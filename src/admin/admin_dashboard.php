@@ -4,6 +4,32 @@ if (!isset($_SESSION['admin_id'])) {
     header("Location: admin_login.html");
     exit;
 }
+
+require_once '../conn/conn.php';
+
+// Get staff count
+try {
+    $staffQuery = $pdo->query("SELECT COUNT(*) FROM staff");
+    $staffCount = $staffQuery->fetchColumn();
+} catch (PDOException $e) {
+    $staffCount = 0;
+}
+
+// Get reports count for the current week
+try {
+    $reportsQuery = $pdo->query("SELECT COUNT(*) FROM reports WHERE created_at >= DATE_SUB(NOW(), INTERVAL 1 WEEK)");
+    $reportsCount = $reportsQuery->fetchColumn();
+} catch (PDOException $e) {
+    $reportsCount = 0;
+}
+
+// Get urgent cases count
+try {
+    $urgentQuery = $pdo->query("SELECT COUNT(*) FROM reports WHERE urgency = 'high' AND status = 'pending'");
+    $urgentCount = $urgentQuery->fetchColumn();
+} catch (PDOException $e) {
+    $urgentCount = 0;
+}
 ?>
 
 <!DOCTYPE html>
@@ -121,7 +147,6 @@ if (!isset($_SESSION['admin_id'])) {
   </style>
 </head>
 <body>
-  <!-- Navbar -->
   <nav class="navbar navbar-expand-lg navbar-light sticky-top mb-4">
     <div class="container">
       <a class="navbar-brand fw-bold" href="#">BHW Admin Portal</a>
@@ -143,9 +168,7 @@ if (!isset($_SESSION['admin_id'])) {
       </div>
     </div>
   </nav>
-
   <div class="dashboard-container">
-    <!-- Welcome Section -->
     <div class="welcome-section">
       <div class="d-flex justify-content-between align-items-center">
         <div>
@@ -155,7 +178,6 @@ if (!isset($_SESSION['admin_id'])) {
       </div>
     </div>
 
-    <!-- Main Cards -->
     <div class="row g-4">
       <div class="col-md-4">
         <a href="add_staff.html" class="text-decoration-none text-dark">
@@ -209,14 +231,13 @@ if (!isset($_SESSION['admin_id'])) {
       </div>
     </div>
 
-    <!-- Stats Section -->
     <div class="row g-4">
       <div class="col-md-4">
         <div class="stats-card">
           <div class="d-flex justify-content-between align-items-center">
             <div>
               <h5 class="mb-0">Recent Activity</h5>
-              <div class="stats-number">24</div>
+              <div class="stats-number"><?php echo $reportsCount; ?></div>
               <p class="text-muted mb-0">New reports this week</p>
             </div>
             <div class="card-icon">
@@ -231,7 +252,7 @@ if (!isset($_SESSION['admin_id'])) {
           <div class="d-flex justify-content-between align-items-center">
             <div>
               <h5 class="mb-0">Staff Members</h5>
-              <div class="stats-number">12</div>
+              <div class="stats-number"><?php echo $staffCount; ?></div>
               <p class="text-muted mb-0">Active health workers</p>
             </div>
             <div class="card-icon">
@@ -246,7 +267,7 @@ if (!isset($_SESSION['admin_id'])) {
           <div class="d-flex justify-content-between align-items-center">
             <div>
               <h5 class="mb-0">Urgent Cases</h5>
-              <div class="stats-number">5</div>
+              <div class="stats-number"><?php echo $urgentCount; ?></div>
               <p class="text-muted mb-0">Require immediate attention</p>
             </div>
             <div class="card-icon">

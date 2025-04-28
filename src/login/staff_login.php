@@ -13,7 +13,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   if ($staff && password_verify($password, $staff['password'])) {
     $_SESSION['staffId'] = $staff['staffId'];
     $_SESSION['staffName'] = $staff['firstName'] . ' ' . $staff['lastName'];
-    header("Location: dashboard.php");
+    header("Location: ../staff/dashboard.php");
     exit;
   } else {
     echo "Invalid login credentials.";

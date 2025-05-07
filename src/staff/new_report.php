@@ -33,6 +33,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $formSubmitted = true;
     
     try {
+        // Start transaction
+        $pdo->beginTransaction();
+        
         // Check if we need to create a new patient first
         if ($_POST['patient_option'] === 'new' && !empty($_POST['new_first_name']) && !empty($_POST['new_last_name'])) {
             $newPatientStmt = $pdo->prepare("
@@ -117,8 +120,66 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $_POST['status']
         ]);
         
+        $reportId = $pdo->lastInsertId();
+        
+        // Handle image uploads
+        if (!empty($_FILES['bite_images']['name'][0])) {
+            // Create uploads directory if it doesn't exist
+            $uploadDir = '../uploads/bites/';
+            if (!file_exists($uploadDir)) {
+                mkdir($uploadDir, 0777, true);
+            }
+            
+            // Process each uploaded file
+            $fileCount = count($_FILES['bite_images']['name']);
+            
+            for ($i = 0; $i < $fileCount; $i++) {
+                if ($_FILES['bite_images']['error'][$i] === UPLOAD_ERR_OK) {
+                    $tmpName = $_FILES['bite_images']['tmp_name'][$i];
+                    $originalName = $_FILES['bite_images']['name'][$i];
+                    $fileType = $_FILES['bite_images']['type'][$i];
+                    $fileSize = $_FILES['bite_images']['size'][$i];
+                    
+                    // Generate a unique filename
+                    $fileExtension = pathinfo($originalName, PATHINFO_EXTENSION);
+                    $newFileName = 'bite_' . $reportId . '_' . uniqid() . '.' . $fileExtension;
+                    $destination = $uploadDir . $newFileName;
+                    
+                    // Move the uploaded file
+                    if (move_uploaded_file($tmpName, $destination)) {
+                        // Insert image record into database
+                        $imageStmt = $pdo->prepare("
+                            INSERT INTO report_images (
+                                report_id, 
+                                image_path, 
+                                file_name, 
+                                file_type, 
+                                file_size, 
+                                is_primary, 
+                                description
+                            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                        ");
+                        
+                        $imageStmt->execute([
+                            $reportId,
+                            $newFileName,
+                            $originalName,
+                            $fileType,
+                            $fileSize,
+                            $i === 0 ? 1 : 0, // First image is primary
+                            !empty($_POST['image_descriptions'][$i]) ? $_POST['image_descriptions'][$i] : null
+                        ]);
+                    }
+                }
+            }
+        }
+        
+        // Commit transaction
+        $pdo->commit();
         $formSuccess = true;
     } catch (PDOException $e) {
+        // Rollback transaction on error
+        $pdo->rollBack();
         $errorMessage = "Error: " . $e->getMessage();
     }
 }
@@ -299,6 +360,65 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       margin-bottom: 1rem;
     }
     
+    .image-preview-container {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 10px;
+    }
+    
+    .image-preview {
+      position: relative;
+      width: 150px;
+      height: 150px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      overflow: hidden;
+      background-color: #f8f9fa;
+    }
+    
+    .image-preview img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    
+    .image-preview .remove-image {
+      position: absolute;
+      top: 5px;
+      right: 5px;
+      background-color: rgba(255, 255, 255, 0.8);
+      border-radius: 50%;
+      width: 24px;
+      height: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      color: #dc3545;
+    }
+    
+    .image-description {
+      width: 150px;
+      margin-top: 5px;
+    }
+    
+    .file-upload-container {
+      position: relative;
+      overflow: hidden;
+      display: inline-block;
+    }
+    
+    .file-upload-container input[type=file] {
+      position: absolute;
+      left: 0;
+      top: 0;
+      opacity: 0;
+      width: 100%;
+      height: 100%;
+      cursor: pointer;
+    }
+    
     @media (max-width: 768px) {
       .form-container {
         padding: 1rem;
@@ -386,7 +506,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         </div>
         <?php endif; ?>
         
-        <form method="POST" action="new_report.php">
+        <form method="POST" action="new_report.php" enctype="multipart/form-data">
           <!-- Patient Information Section -->
           <div class="form-section">
             <h3 class="section-title"><i class="bi bi-person"></i> Patient Information</h3>
@@ -572,6 +692,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             </div>
           </div>
           
+          <!-- Bite Images Section -->
+          <div class="form-section">
+            <h3 class="section-title"><i class="bi bi-camera"></i> Bite Images</h3>
+            
+            <div class="mb-3">
+              <label class="form-label">Upload Images of the Bite</label>
+              <div class="file-upload-container">
+                <button type="button" class="btn btn-outline-primary" id="uploadImagesBtn">
+                  <i class="bi bi-upload me-2"></i>Select Images
+                </button>
+                <input type="file" id="bite_images" name="bite_images[]" accept="image/*" multiple onchange="previewImages(this)">
+              </div>
+              <div class="form-text">Upload clear images of the bite area. You can upload multiple images.</div>
+              
+              <div id="imagePreviewContainer" class="image-preview-container mt-3"></div>
+            </div>
+          </div>
+          
           <!-- Treatment Information -->
           <div class="form-section">
             <h3 class="section-title"><i class="bi bi-bandaid"></i> Treatment Information</h3>
@@ -698,6 +836,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     </div>
   </footer>
 
+  <!-- Image Preview Modal -->
+  <div class="modal fade" id="imagePreviewModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Image Preview</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body text-center">
+          <img id="modalImage" src="/placeholder.svg" alt="Preview" style="max-width: 100%; max-height: 70vh;">
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
   <script>
     document.addEventListener('DOMContentLoaded', function() {
@@ -791,6 +944,60 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       // Set initial state
       togglePatientSections();
     });
+    
+    // Image preview functionality
+    function previewImages(input) {
+      const previewContainer = document.getElementById('imagePreviewContainer');
+      previewContainer.innerHTML = '';
+      
+      if (input.files) {
+        const filesAmount = input.files.length;
+        
+        for (let i = 0; i < filesAmount; i++) {
+          const reader = new FileReader();
+          
+          reader.onload = function(event) {
+            const previewDiv = document.createElement('div');
+            previewDiv.className = 'image-preview';
+            
+            const img = document.createElement('img');
+            img.src = event.target.result;
+            img.alt = 'Preview';
+            img.onclick = function() {
+              document.getElementById('modalImage').src = this.src;
+              new bootstrap.Modal(document.getElementById('imagePreviewModal')).show();
+            };
+            
+            const removeBtn = document.createElement('div');
+            removeBtn.className = 'remove-image';
+            removeBtn.innerHTML = '<i class="bi bi-x"></i>';
+            removeBtn.onclick = function() {
+              this.parentElement.remove();
+              // Note: This doesn't actually remove the file from the input
+              // For that, we would need a more complex solution with a custom file list
+            };
+            
+            previewDiv.appendChild(img);
+            previewDiv.appendChild(removeBtn);
+            
+            const descriptionInput = document.createElement('input');
+            descriptionInput.type = 'text';
+            descriptionInput.className = 'form-control image-description';
+            descriptionInput.name = 'image_descriptions[]';
+            descriptionInput.placeholder = 'Description';
+            
+            const wrapper = document.createElement('div');
+            wrapper.className = 'd-flex flex-column align-items-center';
+            wrapper.appendChild(previewDiv);
+            wrapper.appendChild(descriptionInput);
+            
+            previewContainer.appendChild(wrapper);
+          }
+          
+          reader.readAsDataURL(input.files[i]);
+        }
+      }
+    }
   </script>
 </body>
 </html>

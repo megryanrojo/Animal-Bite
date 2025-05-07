@@ -111,6 +111,11 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
       background-color: white;
       box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
     }
+
+    .nav-link.active {
+            color: var(--bs-primary) !important;
+            font-weight: 500;
+    }
     
     .page-header {
       background-color: white;
@@ -192,7 +197,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
   <!-- Navbar -->
   <nav class="navbar navbar-expand-lg navbar-light sticky-top mb-4">
     <div class="container">
-      <a class="navbar-brand fw-bold" href="#">BHW Admin Portal</a>
+      <a class="navbar-brand fw-bold" href="index.php">BHW Admin Portal</a>
       <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
         <span class="navbar-toggler-icon"></span>
       </button>
@@ -202,7 +207,13 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             <a class="nav-link" href="admin_dashboard.php"><i class="bi bi-house-door"></i> Dashboard</a>
           </li>
           <li class="nav-item">
-            <a class="nav-link active" href="#"><i class="bi bi-gear"></i> Settings</a>
+            <a class="nav-link" href="view_reports.php"><i class="bi bi-file-earmark-text"></i> Reports</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="view_staff.php"><i class="bi bi-people"></i> Staff</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link active" href="admin_settings.php"><i class="bi bi-gear"></i> Settings</a>
           </li>
           <li class="nav-item">
             <a class="nav-link btn-logout ms-2" href="../logout/admin_logout.php"><i class="bi bi-box-arrow-right"></i> Logout</a>
@@ -211,6 +222,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
       </div>
     </div>
   </nav>
+  
 
   <div class="settings-container">
     <!-- Page Header -->

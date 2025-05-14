@@ -351,7 +351,13 @@ try {
             <a class="nav-link active" href="admin_dashboard.php"><i class="bi bi-house-door"></i> Dashboard</a>
           </li>
           <li class="nav-item">
+            <a class="nav-link" href="geomapping.php"><i class="bi bi-geo-alt me-1"></i> Geomapping</a>
+          </li>
+          <li class="nav-item">
             <a class="nav-link" href="view_reports.php"><i class="bi bi-file-earmark-text"></i> Reports</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="decisionSupport.php"><i class="bi bi-graph-up me-1"></i> Decision Support</a>
           </li>
           <li class="nav-item">
             <a class="nav-link" href="view_staff.php"><i class="bi bi-people"></i> Staff</a>

@@ -32,7 +32,7 @@ $formData = [
     'city' => '',
     'province' => '',
     'emergencyContact' => '',
-    'emergencyPhone' => '',
+    'emergencyContactNumber' => '', // Changed from emergencyPhone to match DB column
     'allergies' => '',
     'medicalHistory' => '',
     'previousRabiesVaccine' => ''
@@ -58,60 +58,62 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!empty($missingFields)) {
         $error = 'Please fill in the following required fields: ' . implode(', ', $missingFields);
     } else {
-        try {
-            // Check if patient already exists
-            $checkStmt = $pdo->prepare("SELECT patientId FROM patients WHERE firstName = ? AND lastName = ? AND dateOfBirth = ?");
-            $checkStmt->execute([$formData['firstName'], $formData['lastName'], $formData['dateOfBirth']]);
-            $existingPatient = $checkStmt->fetch(PDO::FETCH_ASSOC);
-            
-            if ($existingPatient) {
-                $error = 'A patient with this name and date of birth already exists. Please check existing records.';
-            } else {
-                // Insert new patient
-                $insertStmt = $pdo->prepare("
-                    INSERT INTO patients (
-                        firstName, lastName, middleName, dateOfBirth, gender, 
-                        contactNumber, email, address, barangay, city, province,
-                        emergencyContact, emergencyPhone, allergies, medicalHistory, previousRabiesVaccine,
-                        registeredBy, registrationDate
-                    ) VALUES (
-                        ?, ?, ?, ?, ?, 
-                        ?, ?, ?, ?, ?, ?,
-                        ?, ?, ?, ?, ?,
-                        ?, NOW()
-                    )
-                ");
+        // Add this to the form submission section before inserting
+        if (!empty($formData['emergencyContactNumber']) && !is_numeric($formData['emergencyContactNumber'])) {
+            $error = 'Emergency contact number must contain only numbers.';
+        } else {
+            try {
+                // Check if patient already exists
+                $checkStmt = $pdo->prepare("SELECT patientId FROM patients WHERE firstName = ? AND lastName = ? AND dateOfBirth = ?");
+                $checkStmt->execute([$formData['firstName'], $formData['lastName'], $formData['dateOfBirth']]);
+                $existingPatient = $checkStmt->fetch(PDO::FETCH_ASSOC);
                 
-                $insertStmt->execute([
-                    $formData['firstName'], 
-                    $formData['lastName'], 
-                    $formData['middleName'], 
-                    $formData['dateOfBirth'], 
-                    $formData['gender'],
-                    $formData['contactNumber'], 
-                    $formData['email'], 
-                    $formData['address'], 
-                    $formData['barangay'], 
-                    $formData['city'], 
-                    $formData['province'],
-                    $formData['emergencyContact'], 
-                    $formData['emergencyPhone'], 
-                    $formData['allergies'], 
-                    $formData['medicalHistory'], 
-                    $formData['previousRabiesVaccine'],
-                    $_SESSION['staffId']
-                ]);
-                
-                $patientId = $pdo->lastInsertId();
-                $success = true;
-                
-                // Reset form data after successful submission
-                foreach ($formData as $key => $value) {
-                    $formData[$key] = '';
+                if ($existingPatient) {
+                    $error = 'A patient with this name and date of birth already exists. Please check existing records.';
+                } else {
+                    // Insert new patient
+                    $insertStmt = $pdo->prepare("
+                        INSERT INTO patients (
+                            firstName, lastName, middleName, dateOfBirth, gender, 
+                            contactNumber, email, address, barangay, city, province,
+                            emergencyContact, emergencyContactNumber, allergies, medicalHistory, previousRabiesVaccine
+                        ) VALUES (
+                            ?, ?, ?, ?, ?, 
+                            ?, ?, ?, ?, ?, ?,
+                            ?, ?, ?, ?, ?
+                        )
+                    ");
+
+                    $insertStmt->execute([
+                        $formData['firstName'], 
+                        $formData['lastName'], 
+                        $formData['middleName'], 
+                        $formData['dateOfBirth'], 
+                        $formData['gender'],
+                        $formData['contactNumber'], 
+                        $formData['email'], 
+                        $formData['address'], 
+                        $formData['barangay'], 
+                        $formData['city'], 
+                        $formData['province'],
+                        $formData['emergencyContact'], 
+                        $formData['emergencyContactNumber'],
+                        $formData['allergies'], 
+                        $formData['medicalHistory'], 
+                        $formData['previousRabiesVaccine']
+                    ]);
+                    
+                    $patientId = $pdo->lastInsertId();
+                    $success = true;
+                    
+                    // Reset form data after successful submission
+                    foreach ($formData as $key => $value) {
+                        $formData[$key] = '';
+                    }
                 }
+            } catch (PDOException $e) {
+                $error = 'Database error: ' . $e->getMessage();
             }
-        } catch (PDOException $e) {
-            $error = 'Database error: ' . $e->getMessage();
         }
     }
 }
@@ -393,8 +395,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             </div>
                             
                             <div class="col-md-6">
-                                <label for="emergencyPhone" class="form-label">Emergency Contact Number</label>
-                                <input type="tel" class="form-control" id="emergencyPhone" name="emergencyPhone" value="<?php echo htmlspecialchars($formData['emergencyPhone']); ?>">
+                                <label for="emergencyContactNumber" class="form-label">Emergency Contact Number</label>
+                                <input type="tel" class="form-control" id="emergencyContactNumber" name="emergencyContactNumber" value="<?php echo htmlspecialchars($formData['emergencyContactNumber']); ?>">
                             </div>
                         </div>
                     </div>
@@ -537,9 +539,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
             });
             
+            // Validate emergency contact number is numeric
+            const emergencyContactNumber = document.getElementById('emergencyContactNumber');
+            if (emergencyContactNumber.value && !/^\d+$/.test(emergencyContactNumber.value)) {
+                emergencyContactNumber.classList.add('is-invalid');
+                isValid = false;
+            }
+            
             if (!isValid) {
                 event.preventDefault();
-                alert('Please fill in all required fields.');
+                alert('Please check the form for errors.');
             }
         });
     </script>

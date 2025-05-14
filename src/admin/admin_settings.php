@@ -204,16 +204,22 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
       <div class="collapse navbar-collapse" id="navbarNav">
         <ul class="navbar-nav ms-auto">
           <li class="nav-item">
-            <a class="nav-link" href="admin_dashboard.php"><i class="bi bi-house-door"></i> Dashboard</a>
+            <a class="nav-link active" href="admin_dashboard.php"><i class="bi bi-house-door"></i> Dashboard</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="geomapping.php"><i class="bi bi-geo-alt me-1"></i> Geomapping</a>
           </li>
           <li class="nav-item">
             <a class="nav-link" href="view_reports.php"><i class="bi bi-file-earmark-text"></i> Reports</a>
           </li>
           <li class="nav-item">
+            <a class="nav-link" href="decisionSupport.php"><i class="bi bi-graph-up me-1"></i> Decision Support</a>
+          </li>
+          <li class="nav-item">
             <a class="nav-link" href="view_staff.php"><i class="bi bi-people"></i> Staff</a>
           </li>
           <li class="nav-item">
-            <a class="nav-link active" href="admin_settings.php"><i class="bi bi-gear"></i> Settings</a>
+            <a class="nav-link" href="admin_settings.php"><i class="bi bi-gear"></i> Settings</a>
           </li>
           <li class="nav-item">
             <a class="nav-link btn-logout ms-2" href="../logout/admin_logout.php"><i class="bi bi-box-arrow-right"></i> Logout</a>
@@ -222,7 +228,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
       </div>
     </div>
   </nav>
-  
 
   <div class="settings-container">
     <!-- Page Header -->

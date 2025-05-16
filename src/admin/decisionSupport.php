@@ -40,430 +40,6 @@ try {
     $barangays = [];
 }
 
-// DSS ANALYTICS FUNCTIONS
-// These functions perform actual data analysis and generate insights
-
-/**
- * Calculate statistical significance using Chi-Square test
- * @param int $observed Observed value
- * @param int $expected Expected value
- * @return float p-value (lower = more significant)
- */
-function calculateSignificance($observed, $expected) {
-    if ($expected == 0) return 1.0; // No significance if expected is zero
-    
-    $chiSquare = pow($observed - $expected, 2) / $expected;
-    
-    // Approximate p-value for chi-square with 1 degree of freedom
-    // This is a simplified calculation for demonstration
-    $p = exp(-0.5 * $chiSquare);
-    
-    return $p;
-}
-
-/**
- * Generate trend description based on time series data
- * @param array $data Array of data points
- * @return array Trend description and metrics
- */
-function analyzeTrend($data) {
-    if (empty($data) || count($data) < 2) {
-        return [
-            'description' => 'Insufficient data to analyze trends.',
-            'direction' => 'neutral',
-            'magnitude' => 0,
-            'significance' => 0
-        ];
-    }
-    
-    // Calculate linear regression
-    $n = count($data);
-    $sumX = 0;
-    $sumY = 0;
-    $sumXY = 0;
-    $sumX2 = 0;
-    
-    foreach ($data as $i => $value) {
-        $sumX += $i;
-        $sumY += $value;
-        $sumXY += $i * $value;
-        $sumX2 += $i * $i;
-    }
-    
-    $slope = ($n * $sumXY - $sumX * $sumY) / ($n * $sumX2 - $sumX * $sumX);
-    
-    // Calculate average for percentage change
-    $avg = $sumY / $n;
-    $percentChange = ($slope * $n / $avg) * 100;
-    
-    // Calculate R-squared (coefficient of determination)
-    $meanY = $sumY / $n;
-    $totalVariation = 0;
-    $explainedVariation = 0;
-    
-    foreach ($data as $i => $value) {
-        $predicted = ($slope * $i) + (($sumY - $slope * $sumX) / $n);
-        $totalVariation += pow($value - $meanY, 2);
-        $explainedVariation += pow($predicted - $meanY, 2);
-    }
-    
-    $rSquared = ($totalVariation > 0) ? $explainedVariation / $totalVariation : 0;
-    
-    // Determine trend direction and magnitude
-    $direction = ($slope > 0) ? 'increasing' : (($slope < 0) ? 'decreasing' : 'stable');
-    $magnitude = abs($percentChange);
-    
-    // Generate description
-    $description = '';
-    if ($magnitude < 5) {
-        $description = "Cases have remained relatively stable over the period.";
-    } else {
-        $intensifier = ($magnitude > 20) ? 'significantly ' : (($magnitude > 10) ? 'moderately ' : 'slightly ');
-        $description = "Cases are {$intensifier}{$direction} at a rate of " . number_format(abs($percentChange), 1) . "% over the period.";
-        
-        if ($rSquared > 0.7) {
-            $description .= " This trend is statistically significant and likely to continue.";
-        } elseif ($rSquared > 0.3) {
-            $description .= " This trend shows moderate statistical significance.";
-        } else {
-            $description .= " This trend shows weak statistical significance and may be due to random variation.";
-        }
-    }
-    
-    return [
-        'description' => $description,
-        'direction' => $direction,
-        'magnitude' => $magnitude,
-        'significance' => $rSquared
-    ];
-}
-
-/**
- * Generate seasonal pattern analysis
- * @param array $monthlyData Monthly data for multiple years
- * @return array Seasonal insights
- */
-function analyzeSeasonality($monthlyData) {
-    if (empty($monthlyData) || count($monthlyData) < 12) {
-        return [
-            'description' => 'Insufficient data to analyze seasonality.',
-            'peak_months' => [],
-            'low_months' => []
-        ];
-    }
-    
-    // Group by month across years
-    $monthlyAverages = [];
-    $monthCounts = [];
-    
-    foreach ($monthlyData as $item) {
-        $month = date('n', strtotime($item['month'] . '-01'));
-        
-        if (!isset($monthlyAverages[$month])) {
-            $monthlyAverages[$month] = 0;
-            $monthCounts[$month] = 0;
-        }
-        
-        $monthlyAverages[$month] += $item['count'];
-        $monthCounts[$month]++;
-    }
-    
-    // Calculate averages
-    foreach ($monthlyAverages as $month => $total) {
-        if ($monthCounts[$month] > 0) {
-            $monthlyAverages[$month] = $total / $monthCounts[$month];
-        }
-    }
-    
-    // Calculate overall average
-    $overallAverage = array_sum($monthlyAverages) / count($monthlyAverages);
-    
-    // Find peak and low months (>20% deviation from average)
-    $peakMonths = [];
-    $lowMonths = [];
-    
-    foreach ($monthlyAverages as $month => $avg) {
-        $percentDiff = (($avg - $overallAverage) / $overallAverage) * 100;
-        
-        if ($percentDiff > 20) {
-            $peakMonths[$month] = $percentDiff;
-        } elseif ($percentDiff < -20) {
-            $lowMonths[$month] = $percentDiff;
-        }
-    }
-    
-    // Generate description
-    $description = '';
-    
-    if (empty($peakMonths) && empty($lowMonths)) {
-        $description = "No significant seasonal pattern detected. Cases are distributed relatively evenly throughout the year.";
-    } else {
-        if (!empty($peakMonths)) {
-            arsort($peakMonths);
-            $monthNames = [];
-            foreach (array_keys($peakMonths) as $month) {
-                $monthNames[] = date('F', mktime(0, 0, 0, $month, 10));
-            }
-            
-            $description = "Peak months for animal bite cases are " . implode(', ', $monthNames) . 
-                           ", with " . number_format(reset($peakMonths), 1) . "% more cases than average.";
-        }
-        
-        if (!empty($lowMonths)) {
-            asort($lowMonths);
-            $monthNames = [];
-            foreach (array_keys($lowMonths) as $month) {
-                $monthNames[] = date('F', mktime(0, 0, 0, $month, 10));
-            }
-            
-            if (!empty($description)) {
-                $description .= " ";
-            }
-            
-            $description .= "Lowest incidence occurs in " . implode(', ', $monthNames) . 
-                           ", with " . number_format(abs(reset($lowMonths)), 1) . "% fewer cases than average.";
-        }
-    }
-    
-    return [
-        'description' => $description,
-        'peak_months' => array_keys($peakMonths),
-        'low_months' => array_keys($lowMonths)
-    ];
-}
-
-/**
- * Analyze demographic patterns to identify at-risk groups
- * @param array $ageData Age distribution data
- * @param array $genderData Gender distribution data
- * @return array Risk group insights
- */
-function analyzeRiskGroups($ageData, $genderData) {
-    $insights = [];
-    
-    // Analyze age distribution
-    if (!empty($ageData)) {
-        // Find age group with highest incidence
-        $maxCount = 0;
-        $maxAgeGroup = '';
-        $totalAgeCases = 0;
-        
-        foreach ($ageData as $age) {
-            $totalAgeCases += $age['count'];
-            if ($age['count'] > $maxCount) {
-                $maxCount = $age['count'];
-                $maxAgeGroup = $age['age_group'];
-            }
-        }
-        
-        // Calculate percentage for highest group
-        $maxAgePercent = ($totalAgeCases > 0) ? ($maxCount / $totalAgeCases) * 100 : 0;
-        
-        // Check if there's a significant concentration in one age group (>30%)
-        if ($maxAgePercent > 30) {
-            $insights[] = "The {$maxAgeGroup} age group is significantly overrepresented, accounting for " . 
-                         number_format($maxAgePercent, 1) . "% of all cases.";
-        }
-        
-        // Check for children specifically
-        $childrenCount = 0;
-        foreach ($ageData as $age) {
-            if ($age['age_group'] === 'Under 5' || $age['age_group'] === '5-12') {
-                $childrenCount += $age['count'];
-            }
-        }
-        
-        $childrenPercent = ($totalAgeCases > 0) ? ($childrenCount / $totalAgeCases) * 100 : 0;
-        
-        if ($childrenPercent > 25) {
-            $insights[] = "Children under 12 account for " . number_format($childrenPercent, 1) . 
-                         "% of cases, suggesting a need for targeted education in schools and for parents.";
-        }
-    }
-    
-    // Analyze gender distribution
-    if (!empty($genderData)) {
-        $maleCount = 0;
-        $femaleCount = 0;
-        
-        foreach ($genderData as $gender) {
-            if ($gender['gender'] === 'Male') {
-                $maleCount = $gender['count'];
-            } elseif ($gender['gender'] === 'Female') {
-                $femaleCount = $gender['count'];
-            }
-        }
-        
-        $totalGenderCases = $maleCount + $femaleCount;
-        
-        if ($totalGenderCases > 0) {
-            $malePercent = ($maleCount / $totalGenderCases) * 100;
-            $femalePercent = ($femaleCount / $totalGenderCases) * 100;
-            
-            // Check for significant gender disparity (>60%)
-            if ($malePercent > 60) {
-                $insights[] = "Males are significantly overrepresented at " . number_format($malePercent, 1) . 
-                             "% of cases, suggesting gender-specific risk factors.";
-            } elseif ($femalePercent > 60) {
-                $insights[] = "Females are significantly overrepresented at " . number_format($femalePercent, 1) . 
-                             "% of cases, suggesting gender-specific risk factors.";
-            }
-        }
-    }
-    
-    // If no specific insights, provide a general statement
-    if (empty($insights)) {
-        $insights[] = "No significant demographic patterns detected. Cases appear to be distributed across age groups and genders.";
-    }
-    
-    return $insights;
-}
-
-/**
- * Generate data-driven recommendations based on analysis
- * @param array $analysisResults Various analysis results
- * @return array Actionable recommendations
- */
-function generateRecommendations($analysisResults) {
-    $recommendations = [];
-    
-    // Extract analysis components
-    $trendAnalysis = $analysisResults['trend'] ?? null;
-    $seasonalAnalysis = $analysisResults['seasonality'] ?? null;
-    $riskGroups = $analysisResults['risk_groups'] ?? [];
-    $highRiskAreas = $analysisResults['high_risk_areas'] ?? [];
-    $animalDistribution = $analysisResults['animal_distribution'] ?? [];
-    $vaccinationRate = $analysisResults['vaccination_rate'] ?? 0;
-    $reportingDelay = $analysisResults['reporting_delay'] ?? 0;
-    
-    // Recommendations based on trend
-    if ($trendAnalysis && isset($trendAnalysis['direction'])) {
-        if ($trendAnalysis['direction'] === 'increasing' && $trendAnalysis['magnitude'] > 10) {
-            $recommendations[] = [
-                'title' => 'Address Rising Case Numbers',
-                'description' => "Implement immediate intervention measures to address the " . 
-                                number_format($trendAnalysis['magnitude'], 1) . "% increase in cases. " .
-                                "Consider allocating additional resources for prevention and treatment."
-            ];
-        } elseif ($trendAnalysis['direction'] === 'decreasing' && $trendAnalysis['magnitude'] > 10) {
-            $recommendations[] = [
-                'title' => 'Maintain Successful Strategies',
-                'description' => "Continue current prevention strategies that have contributed to a " . 
-                                number_format($trendAnalysis['magnitude'], 1) . "% decrease in cases. " .
-                                "Document successful approaches for future reference."
-            ];
-        }
-    }
-    
-    // Recommendations based on seasonality
-    if ($seasonalAnalysis && !empty($seasonalAnalysis['peak_months'])) {
-        $monthNames = [];
-        foreach ($seasonalAnalysis['peak_months'] as $month) {
-            $monthNames[] = date('F', mktime(0, 0, 0, $month, 10));
-        }
-        
-        $recommendations[] = [
-            'title' => 'Prepare for Seasonal Peaks',
-            'description' => "Increase preparedness and resources during " . implode(', ', $monthNames) . 
-                            ", when cases historically peak. Consider seasonal awareness campaigns before these months."
-        ];
-    }
-    
-    // Recommendations based on risk groups
-    foreach ($riskGroups as $insight) {
-        if (strpos($insight, 'Children under 12') !== false) {
-            $recommendations[] = [
-                'title' => 'School-Based Education',
-                'description' => "Implement animal bite prevention education in schools, targeting children under 12 " .
-                                "who are disproportionately affected. Include parent education components."
-            ];
-        }
-        
-        if (strpos($insight, 'Males are significantly') !== false) {
-            $recommendations[] = [
-                'title' => 'Target High-Risk Demographics',
-                'description' => "Develop targeted prevention messages for males, who show higher risk. " .
-                                "Focus on common activities or behaviors that may increase exposure risk."
-            ];
-        } elseif (strpos($insight, 'Females are significantly') !== false) {
-            $recommendations[] = [
-                'title' => 'Target High-Risk Demographics',
-                'description' => "Develop targeted prevention messages for females, who show higher risk. " .
-                                "Focus on common activities or behaviors that may increase exposure risk."
-            ];
-        }
-    }
-    
-    // Recommendations based on high-risk areas
-    if (!empty($highRiskAreas)) {
-        $areaNames = array_column($highRiskAreas, 'barangay');
-        $topArea = $areaNames[0] ?? '';
-        
-        if (!empty($topArea)) {
-            $recommendations[] = [
-                'title' => 'Focus on High-Risk Areas',
-                'description' => "Prioritize prevention and response resources in {$topArea} and other high-incidence barangays. " .
-                                "Consider targeted vaccination drives and stray animal control in these areas."
-            ];
-        }
-    }
-    
-    // Recommendations based on animal distribution
-    if (!empty($animalDistribution)) {
-        $topAnimal = '';
-        $topCount = 0;
-        
-        foreach ($animalDistribution as $animal) {
-            if ($animal['count'] > $topCount) {
-                $topCount = $animal['count'];
-                $topAnimal = $animal['animalType'];
-            }
-        }
-        
-        if (!empty($topAnimal)) {
-            $recommendations[] = [
-                'title' => 'Animal-Specific Interventions',
-                'description' => "Focus prevention efforts on {$topAnimal} bites, which account for the highest percentage of cases. " .
-                                "Develop specific guidelines for {$topAnimal} owners and handling encounters."
-            ];
-        }
-    }
-    
-    // Recommendations based on vaccination rate
-    if ($vaccinationRate < 50) {
-        $recommendations[] = [
-            'title' => 'Improve Animal Vaccination',
-            'description' => "The low animal vaccination rate of " . number_format($vaccinationRate, 1) . "% is concerning. " .
-                            "Implement community vaccination drives and consider subsidized or free rabies vaccines for pets."
-        ];
-    }
-    
-    // Recommendations based on reporting delay
-    if ($reportingDelay > 24) {
-        $recommendations[] = [
-            'title' => 'Address Reporting Delays',
-            'description' => "The average reporting delay of {$reportingDelay} hours is concerning. " .
-                            "Launch public awareness campaigns about the importance of immediate reporting after animal bites."
-        ];
-    }
-    
-    // If no specific recommendations, provide general ones
-    if (empty($recommendations)) {
-        $recommendations[] = [
-            'title' => 'Maintain Prevention Programs',
-            'description' => "Continue current prevention and education programs. Monitor trends closely for any changes."
-        ];
-        
-        $recommendations[] = [
-            'title' => 'Improve Data Collection',
-            'description' => "Enhance data collection practices to gather more detailed information about cases, " .
-                            "which will enable more specific recommendations in the future."
-        ];
-    }
-    
-    return $recommendations;
-}
-
 // Get total cases for the selected period
 try {
     $totalQuery = "
@@ -655,39 +231,10 @@ try {
         $trendCounts[] = $data['count'];
     }
     
-    // Get monthly data for the past 2 years for seasonality analysis
-    $seasonalQuery = "
-        SELECT 
-            DATE_FORMAT(r.reportDate, '%Y-%m') as month,
-            COUNT(*) as count
-        FROM reports r
-        JOIN patients p ON r.patientId = p.patientId
-        WHERE r.reportDate >= DATE_SUB(CURDATE(), INTERVAL 2 YEAR)
-    ";
-    
-    $seasonalParams = [];
-    
-    if (!empty($animalType)) {
-        $seasonalQuery .= " AND r.animalType = ?";
-        $seasonalParams[] = $animalType;
-    }
-    
-    if (!empty($barangay)) {
-        $seasonalQuery .= " AND p.barangay = ?";
-        $seasonalParams[] = $barangay;
-    }
-    
-    $seasonalQuery .= " GROUP BY DATE_FORMAT(r.reportDate, '%Y-%m') ORDER BY month";
-    
-    $seasonalStmt = $pdo->prepare($seasonalQuery);
-    $seasonalStmt->execute($seasonalParams);
-    $seasonalData = $seasonalStmt->fetchAll(PDO::FETCH_ASSOC);
-    
 } catch (PDOException $e) {
     $trendData = [];
     $trendLabels = [];
     $trendCounts = [];
-    $seasonalData = [];
 }
 
 // Get cases by age group
@@ -879,105 +426,9 @@ try {
     $vaccinationStmt->execute($vaccinationParams);
     $vaccinationData = $vaccinationStmt->fetchAll(PDO::FETCH_ASSOC);
     
-    // Calculate vaccination rate
-    $vaccinatedCount = 0;
-    $totalVaccinationCount = 0;
-    
-    foreach ($vaccinationData as $data) {
-        $totalVaccinationCount += $data['count'];
-        if ($data['animalVaccinated'] === 'Yes') {
-            $vaccinatedCount = $data['count'];
-        }
-    }
-    
-    $vaccinationRate = ($totalVaccinationCount > 0) ? ($vaccinatedCount / $totalVaccinationCount) * 100 : 0;
-    
 } catch (PDOException $e) {
     $vaccinationData = [];
-    $vaccinationRate = 0;
 }
-
-// Get reporting delay data
-try {
-    $delayQuery = "
-        SELECT 
-            AVG(TIMESTAMPDIFF(HOUR, biteDate, reportDate)) as avg_delay
-        FROM reports
-        WHERE reportDate BETWEEN ? AND ? AND biteDate IS NOT NULL
-    ";
-    
-    $delayParams = [$dateFrom, $dateTo];
-    
-    if (!empty($animalType)) {
-        $delayQuery .= " AND animalType = ?";
-        $delayParams[] = $animalType;
-    }
-    
-    $delayStmt = $pdo->prepare($delayQuery);
-    $delayStmt->execute($delayParams);
-    $avgDelay = $delayStmt->fetchColumn();
-    
-} catch (PDOException $e) {
-    $avgDelay = 0;
-}
-
-// Get high-risk areas (barangays with high Category III bites)
-try {
-    $riskAreasQuery = "
-        SELECT 
-            p.barangay,
-            COUNT(*) as total_cases,
-            SUM(CASE WHEN r.biteType = 'Category III' THEN 1 ELSE 0 END) as high_risk_cases,
-            ROUND((SUM(CASE WHEN r.biteType = 'Category III' THEN 1 ELSE 0 END) / COUNT(*)) * 100, 1) as high_risk_percentage
-        FROM reports r
-        JOIN patients p ON r.patientId = p.patientId
-        WHERE r.reportDate BETWEEN ? AND ? AND p.barangay IS NOT NULL
-    ";
-    
-    $riskAreasParams = [$dateFrom, $dateTo];
-    
-    if (!empty($animalType)) {
-        $riskAreasQuery .= " AND r.animalType = ?";
-        $riskAreasParams[] = $animalType;
-    }
-    
-    if (!empty($barangay)) {
-        $riskAreasQuery .= " AND p.barangay = ?";
-        $riskAreasParams[] = $barangay;
-    }
-    
-    $riskAreasQuery .= " GROUP BY p.barangay HAVING COUNT(*) >= 5 ORDER BY high_risk_percentage DESC LIMIT 5";
-    
-    $riskAreasStmt = $pdo->prepare($riskAreasQuery);
-    $riskAreasStmt->execute($riskAreasParams);
-    $highRiskAreas = $riskAreasStmt->fetchAll(PDO::FETCH_ASSOC);
-    
-} catch (PDOException $e) {
-    $highRiskAreas = [];
-}
-
-// Perform trend analysis
-$trendAnalysis = analyzeTrend($trendCounts);
-
-// Perform seasonality analysis
-$seasonalAnalysis = analyzeSeasonality($seasonalData);
-
-// Analyze risk groups
-$riskGroupInsights = analyzeRiskGroups($ageData, $genderData);
-
-// Compile analysis results
-$analysisResults = [
-    'trend' => $trendAnalysis,
-    'seasonality' => $seasonalAnalysis,
-    'risk_groups' => $riskGroupInsights,
-    'high_risk_areas' => $highRiskAreas,
-    'animal_distribution' => $animalData,
-    'vaccination_rate' => $vaccinationRate,
-    'reporting_delay' => $avgDelay
-];
-
-// Generate recommendations
-$recommendations = generateRecommendations($analysisResults);
 
 // Function to build URL with updated parameters
 function buildUrl($newParams = []) {
@@ -1489,7 +940,7 @@ function buildUrl($newParams = []) {
                     
                     <div class="col-md-4">
                         <div class="kpi-card">
-                            <div class="kpi-icon kpi-success">
+                            <div class="kpi-icon kpi-icon-success">
                                 <i class="bi bi-bandaid"></i>
                             </div>
                             <?php
@@ -1523,14 +974,30 @@ function buildUrl($newParams = []) {
                 <div class="mt-4">
                     <h6>Trend Analysis:</h6>
                     <p>
-                        <?php echo $trendAnalysis['description']; ?>
+                        <?php
+                            // Simple trend analysis
+                            $trendCount = count($trendCounts);
+                            if ($trendCount > 1) {
+                                $firstHalf = array_slice($trendCounts, 0, floor($trendCount / 2));
+                                $secondHalf = array_slice($trendCounts, floor($trendCount / 2));
+                                
+                                $firstHalfAvg = array_sum($firstHalf) / count($firstHalf);
+                                $secondHalfAvg = array_sum($secondHalf) / count($secondHalf);
+                                
+                                $percentChange = $firstHalfAvg > 0 ? (($secondHalfAvg - $firstHalfAvg) / $firstHalfAvg) * 100 : 0;
+                                
+                                if ($percentChange > 10) {
+                                    echo "There is a significant <strong>increasing trend</strong> of " . number_format(abs($percentChange), 1) . "% in animal bite cases over the selected period. This suggests a need for increased preventive measures and public awareness campaigns.";
+                                } elseif ($percentChange < -10) {
+                                    echo "There is a significant <strong>decreasing trend</strong> of " . number_format(abs($percentChange), 1) . "% in animal bite cases over the selected period. This suggests that current preventive measures may be effective.";
+                                } else {
+                                    echo "The number of animal bite cases has remained <strong>relatively stable</strong> over the selected period, with a change of only " . number_format(abs($percentChange), 1) . "%.";
+                                }
+                            } else {
+                                echo "Insufficient data to perform trend analysis. Please select a wider date range.";
+                            }
+                        ?>
                     </p>
-                    <?php if (!empty($seasonalAnalysis['description'])): ?>
-                    <h6 class="mt-3">Seasonal Patterns:</h6>
-                    <p>
-                        <?php echo $seasonalAnalysis['description']; ?>
-                    </p>
-                    <?php endif; ?>
                 </div>
             </div>
         </div>
@@ -2033,10 +1500,50 @@ function buildUrl($newParams = []) {
                     <h6><i class="bi bi-info-circle me-2"></i>Based on this analysis, we recommend the following actions:</h6>
                     <ol>
                         <?php
-                            // Output data-driven recommendations
+                            // Generate dynamic recommendations based on the data
+                            $recommendations = [];
+                            
+                            // Trend-based recommendations
+                            if (isset($percentChange) && $percentChange > 10) {
+                                $recommendations[] = "<strong>Increase Prevention Efforts:</strong> With a " . number_format(abs($percentChange), 1) . "% increase in cases, allocate additional resources to prevention programs, especially in high-risk areas.";
+                            }
+                            
+                            // Geographic recommendations
+                            if (count($barangayData) > 0) {
+                                $topBarangay = $barangayData[0]['barangay'];
+                                $recommendations[] = "<strong>Target High-Risk Areas:</strong> Focus educational campaigns and animal control efforts in " . htmlspecialchars($topBarangay) . " and other high-incidence barangays.";
+                            }
+                            
+                            // Animal type recommendations
+                            if (count($animalData) > 0) {
+                                $topAnimal = $animalData[0]['animalType'];
+                                $recommendations[] = "<strong>Animal-Specific Interventions:</strong> Develop prevention strategies specifically for " . htmlspecialchars($topAnimal) . " bites, which account for the highest percentage of cases.";
+                            }
+                            
+                            // Vaccination recommendations
+                            if (isset($unvaccinatedPercent) && $unvaccinatedPercent > 30) {
+                                $recommendations[] = "<strong>Vaccination Campaign:</strong> Launch a targeted rabies vaccination campaign for pets, as " . number_format($unvaccinatedPercent, 1) . "% of biting animals were unvaccinated.";
+                            }
+                            
+                            // Treatment recommendations
+                            if (isset($washPercent) && $washPercent < 90) {
+                                $recommendations[] = "<strong>Improve First Aid Education:</strong> Enhance public education on proper wound washing, as only " . number_format($washPercent, 1) . "% of cases received this critical first aid measure.";
+                            }
+                            
+                            // Age-based recommendations
+                            if (isset($childrenPercent) && $childrenPercent > 30) {
+                                $recommendations[] = "<strong>School-Based Education:</strong> Implement animal bite prevention education in schools, as children under 12 account for " . number_format($childrenPercent, 1) . "% of cases.";
+                            }
+                            
+                            // Add general recommendations if specific ones are few
+                            if (count($recommendations) < 3) {
+                                $recommendations[] = "<strong>Data Collection Improvement:</strong> Enhance the completeness of case reporting, particularly for animal vaccination status and follow-up information.";
+                                $recommendations[] = "<strong>Community Engagement:</strong> Develop community-based programs to address stray animal populations and promote responsible pet ownership.";
+                            }
+                            
+                            // Output recommendations
                             foreach ($recommendations as $recommendation) {
-                                echo "<li><strong>" . htmlspecialchars($recommendation['title']) . ":</strong> " . 
-                                     htmlspecialchars($recommendation['description']) . "</li>";
+                                echo "<li>" . $recommendation . "</li>";
                             }
                         ?>
                     </ol>

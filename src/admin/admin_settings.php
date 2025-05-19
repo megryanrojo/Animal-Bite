@@ -9,7 +9,7 @@ require_once '../conn/conn.php';
 require_once 'includes/notification_helper.php';
 
 $admin_id = $_SESSION['admin_id'];
-$stmt = $pdo->prepare("SELECT firstName, lastName, email FROM admin WHERE adminId = ?");
+$stmt = $pdo->prepare("SELECT name, email FROM admin WHERE adminId = ?");
 $stmt->execute([$admin_id]);
 $admin = $stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -19,8 +19,7 @@ $error = "";
 
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
     if (isset($_POST['update_account'])) {
-        $firstName = $_POST['firstName'];
-        $lastName = $_POST['lastName'];
+        $name = $_POST['name'];
         $email = $_POST['email'];
         
         $stmt = $pdo->prepare("SELECT adminId FROM admin WHERE email = ? AND adminId != ?");
@@ -31,16 +30,15 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             $error = "Email already in use by another admin.";
         } else {
             // Update admin information
-            $stmt = $pdo->prepare("UPDATE admin SET firstName = ?, lastName = ?, email = ? WHERE adminId = ?");
+            $stmt = $pdo->prepare("UPDATE admin SET name = ?, email = ? WHERE adminId = ?");
             
             try {
-                $stmt->execute([$firstName, $lastName, $email, $admin_id]);
+                $stmt->execute([$name, $email, $admin_id]);
                 $account_updated = true;
                 // Update session data
-                $_SESSION['admin_name'] = $firstName . ' ' . $lastName;
+                $_SESSION['admin_name'] = $name;
                 // Refresh admin data
-                $admin['firstName'] = $firstName;
-                $admin['lastName'] = $lastName;
+                $admin['name'] = $name;
                 $admin['email'] = $email;
             } catch (PDOException $e) {
                 $error = "Error updating account: " . $e->getMessage();
@@ -358,12 +356,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
               <div class="settings-card-body">
                 <form method="POST" action="">
                   <div class="mb-3">
-                    <label for="firstName" class="form-label">First Name</label>
-                    <input type="text" class="form-control" id="firstName" name="firstName" value="<?php echo htmlspecialchars($admin['firstName']); ?>" required>
-                  </div>
-                  <div class="mb-3">
-                    <label for="lastName" class="form-label">Last Name</label>
-                    <input type="text" class="form-control" id="lastName" name="lastName" value="<?php echo htmlspecialchars($admin['lastName']); ?>" required>
+                    <label for="name" class="form-label">Full Name</label>
+                    <input type="text" class="form-control" id="name" name="name" value="<?php echo htmlspecialchars($admin['name']); ?>" required>
                   </div>
                   <div class="mb-3">
                     <label for="email" class="form-label">Email Address</label>

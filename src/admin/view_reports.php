@@ -70,12 +70,39 @@ $whereClause = !empty($whereConditions) ? "WHERE " . implode(" AND ", $whereCond
 
 // Get total records for pagination
 try {
+   // Debug: Check if there's any data in the tables
+   $debugQuery = "SELECT COUNT(*) FROM reports";
+   $debugStmt = $pdo->query($debugQuery);
+   $totalReports = $debugStmt->fetchColumn();
+   
+   $debugQuery2 = "SELECT COUNT(*) FROM patients";
+   $debugStmt2 = $pdo->query($debugQuery2);
+   $totalPatients = $debugStmt2->fetchColumn();
+   
+   // Debug: Check patientId values in reports
+   $debugQuery3 = "SELECT reportId, patientId FROM reports";
+   $debugStmt3 = $pdo->query($debugQuery3);
+   $reportPatientIds = $debugStmt3->fetchAll(PDO::FETCH_ASSOC);
+   
+   // Debug: Check patientId values in patients
+   $debugQuery4 = "SELECT patientId FROM patients";
+   $debugStmt4 = $pdo->query($debugQuery4);
+   $patientIds = $debugStmt4->fetchAll(PDO::FETCH_ASSOC);
+   
+   echo "<!-- Debug: Total reports: $totalReports, Total patients: $totalPatients -->";
+   echo "<!-- Debug: Report patientIds: " . print_r($reportPatientIds, true) . " -->";
+   echo "<!-- Debug: Patient IDs: " . print_r($patientIds, true) . " -->";
+   
    $countQuery = "
        SELECT COUNT(*) 
        FROM reports r
-       JOIN patients p ON r.patientId = p.patientId
+       LEFT JOIN patients p ON r.patientId = p.patientId
        $whereClause
    ";
+   
+   // Debug: Print the query and parameters
+   echo "<!-- Debug: Query: $countQuery -->";
+   echo "<!-- Debug: Parameters: " . print_r($params, true) . " -->";
    
    $countStmt = $pdo->prepare($countQuery);
    if (!empty($params)) {
@@ -88,6 +115,7 @@ try {
    $totalPages = ceil($totalRecords / $recordsPerPage);
 } catch (PDOException $e) {
    $error = "Database error: " . $e->getMessage();
+   echo "<!-- Debug: SQL Error: " . $e->getMessage() . " -->";
    $totalRecords = 0;
    $totalPages = 0;
 }
@@ -95,10 +123,10 @@ try {
 // Get reports
 try {
    $query = "
-       SELECT r.reportId, r.referenceNumber, r.reportDate, r.biteDate, r.animalType, r.biteType, r.status, r.updated_at,
+       SELECT r.reportId, r.reportDate, r.biteDate, r.animalType, r.biteType, r.status, r.updated_at,
               p.firstName, p.lastName, p.contactNumber, p.barangay
        FROM reports r
-       JOIN patients p ON r.patientId = p.patientId
+       LEFT JOIN patients p ON r.patientId = p.patientId
        $whereClause
        ORDER BY r.reportDate DESC
        LIMIT $offset, $recordsPerPage
@@ -112,8 +140,14 @@ try {
    }
    
    $reports = $stmt->fetchAll(PDO::FETCH_ASSOC);
+   
+   // Debug: Print the first report to check data
+   if (!empty($reports)) {
+       echo "<!-- Debug: First report data: " . print_r($reports[0], true) . " -->";
+   }
 } catch (PDOException $e) {
    $error = "Database error: " . $e->getMessage();
+   echo "<!-- Debug: SQL Error in reports query: " . $e->getMessage() . " -->";
    $reports = [];
 }
 
@@ -509,7 +543,7 @@ try {
                <table class="table table-hover">
                    <thead>
                        <tr>
-                           <th>Ref #</th>
+                           <th>ID</th>
                            <th>Patient Name</th>
                            <th>Contact</th>
                            <th>Barangay</th>
@@ -532,7 +566,7 @@ try {
                        <?php else: ?>
                            <?php foreach ($reports as $report): ?>
                            <tr>
-                               <td><?php echo htmlspecialchars($report['referenceNumber']); ?></td>
+                               <td><?php echo htmlspecialchars($report['reportId']); ?></td>
                                <td><?php echo htmlspecialchars($report['firstName'] . ' ' . $report['lastName']); ?></td>
                                <td><?php echo htmlspecialchars($report['contactNumber']); ?></td>
                                <td><?php echo htmlspecialchars($report['barangay']); ?></td>

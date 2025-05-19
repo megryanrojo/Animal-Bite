@@ -319,47 +319,7 @@ try {
   </style>
 </head>
 <body>
-  <!-- Navbar -->
-  <nav class="navbar navbar-expand-lg navbar-light sticky-top">
-    <div class="container">
-      <a class="navbar-brand" href="dashboard.php">
-        <i class="bi bi-heart-pulse"></i>
-        <span class="fw-bold">Animal Bite Center</span>
-      </a>
-      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
-        <span class="navbar-toggler-icon"></span>
-      </button>
-      <div class="collapse navbar-collapse" id="navbarNav">
-        <ul class="navbar-nav me-auto">
-          <li class="nav-item">
-            <a class="nav-link" href="dashboard.php"><i class="bi bi-house-door me-1"></i> Dashboard</a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link active" href="reports.php"><i class="bi bi-file-earmark-text me-1"></i> Reports</a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" href="patients.php"><i class="bi bi-people me-1"></i> Patients</a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" href="resources.php"><i class="bi bi-journal-medical me-1"></i> Resources</a>
-          </li>
-        </ul>
-        <div class="d-flex align-items-center">
-          <div class="dropdown">
-            <a class="nav-link dropdown-toggle" href="#" role="button" id="userDropdown" data-bs-toggle="dropdown" aria-expanded="false">
-              <i class="bi bi-person-circle me-1"></i> <?php echo htmlspecialchars($staff['firstName'] . ' ' . $staff['lastName']); ?>
-            </a>
-            <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="userDropdown">
-              <li><a class="dropdown-item" href="profile.php"><i class="bi bi-person me-2"></i> My Profile</a></li>
-              <li><a class="dropdown-item" href="settings.php"><i class="bi bi-gear me-2"></i> Settings</a></li>
-              <li><hr class="dropdown-divider"></li>
-              <li><a class="dropdown-item text-danger" href="../logout/staff_logout.php"><i class="bi bi-box-arrow-right me-2"></i> Logout</a></li>
-            </ul>
-          </div>
-        </div>
-      </div>
-    </div>
-  </nav>
+  <?php $activePage = 'reports'; include 'navbar.php'; ?>
 
   <div class="report-container">
     <div class="report-card">

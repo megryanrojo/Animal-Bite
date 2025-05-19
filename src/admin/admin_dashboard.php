@@ -6,6 +6,7 @@ if (!isset($_SESSION['admin_id'])) {
 }
 
 require_once '../conn/conn.php';
+require_once 'includes/notification_helper.php';
 
 // Get admin information
 try {
@@ -14,6 +15,27 @@ try {
     $admin = $stmt->fetch(PDO::FETCH_ASSOC);
 } catch (PDOException $e) {
     $admin = ['firstName' => 'Admin', 'lastName' => ''];
+}
+
+// Get unread notification count
+$unread_count = getUnreadNotificationCount($pdo);
+
+// Get recent notifications
+$recent_notifications = getAllNotifications($pdo, 5);
+
+// Mark notification as read if requested
+if (isset($_GET['read_notification']) && !empty($_GET['read_notification'])) {
+    markNotificationAsRead($pdo, $_GET['read_notification']);
+    
+    // If a redirect URL is provided, go there
+    if (isset($_GET['redirect'])) {
+        header("Location: " . $_GET['redirect']);
+        exit;
+    }
+    
+    // Otherwise, redirect back to dashboard
+    header("Location: admin_dashboard.php");
+    exit;
 }
 
 // Get statistics
@@ -60,6 +82,36 @@ try {
     $totalPatients = 0;
     $totalStaff = 0;
     $recentReports = [];
+}
+
+// Add some sample notifications for testing if none exist
+if (count(getAllNotifications($pdo)) === 0) {
+    add_notification(
+        $pdo,
+        'Welcome to the Admin Dashboard',
+        'This is your notification center where you can see important alerts and updates.',
+        'info',
+        'info-circle',
+        null
+    );
+    
+    add_notification(
+        $pdo,
+        'New Animal Bite Report',
+        'A new animal bite report has been submitted for patient: John Doe',
+        'info',
+        'file-medical',
+        'view_report.php?id=1'
+    );
+    
+    add_notification(
+        $pdo,
+        'Critical Case Alert',
+        'A critical animal bite case (Category III) has been reported for patient: Jane Smith',
+        'danger',
+        'exclamation-circle',
+        'view_report.php?id=2'
+    );
 }
 ?>
 
@@ -314,6 +366,69 @@ try {
             border-top: 1px solid rgba(0, 0, 0, 0.05);
         }
         
+        /* Notification Styles */
+        .badge-counter {
+            position: absolute;
+            top: 0;
+            right: 0;
+            transform: translate(50%, -50%);
+            font-size: 0.65rem;
+        }
+        
+        .notification-dropdown {
+            min-width: 320px;
+            max-width: 320px;
+            max-height: 400px;
+            overflow-y: auto;
+            padding: 0;
+        }
+        
+        .dropdown-header {
+            background-color: #f8f9fa;
+            padding: 0.75rem 1rem;
+            font-weight: 600;
+        }
+        
+        .dropdown-footer {
+            background-color: #f8f9fa;
+            padding: 0.75rem 1rem;
+            text-align: center;
+            font-weight: 500;
+        }
+        
+        .notification-item {
+            border-left: 4px solid transparent;
+            transition: all 0.2s ease;
+        }
+        
+        .notification-item:hover {
+            background-color: rgba(0, 0, 0, 0.02);
+        }
+        
+        .notification-item.unread {
+            border-left-color: var(--bs-primary);
+            background-color: rgba(var(--bs-primary-rgb), 0.05);
+        }
+        
+        .notification-item.info { border-left-color: #0dcaf0; }
+        .notification-item.warning { border-left-color: #ffc107; }
+        .notification-item.danger { border-left-color: #dc3545; }
+        .notification-item.success { border-left-color: #198754; }
+        
+        .notification-icon {
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+        }
+        
+        .notification-icon.info { background-color: rgba(13, 202, 240, 0.2); color: #0dcaf0; }
+        .notification-icon.warning { background-color: rgba(255, 193, 7, 0.2); color: #ffc107; }
+        .notification-icon.danger { background-color: rgba(220, 53, 69, 0.2); color: #dc3545; }
+        .notification-icon.success { background-color: rgba(25, 135, 84, 0.2); color: #198754; }
+        
         @media (max-width: 768px) {
             .dashboard-container {
                 padding: 1rem;
@@ -340,38 +455,84 @@ try {
 <body>
     <!-- Navbar -->
     <nav class="navbar navbar-expand-lg navbar-light sticky-top mb-4">
-    <div class="container">
-      <a class="navbar-brand fw-bold" href="index.php">BHW Admin Portal</a>
-      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
-        <span class="navbar-toggler-icon"></span>
-      </button>
-      <div class="collapse navbar-collapse" id="navbarNav">
-        <ul class="navbar-nav ms-auto">
-          <li class="nav-item">
-            <a class="nav-link active" href="admin_dashboard.php"><i class="bi bi-house-door"></i> Dashboard</a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" href="geomapping.php"><i class="bi bi-geo-alt me-1"></i> Geomapping</a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" href="view_reports.php"><i class="bi bi-file-earmark-text"></i> Reports</a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" href="decisionSupport.php"><i class="bi bi-graph-up me-1"></i> Decision Support</a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" href="view_staff.php"><i class="bi bi-people"></i> Staff</a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" href="admin_settings.php"><i class="bi bi-gear"></i> Settings</a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link btn-logout ms-2" href="../logout/admin_logout.php"><i class="bi bi-box-arrow-right"></i> Logout</a>
-          </li>
-        </ul>
-      </div>
-    </div>
-  </nav>
+        <div class="container">
+            <a class="navbar-brand fw-bold" href="admin_dashboard.php">BHW Admin Portal</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link active" href="admin_dashboard.php"><i class="bi bi-house-door"></i> Dashboard</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="geomapping.php"><i class="bi bi-geo-alt me-1"></i> Geomapping</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="view_reports.php"><i class="bi bi-file-earmark-text"></i> Reports</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="decisionSupport.php"><i class="bi bi-graph-up me-1"></i> Decision Support</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="view_staff.php"><i class="bi bi-people"></i> Staff</a>
+                    </li>
+                    <!-- Notification Dropdown -->
+                    <li class="nav-item dropdown">
+                        <a class="nav-link position-relative" href="#" id="notificationDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                            <i class="bi bi-bell"></i>
+                            <?php if ($unread_count > 0): ?>
+                            <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger badge-counter">
+                                <?php echo $unread_count > 99 ? '99+' : $unread_count; ?>
+                            </span>
+                            <?php endif; ?>
+                        </a>
+                        <div class="dropdown-menu dropdown-menu-end notification-dropdown" aria-labelledby="notificationDropdown">
+                            <div class="dropdown-header d-flex justify-content-between align-items-center">
+                                <span>Notifications</span>
+                                <?php if ($unread_count > 0): ?>
+                                <a href="notifications.php?action=mark_all_read" class="text-decoration-none small">Mark all as read</a>
+                                <?php endif; ?>
+                            </div>
+                            <div class="dropdown-divider m-0"></div>
+                            <?php if (count($recent_notifications) > 0): ?>
+                                <?php foreach ($recent_notifications as $notification): ?>
+                                <a class="dropdown-item notification-item <?php echo !$notification['is_read'] ? 'unread' : ''; ?> <?php echo $notification['type']; ?> p-2" 
+                                   href="<?php echo !empty($notification['link']) ? htmlspecialchars($notification['link']) : 'admin_dashboard.php?read_notification=' . $notification['id']; ?>">
+                                    <div class="d-flex align-items-center">
+                                        <div class="notification-icon <?php echo $notification['type']; ?> me-3">
+                                            <i class="bi bi-<?php echo htmlspecialchars($notification['icon']); ?>"></i>
+                                        </div>
+                                        <div>
+                                            <div class="small text-muted"><?php echo format_notification_date($notification['created_at']); ?></div>
+                                            <div class="fw-bold"><?php echo htmlspecialchars($notification['title']); ?></div>
+                                            <div class="text-truncate" style="max-width: 230px;"><?php echo htmlspecialchars($notification['message']); ?></div>
+                                        </div>
+                                    </div>
+                                </a>
+                                <div class="dropdown-divider m-0"></div>
+                                <?php endforeach; ?>
+                            <?php else: ?>
+                                <div class="dropdown-item text-center p-3">
+                                    <span class="text-muted">No notifications</span>
+                                </div>
+                                <div class="dropdown-divider m-0"></div>
+                            <?php endif; ?>
+                            <div class="dropdown-footer">
+                                <a href="notifications.php" class="text-decoration-none">View all notifications</a>
+                            </div>
+                        </div>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="admin_settings.php"><i class="bi bi-gear"></i> Settings</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link btn-logout ms-2" href="../logout/admin_logout.php"><i class="bi bi-box-arrow-right"></i> Logout</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
   
     <div class="dashboard-container">
         <!-- Welcome Section -->
@@ -522,6 +683,9 @@ try {
                         </div>
                         <h5>Notifications</h5>
                         <p class="text-muted mb-0">Manage system alerts</p>
+                        <?php if ($unread_count > 0): ?>
+                        <span class="badge bg-danger position-absolute top-0 end-0 m-2"><?php echo $unread_count; ?></span>
+                        <?php endif; ?>
                     </a>
                 </div>
             </div>

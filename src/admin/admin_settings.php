@@ -5,10 +5,11 @@ if (!isset($_SESSION['admin_id'])) {
     exit;
 }
 
-require '../conn/conn.php';
+require_once '../conn/conn.php';
+require_once 'includes/notification_helper.php';
 
 $admin_id = $_SESSION['admin_id'];
-$stmt = $pdo->prepare("SELECT name, email FROM admin WHERE adminId = ?");
+$stmt = $pdo->prepare("SELECT firstName, lastName, email FROM admin WHERE adminId = ?");
 $stmt->execute([$admin_id]);
 $admin = $stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -18,8 +19,9 @@ $error = "";
 
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
     if (isset($_POST['update_account'])) {
-        $name = $_POST['adminName'];
-        $email = $_POST['adminEmail'];
+        $firstName = $_POST['firstName'];
+        $lastName = $_POST['lastName'];
+        $email = $_POST['email'];
         
         $stmt = $pdo->prepare("SELECT adminId FROM admin WHERE email = ? AND adminId != ?");
         $stmt->execute([$email, $admin_id]);
@@ -29,15 +31,16 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             $error = "Email already in use by another admin.";
         } else {
             // Update admin information
-            $stmt = $pdo->prepare("UPDATE admin SET name = ?, email = ? WHERE adminId = ?");
+            $stmt = $pdo->prepare("UPDATE admin SET firstName = ?, lastName = ?, email = ? WHERE adminId = ?");
             
             try {
-                $stmt->execute([$name, $email, $admin_id]);
+                $stmt->execute([$firstName, $lastName, $email, $admin_id]);
                 $account_updated = true;
                 // Update session data
-                $_SESSION['admin_name'] = $name;
+                $_SESSION['admin_name'] = $firstName . ' ' . $lastName;
                 // Refresh admin data
-                $admin['name'] = $name;
+                $admin['firstName'] = $firstName;
+                $admin['lastName'] = $lastName;
                 $admin['email'] = $email;
             } catch (PDOException $e) {
                 $error = "Error updating account: " . $e->getMessage();
@@ -78,7 +81,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     }
 }
 ?>
-
 
 <!DOCTYPE html>
 <html lang="en">
@@ -182,6 +184,92 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
       border-color: var(--bs-primary);
     }
     
+    /* Notification Dropdown Styles */
+    .notification-dropdown {
+        min-width: 320px;
+        max-width: 320px;
+        max-height: 400px;
+        overflow-y: auto;
+        padding: 0;
+    }
+    
+    .dropdown-header {
+        background-color: #f8f9fa;
+        padding: 0.75rem 1rem;
+        font-weight: 600;
+        border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+    }
+    
+    .dropdown-footer {
+        background-color: #f8f9fa;
+        padding: 0.75rem 1rem;
+        text-align: center;
+        font-weight: 500;
+        border-top: 1px solid rgba(0, 0, 0, 0.05);
+    }
+    
+    .notification-item {
+        padding: 0.75rem 1rem;
+        border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+        transition: background-color 0.2s;
+    }
+    
+    .notification-item:hover {
+        background-color: rgba(var(--bs-primary-rgb), 0.03);
+    }
+    
+    .notification-item.unread {
+        background-color: rgba(var(--bs-primary-rgb), 0.05);
+    }
+    
+    .notification-icon {
+        width: 36px;
+        height: 36px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 50%;
+        flex-shrink: 0;
+    }
+    
+    .notification-icon.info { background-color: rgba(13, 202, 240, 0.2); color: #0dcaf0; }
+    .notification-icon.warning { background-color: rgba(255, 193, 7, 0.2); color: #ffc107; }
+    .notification-icon.danger { background-color: rgba(220, 53, 69, 0.2); color: #dc3545; }
+    .notification-icon.success { background-color: rgba(25, 135, 84, 0.2); color: #198754; }
+    
+    .notification-content {
+        margin-left: 0.75rem;
+        overflow: hidden;
+    }
+    
+    .notification-title {
+        font-weight: 600;
+        margin-bottom: 0.25rem;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    
+    .notification-message {
+        font-size: 0.875rem;
+        color: #6c757d;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    
+    .notification-time {
+        font-size: 0.75rem;
+        color: #6c757d;
+    }
+    
+    .badge-counter {
+        position: absolute;
+        top: 0px;
+        right: 0px;
+        transform: translate(25%, -25%);
+    }
+    
     @media (max-width: 768px) {
       .settings-container {
         padding: 1rem;
@@ -194,40 +282,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
   </style>
 </head>
 <body>
-  <!-- Navbar -->
-  <nav class="navbar navbar-expand-lg navbar-light sticky-top mb-4">
-    <div class="container">
-      <a class="navbar-brand fw-bold" href="index.php">BHW Admin Portal</a>
-      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
-        <span class="navbar-toggler-icon"></span>
-      </button>
-      <div class="collapse navbar-collapse" id="navbarNav">
-        <ul class="navbar-nav ms-auto">
-          <li class="nav-item">
-            <a class="nav-link active" href="admin_dashboard.php"><i class="bi bi-house-door"></i> Dashboard</a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" href="geomapping.php"><i class="bi bi-geo-alt me-1"></i> Geomapping</a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" href="view_reports.php"><i class="bi bi-file-earmark-text"></i> Reports</a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" href="decisionSupport.php"><i class="bi bi-graph-up me-1"></i> Decision Support</a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" href="view_staff.php"><i class="bi bi-people"></i> Staff</a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" href="admin_settings.php"><i class="bi bi-gear"></i> Settings</a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link btn-logout ms-2" href="../logout/admin_logout.php"><i class="bi bi-box-arrow-right"></i> Logout</a>
-          </li>
-        </ul>
-      </div>
-    </div>
-  </nav>
+  <!-- Include the navbar -->
+  <?php include 'includes/navbar.php'; ?>
 
   <div class="settings-container">
     <!-- Page Header -->
@@ -302,12 +358,16 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
               <div class="settings-card-body">
                 <form method="POST" action="">
                   <div class="mb-3">
-                    <label for="adminName" class="form-label">Admin Name</label>
-                    <input type="text" class="form-control" id="adminName" name="adminName" value="<?php echo htmlspecialchars($admin['name']); ?>" required>
+                    <label for="firstName" class="form-label">First Name</label>
+                    <input type="text" class="form-control" id="firstName" name="firstName" value="<?php echo htmlspecialchars($admin['firstName']); ?>" required>
                   </div>
                   <div class="mb-3">
-                    <label for="adminEmail" class="form-label">Email Address</label>
-                    <input type="email" class="form-control" id="adminEmail" name="adminEmail" value="<?php echo htmlspecialchars($admin['email']); ?>" required>
+                    <label for="lastName" class="form-label">Last Name</label>
+                    <input type="text" class="form-control" id="lastName" name="lastName" value="<?php echo htmlspecialchars($admin['lastName']); ?>" required>
+                  </div>
+                  <div class="mb-3">
+                    <label for="email" class="form-label">Email Address</label>
+                    <input type="email" class="form-control" id="email" name="email" value="<?php echo htmlspecialchars($admin['email']); ?>" required>
                   </div>
                   <button type="submit" name="update_account" class="btn btn-primary">Save Changes</button>
                 </form>

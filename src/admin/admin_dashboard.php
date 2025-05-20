@@ -454,85 +454,7 @@ if (count(getAllNotifications($pdo)) === 0) {
 </head>
 <body>
     <!-- Navbar -->
-    <nav class="navbar navbar-expand-lg navbar-light sticky-top mb-4">
-        <div class="container">
-            <a class="navbar-brand fw-bold" href="admin_dashboard.php">Animal Bite Admin Portal</a>
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
-                <span class="navbar-toggler-icon"></span>
-            </button>
-            <div class="collapse navbar-collapse" id="navbarNav">
-                <ul class="navbar-nav ms-auto">
-                    <li class="nav-item">
-                        <a class="nav-link active" href="admin_dashboard.php"><i class="bi bi-house-door"></i> Dashboard</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="geomapping.php"><i class="bi bi-geo-alt me-1"></i> Geomapping</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="view_reports.php"><i class="bi bi-file-earmark-text"></i> Reports</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="decisionSupport.php"><i class="bi bi-graph-up me-1"></i> Decision Support</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="view_staff.php"><i class="bi bi-people"></i> Staff</a>
-                    </li>
-                    <!-- Notification Dropdown -->
-                    <li class="nav-item dropdown">
-                        <a class="nav-link position-relative" href="#" id="notificationDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                            <i class="bi bi-bell"></i>
-                            <?php if ($unread_count > 0): ?>
-                            <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger badge-counter">
-                                <?php echo $unread_count > 99 ? '99+' : $unread_count; ?>
-                            </span>
-                            <?php endif; ?>
-                        </a>
-                        <div class="dropdown-menu dropdown-menu-end notification-dropdown" aria-labelledby="notificationDropdown">
-                            <div class="dropdown-header d-flex justify-content-between align-items-center">
-                                <span>Notifications</span>
-                                <?php if ($unread_count > 0): ?>
-                                <a href="notifications.php?action=mark_all_read" class="text-decoration-none small">Mark all as read</a>
-                                <?php endif; ?>
-                            </div>
-                            <div class="dropdown-divider m-0"></div>
-                            <?php if (count($recent_notifications) > 0): ?>
-                                <?php foreach ($recent_notifications as $notification): ?>
-                                <a class="dropdown-item notification-item <?php echo !$notification['is_read'] ? 'unread' : ''; ?> <?php echo $notification['type']; ?> p-2" 
-                                   href="<?php echo !empty($notification['link']) ? htmlspecialchars($notification['link']) : 'admin_dashboard.php?read_notification=' . $notification['id']; ?>">
-                                    <div class="d-flex align-items-center">
-                                        <div class="notification-icon <?php echo $notification['type']; ?> me-3">
-                                            <i class="bi bi-<?php echo htmlspecialchars($notification['icon']); ?>"></i>
-                                        </div>
-                                        <div>
-                                            <div class="small text-muted"><?php echo format_notification_date($notification['created_at']); ?></div>
-                                            <div class="fw-bold"><?php echo htmlspecialchars($notification['title']); ?></div>
-                                            <div class="text-truncate" style="max-width: 230px;"><?php echo htmlspecialchars($notification['message']); ?></div>
-                                        </div>
-                                    </div>
-                                </a>
-                                <div class="dropdown-divider m-0"></div>
-                                <?php endforeach; ?>
-                            <?php else: ?>
-                                <div class="dropdown-item text-center p-3">
-                                    <span class="text-muted">No notifications</span>
-                                </div>
-                                <div class="dropdown-divider m-0"></div>
-                            <?php endif; ?>
-                            <div class="dropdown-footer">
-                                <a href="notifications.php" class="text-decoration-none">View all notifications</a>
-                            </div>
-                        </div>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="admin_settings.php"><i class="bi bi-gear"></i> Settings</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link btn-logout ms-2" href="../logout/admin_logout.php"><i class="bi bi-box-arrow-right"></i> Logout</a>
-                    </li>
-                </ul>
-            </div>
-        </div>
-    </nav>
+    <?php include 'includes/navbar.php'; ?>
   
     <div class="dashboard-container">
         <!-- Welcome Section -->
@@ -675,17 +597,6 @@ if (count(getAllNotifications($pdo)) === 0) {
                         </div>
                         <h5>System Settings</h5>
                         <p class="text-muted mb-0">Configure system parameters</p>
-                    </a>
-                    
-                    <a href="notifications.php" class="action-card">
-                        <div class="action-icon">
-                            <i class="bi bi-bell"></i>
-                        </div>
-                        <h5>Notifications</h5>
-                        <p class="text-muted mb-0">Manage system alerts</p>
-                        <?php if ($unread_count > 0): ?>
-                        <span class="badge bg-danger position-absolute top-0 end-0 m-2"><?php echo $unread_count; ?></span>
-                        <?php endif; ?>
                     </a>
                 </div>
             </div>

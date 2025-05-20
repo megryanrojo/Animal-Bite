@@ -795,7 +795,7 @@ try {
                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                </div>
                <div class="modal-body">
-                   <form id="saveFilterForm">
+                   <form id="saveFilterForm" onsubmit="return false;">
                        <div class="mb-3">
                            <label for="filterName" class="form-label">Filter Name</label>
                            <input type="text" class="form-control" id="filterName" required>
@@ -907,6 +907,139 @@ try {
                window.location.href = url.toString();
            });
        });
+
+       // Save Filter functionality
+       document.addEventListener('DOMContentLoaded', function() {
+           const saveFilterBtn = document.getElementById('saveFilterBtn');
+           if (saveFilterBtn) {
+               saveFilterBtn.addEventListener('click', function() {
+                   const filterName = document.getElementById('filterName').value.trim();
+                   const filterDescription = document.getElementById('filterDescription').value.trim();
+                   
+                   if (!filterName) {
+                       alert('Please enter a filter name');
+                       return;
+                   }
+
+                   // Get current filter values
+                   const currentFilters = {
+                       name: filterName,
+                       description: filterDescription,
+                       filters: {
+                           status: document.getElementById('status').value,
+                           animal_type: document.getElementById('animal_type').value,
+                           bite_type: document.getElementById('bite_type').value,
+                           barangay: document.getElementById('barangay').value,
+                           search: document.getElementById('search').value,
+                           date_from: document.getElementById('date_from').value,
+                           date_to: document.getElementById('date_to').value
+                       }
+                   };
+
+                   try {
+                       // Get existing filters from localStorage
+                       let savedFilters = JSON.parse(localStorage.getItem('reportFilters') || '[]');
+                       
+                       // Check if filter name already exists
+                       if (savedFilters.some(f => f.name === filterName)) {
+                           if (!confirm('A filter with this name already exists. Do you want to overwrite it?')) {
+                               return;
+                           }
+                           savedFilters = savedFilters.filter(f => f.name !== filterName);
+                       }
+
+                       // Add new filter
+                       savedFilters.push(currentFilters);
+                       
+                       // Save to localStorage
+                       localStorage.setItem('reportFilters', JSON.stringify(savedFilters));
+                       
+                       // Close modal and show success message
+                       const modal = bootstrap.Modal.getInstance(document.getElementById('saveFilterModal'));
+                       modal.hide();
+                       
+                       // Clear the form
+                       document.getElementById('filterName').value = '';
+                       document.getElementById('filterDescription').value = '';
+                       
+                       alert('Filter saved successfully!');
+                   } catch (error) {
+                       console.error('Error saving filter:', error);
+                       alert('Error saving filter. Please try again.');
+                   }
+               });
+           }
+       });
+
+       // Load Filter functionality
+       function loadSavedFilters() {
+           try {
+               const savedFilters = JSON.parse(localStorage.getItem('reportFilters') || '[]');
+               const filtersList = document.getElementById('savedFiltersList');
+               
+               if (savedFilters.length === 0) {
+                   filtersList.innerHTML = '<p class="text-muted text-center">No saved filters found</p>';
+                   return;
+               }
+
+               filtersList.innerHTML = savedFilters.map(filter => `
+                   <div class="card mb-2">
+                       <div class="card-body">
+                           <h6 class="card-title">${filter.name}</h6>
+                           ${filter.description ? `<p class="card-text small text-muted">${filter.description}</p>` : ''}
+                           <div class="d-flex gap-2">
+                               <button class="btn btn-sm btn-primary load-filter" data-filter='${JSON.stringify(filter)}'>
+                                   <i class="bi bi-funnel me-1"></i>Load
+                               </button>
+                               <button class="btn btn-sm btn-danger delete-filter" data-name="${filter.name}">
+                                   <i class="bi bi-trash me-1"></i>Delete
+                               </button>
+                           </div>
+                       </div>
+                   </div>
+               `).join('');
+
+               // Add event listeners for load buttons
+               document.querySelectorAll('.load-filter').forEach(button => {
+                   button.addEventListener('click', function() {
+                       const filter = JSON.parse(this.dataset.filter);
+                       applyFilter(filter.filters);
+                   });
+               });
+
+               // Add event listeners for delete buttons
+               document.querySelectorAll('.delete-filter').forEach(button => {
+                   button.addEventListener('click', function() {
+                       const filterName = this.dataset.name;
+                       if (confirm(`Are you sure you want to delete the filter "${filterName}"?`)) {
+                           let savedFilters = JSON.parse(localStorage.getItem('reportFilters') || '[]');
+                           savedFilters = savedFilters.filter(f => f.name !== filterName);
+                           localStorage.setItem('reportFilters', JSON.stringify(savedFilters));
+                           loadSavedFilters(); // Refresh the list
+                       }
+                   });
+               });
+           } catch (error) {
+               console.error('Error loading filters:', error);
+               document.getElementById('savedFiltersList').innerHTML = 
+                   '<p class="text-danger text-center">Error loading saved filters</p>';
+           }
+       }
+
+       // Function to apply filter
+       function applyFilter(filters) {
+           const form = document.querySelector('form[method="GET"]');
+           Object.entries(filters).forEach(([key, value]) => {
+               const input = form.querySelector(`[name="${key}"]`);
+               if (input) {
+                   input.value = value;
+               }
+           });
+           form.submit();
+       }
+
+       // Load saved filters when modal opens
+       document.getElementById('loadFilterModal').addEventListener('show.bs.modal', loadSavedFilters);
 
        // Report preview modal
        const reportModal = document.getElementById('reportModal');
@@ -1022,10 +1155,6 @@ try {
            
            // Initialize column visibility when page loads
            initializeColumnVisibility();
-           
-           // Debug logging
-           console.log('Column visibility initialized');
-           console.log('Saved columns:', savedColumns);
        });
    </script>
 </body>

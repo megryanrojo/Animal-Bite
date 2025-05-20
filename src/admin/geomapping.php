@@ -129,7 +129,6 @@ try {
     $recentCases = [];
 }
 
-// Function to build URL with updated parameters
 function buildUrl($newParams = []) {
     $params = $_GET;
     
@@ -144,7 +143,7 @@ function buildUrl($newParams = []) {
     return 'geomapping.php?' . http_build_query($params);
 }
 
-// Fetch coordinates for each barangay dynamically from the database
+// Fetch coordinates for each barangay dynamically halin sa database
 $barangayCoordinates = [];
 try {
     $stmt = $pdo->query("SELECT barangay, latitude, longitude FROM barangay_coordinates");
@@ -537,11 +536,8 @@ error_log("Final Heatmap Data for JavaScript: " . print_r($jsHeatmapData, true))
     </style>
 </head>
 <body>
-    <!-- Include the navbar -->
     <?php include 'includes/navbar.php'; ?>
-
     <div class="geomapping-container">
-        <!-- Page Header -->
         <div class="d-flex justify-content-between align-items-center mb-4">
             <div>
                 <h2 class="mb-1">Geomapping Analysis</h2>
@@ -557,7 +553,6 @@ error_log("Final Heatmap Data for JavaScript: " . print_r($jsHeatmapData, true))
             </div>
         </div>
         
-        <!-- Filters -->
         <div class="filter-form">
             <form method="GET" action="geomapping.php">
                 <div class="row g-3">
@@ -830,28 +825,25 @@ error_log("Final Heatmap Data for JavaScript: " . print_r($jsHeatmapData, true))
         }).addTo(map);
         
         var heatData = <?php echo json_encode($jsHeatmapData); ?>;
-        console.log('Heatmap Data:', heatData); // Debug output
+        console.log('Heatmap Data:', heatData); 
         
         var heatPoints = [];
         var markers = L.markerClusterGroup();
 
         heatData.forEach(function(point) {
-            // Add intensity based on case count
-            var intensity = Math.min(point.count / 2, 1); // Adjusted for smaller numbers
+            var intensity = Math.min(point.count / 2, 1); 
             heatPoints.push([point.lat, point.lng, intensity]);
-            console.log('Adding point:', point.barangay, 'with intensity:', intensity); // Debug output
-            
-            // Create marker with popup
+            console.log('Adding point:', point.barangay, 'with intensity:', intensity); 
+
             var marker = L.marker([point.lat, point.lng])
                 .bindPopup('<strong>' + point.barangay + '</strong><br>Cases: ' + point.count);
             
             markers.addLayer(marker);
         });
         
-        // Create heatmap layer with adjusted parameters
         var heat = L.heatLayer(heatPoints, {
-            radius: 50, // Increased radius
-            blur: 25,   // Increased blur
+            radius: 50, 
+            blur: 25,   
             maxZoom: 18,
             minOpacity: 0.6,
             gradient: {
@@ -862,11 +854,9 @@ error_log("Final Heatmap Data for JavaScript: " . print_r($jsHeatmapData, true))
             }
         }).addTo(map);
         
-        // Initially show both heatmap and markers
         map.addLayer(heat);
         map.addLayer(markers);
         
-        // Toggle between heatmap and markers
         document.getElementById('heatmapView').addEventListener('click', function() {
             map.removeLayer(markers);
             map.addLayer(heat);
@@ -885,14 +875,12 @@ error_log("Final Heatmap Data for JavaScript: " . print_r($jsHeatmapData, true))
             document.getElementById('heatmapView').classList.add('btn-outline-primary');
         });
         
-        // Add legend
         var legend = L.control({position: 'bottomright'});
         
         legend.onAdd = function (map) {
             var div = L.DomUtil.create('div', 'legend');
             div.innerHTML = '<h6>Case Density</h6>';
             
-            // Add legend items
             var grades = [1, 5, 10, 20, 50];
             var colors = ['blue', 'lime', 'yellow', 'orange', 'red'];
             
@@ -909,7 +897,6 @@ error_log("Final Heatmap Data for JavaScript: " . print_r($jsHeatmapData, true))
         
         legend.addTo(map);
         
-        // Print map function
         function printMap() {
             window.print();
         }

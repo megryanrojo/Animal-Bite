@@ -273,7 +273,6 @@ try {
         
         <div class="footer">
             <p>Total Reports: <?php echo count($reports); ?></p>
-            <p>This is a computer-generated report. No signature is required.</p>
         </div>
     </div>
 </body>

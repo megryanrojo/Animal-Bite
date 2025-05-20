@@ -532,7 +532,7 @@ function buildUrl($newParams = []) {
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Analytics Dashboard | Animal Bite Center</title>
+    <title>Decision Support | Animal Bite Center</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
@@ -856,8 +856,8 @@ function buildUrl($newParams = []) {
         <!-- Page Header -->
         <div class="d-flex justify-content-between align-items-center mb-4">
             <div>
-                <h2 class="mb-1">Analytics Dashboard</h2>
-                <p class="text-muted mb-0">Comprehensive analysis of animal bite cases and trends</p>
+                <h2 class="mb-1">Decision Support</h2>
+                <p class="text-muted mb-0">Analysis of animal bite cases and trends</p>
             </div>
             <div>
                 <button class="btn btn-outline-primary me-2" onclick="window.print()">
@@ -868,7 +868,6 @@ function buildUrl($newParams = []) {
                         <i class="bi bi-download me-2"></i>Export
                     </button>
                     <ul class="dropdown-menu dropdown-menu-end">
-                        <li><a class="dropdown-item" href="export_analytics.php?format=pdf&<?php echo http_build_query($_GET); ?>"><i class="bi bi-file-pdf me-2"></i>Export as PDF</a></li>
                         <li><a class="dropdown-item" href="export_analytics.php?format=excel&<?php echo http_build_query($_GET); ?>"><i class="bi bi-file-excel me-2"></i>Export as Excel</a></li>
                         <li><a class="dropdown-item" href="export_analytics.php?format=csv&<?php echo http_build_query($_GET); ?>"><i class="bi bi-file-csv me-2"></i>Export as CSV</a></li>
                     </ul>

@@ -12,27 +12,27 @@ session_start();
 // Check if user is logged in
 if (!isset($_SESSION['staffId']) || empty($_SESSION['staffId'])) {
     ob_end_clean();
-    header("Location: ../login/staff_login.html");
+    header("Location: ../login/admin_login.php");
     exit;
 }
 
 // Include database connection
 require_once '../conn/conn.php';
 
-// Get staff information
+// Get admin information
 try {
     $stmt = $pdo->prepare("SELECT firstName, lastName FROM staff WHERE staffId = ?");
     $stmt->execute([$_SESSION['staffId']]);
-    $staff = $stmt->fetch(PDO::FETCH_ASSOC);
+    $admin = $stmt->fetch(PDO::FETCH_ASSOC);
     
-    if (!$staff) {
+    if (!$admin) {
         session_destroy();
         ob_end_clean();
-        header("Location: ../login/staff_login.html");
+        header("Location: ../login/admin_login.php");
         exit;
     }
 } catch (PDOException $e) {
-    $staff = ['firstName' => 'User', 'lastName' => ''];
+    $admin = ['firstName' => 'User', 'lastName' => ''];
 }
 
 // Check if report ID is provided
@@ -203,8 +203,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
     <style>
         :root {
-            --bs-primary: #28a745;
-            --bs-primary-rgb: 40, 167, 69;
+            --bs-primary: #0d6efd;
+            --bs-primary-rgb: 13, 110, 253;
             --bs-secondary: #f8f9fa;
             --bs-secondary-rgb: 248, 249, 250;
         }
@@ -244,8 +244,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         
         .btn-primary:hover {
-            background-color: #218838;
-            border-color: #1e7e34;
+            background-color: #0b5ed7;
+            border-color: #0a58ca;
         }
         
         .btn-outline-primary {
@@ -332,7 +332,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     </style>
 </head>
 <body>
-    <?php $activePage = 'reports'; include 'navbar.php'; ?>
+    <?php $activePage = 'reports'; include 'includes/navbar.php'; ?>
 
     <div class="report-container">
         <!-- Success Alert -->
@@ -609,7 +609,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             <a href="view_report.php?id=<?php echo $reportId; ?>" class="btn btn-outline-secondary me-2">
                                 <i class="bi bi-arrow-left me-2"></i>Back to Report
                             </a>
-                            <a href="reports.php" class="btn btn-outline-secondary">
+                            <a href="view_reports.php" class="btn btn-outline-secondary">
                                 <i class="bi bi-file-text me-2"></i>All Reports
                             </a>
                         </div>
@@ -633,9 +633,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <div class="d-flex justify-content-between align-items-center">
                 <div>
                     <small class="text-muted">&copy; <?php echo date('Y'); ?> Animal Bite Treatment Center</small>
-                </div>
-                <div>
-                    <small><a href="help.php" class="text-decoration-none">Help & Support</a></small>
                 </div>
             </div>
         </div>

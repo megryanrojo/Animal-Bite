@@ -49,6 +49,11 @@ $current_page = basename($_SERVER['PHP_SELF']);
                     </a>
                 </li>
                 <li class="nav-item">
+                    <a class="nav-link <?php echo $current_page == 'view_patients.php' ? 'active' : ''; ?>" href="view_patients.php">
+                        <i class="bi bi-person"></i> Patients
+                    </a>
+                </li>
+                <li class="nav-item">
                     <a class="nav-link <?php echo $current_page == 'decisionSupport.php' ? 'active' : ''; ?>" href="decisionSupport.php">
                         <i class="bi bi-graph-up me-1"></i> Decision Support
                     </a>
@@ -57,57 +62,6 @@ $current_page = basename($_SERVER['PHP_SELF']);
                     <a class="nav-link <?php echo $current_page == 'view_staff.php' ? 'active' : ''; ?>" href="view_staff.php">
                         <i class="bi bi-people"></i> Staff
                     </a>
-                </li>
-                
-                <!-- Notification Dropdown -->
-                <li class="nav-item dropdown">
-                    <a class="nav-link position-relative" href="#" id="notificationDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                        <i class="bi bi-bell"></i>
-                        <?php if ($unread_count > 0): ?>
-                        <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger badge-counter">
-                            <?php echo $unread_count > 99 ? '99+' : $unread_count; ?>
-                        </span>
-                        <?php endif; ?>
-                    </a>
-                    <div class="dropdown-menu dropdown-menu-end notification-dropdown" aria-labelledby="notificationDropdown" style="min-width: 320px; max-width: 320px; max-height: 400px; overflow-y: auto; padding: 0;">
-                        <div class="dropdown-header d-flex justify-content-between align-items-center" style="background-color: #f8f9fa; padding: 0.75rem 1rem; font-weight: 600;">
-                            <span>Notifications</span>
-                            <?php if ($unread_count > 0): ?>
-                            <a href="notifications.php?action=mark_all_read" class="text-decoration-none small">Mark all as read</a>
-                            <?php endif; ?>
-                        </div>
-                        <div class="dropdown-divider m-0"></div>
-                        <?php if (count($recent_notifications) > 0): ?>
-                            <?php foreach ($recent_notifications as $notification): ?>
-                            <a class="dropdown-item notification-item <?php echo !$notification['is_read'] ? 'unread' : ''; ?> <?php echo $notification['type']; ?> p-2" 
-                               href="<?php echo !empty($notification['link']) ? htmlspecialchars($notification['link']) : 'admin_dashboard.php?read_notification=' . $notification['id']; ?>"
-                               style="border-left: 4px solid <?php echo getNotificationColor($notification['type']); ?>; transition: all 0.2s ease;">
-                                <div class="d-flex align-items-center">
-                                    <div class="notification-icon <?php echo $notification['type']; ?> me-3" 
-                                         style="width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; border-radius: 50%; 
-                                                background-color: <?php echo getNotificationBgColor($notification['type']); ?>; 
-                                                color: <?php echo getNotificationColor($notification['type']); ?>;">
-                                        <i class="bi bi-<?php echo htmlspecialchars($notification['icon']); ?>"></i>
-                                    </div>
-                                    <div>
-                                        <div class="small text-muted"><?php echo format_notification_date($notification['created_at']); ?></div>
-                                        <div class="fw-bold"><?php echo htmlspecialchars($notification['title']); ?></div>
-                                        <div class="text-truncate" style="max-width: 230px;"><?php echo htmlspecialchars($notification['message']); ?></div>
-                                    </div>
-                                </div>
-                            </a>
-                            <div class="dropdown-divider m-0"></div>
-                            <?php endforeach; ?>
-                        <?php else: ?>
-                            <div class="dropdown-item text-center p-3">
-                                <span class="text-muted">No notifications</span>
-                            </div>
-                            <div class="dropdown-divider m-0"></div>
-                        <?php endif; ?>
-                        <div class="dropdown-footer" style="background-color: #f8f9fa; padding: 0.75rem 1rem; text-align: center; font-weight: 500;">
-                            <a href="notifications.php" class="text-decoration-none">View all notifications</a>
-                        </div>
-                    </div>
                 </li>
                 
                 <li class="nav-item">

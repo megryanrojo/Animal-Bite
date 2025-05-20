@@ -294,33 +294,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 </head>
 <body>
    <!-- Navbar -->
-   <nav class="navbar navbar-expand-lg navbar-light sticky-top mb-4">
-       <div class="container">
-           <a class="navbar-brand fw-bold" href="index.php">BHW Admin Portal</a>
-           <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
-               <span class="navbar-toggler-icon"></span>
-           </button>
-           <div class="collapse navbar-collapse" id="navbarNav">
-               <ul class="navbar-nav ms-auto">
-                   <li class="nav-item">
-                       <a class="nav-link" href="admin_dashboard.php"><i class="bi bi-house-door"></i> Dashboard</a>
-                   </li>
-                   <li class="nav-item">
-                       <a class="nav-link active" href="view_reports.php"><i class="bi bi-file-earmark-text"></i> Reports</a>
-                   </li>
-                   <li class="nav-item">
-                       <a class="nav-link" href="view_staff.php"><i class="bi bi-people"></i> Staff</a>
-                   </li>
-                   <li class="nav-item">
-                       <a class="nav-link" href="admin_settings.php"><i class="bi bi-gear"></i> Settings</a>
-                   </li>
-                   <li class="nav-item">
-                       <a class="nav-link btn-logout ms-2" href="../logout/admin_logout.php"><i class="bi bi-box-arrow-right"></i> Logout</a>
-                   </li>
-               </ul>
-           </div>
-       </div>
-   </nav>
+   <?php include "includes/navbar.php"; ?>    
 
    <div class="report-container">
        <!-- Page Header -->

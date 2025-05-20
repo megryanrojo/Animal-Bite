@@ -6,7 +6,7 @@ if (!isset($staff) && isset($_SESSION['staffId'])) {
     $staff = $stmt->fetch(PDO::FETCH_ASSOC);
 }
 ?>
-<nav class="navbar navbar-expand-lg navbar-light sticky-top">
+<nav class="navbar navbar-expand-lg navbar-light bg-white sticky-top shadow-sm">
   <div class="container">
     <a class="navbar-brand" href="dashboard.php">
       <i class="bi bi-heart-pulse"></i>
@@ -18,16 +18,16 @@ if (!isset($staff) && isset($_SESSION['staffId'])) {
     <div class="collapse navbar-collapse" id="navbarNav">
       <ul class="navbar-nav me-auto">
         <li class="nav-item">
-          <a class="nav-link<?php if(isset($activePage) && $activePage=="dashboard") echo " active"; ?>" href="dashboard.php"><i class="bi bi-house-door me-1"></i> Dashboard</a>
+          <a class="nav-link<?php if(isset($activePage) && $activePage=="dashboard") echo " active fw-bold"; ?>" href="dashboard.php"><i class="bi bi-house-door me-1"></i> Dashboard</a>
         </li>
         <li class="nav-item">
-          <a class="nav-link<?php if(isset($activePage) && $activePage=="reports") echo " active"; ?>" href="reports.php"><i class="bi bi-file-earmark-text me-1"></i> Reports</a>
+          <a class="nav-link<?php if(isset($activePage) && $activePage=="reports") echo " active fw-bold"; ?>" href="reports.php"><i class="bi bi-file-earmark-text me-1"></i> Reports</a>
         </li>
         <li class="nav-item">
-          <a class="nav-link<?php if(isset($activePage) && $activePage=="patients") echo " active"; ?>" href="patients.php"><i class="bi bi-people me-1"></i> Patients</a>
+          <a class="nav-link<?php if(isset($activePage) && $activePage=="patients") echo " active fw-bold"; ?>" href="patients.php"><i class="bi bi-people me-1"></i> Patients</a>
         </li>
         <li class="nav-item">
-          <a class="nav-link<?php if(isset($activePage) && $activePage=="search") echo " active"; ?>" href="search.php"><i class="bi bi-search me-1"></i> Search</a>
+          <a class="nav-link<?php if(isset($activePage) && $activePage=="search") echo " active fw-bold"; ?>" href="search.php"><i class="bi bi-search me-1"></i> Search</a>
         </li>
       </ul>
       <div class="d-flex align-items-center">
@@ -42,4 +42,36 @@ if (!isset($staff) && isset($_SESSION['staffId'])) {
       </div>
     </div>
   </div>
-</nav> 
+</nav>
+<style>
+.navbar {
+    border-bottom: 1px solid rgba(0,0,0,.1);
+}
+.navbar .nav-link {
+    color: #495057;
+    padding: 1rem 1rem;
+    transition: all 0.2s;
+}
+.navbar .nav-link:hover {
+    color: #28a745;
+}
+.navbar .nav-link.active {
+    color: #28a745;
+    background-color: rgba(40,167,69,0.1);
+    border-radius: 0.25rem;
+}
+.navbar-brand {
+    color: #28a745;
+    font-size: 1.25rem;
+}
+.navbar-brand i {
+    margin-right: 0.5rem;
+}
+.dropdown-menu {
+    border: none;
+    box-shadow: 0 0.5rem 1rem rgba(0,0,0,.15);
+}
+.dropdown-item:hover {
+    background-color: rgba(40,167,69,0.1);
+}
+</style> 

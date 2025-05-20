@@ -345,21 +345,43 @@ function getNotificationBgColor($type) {
  * @param string $biteType Bite type
  * @return bool True if successful, false otherwise
  */
-function createReportNotification(PDO $pdo, $reportId, $patientName, $biteType) {
-    $title = "New Animal Bite Report";
-    $message = "A new animal bite report has been submitted for patient: $patientName";
-    $type = "info";
-    $icon = "file-medical";
-    $link = "view_report.php?id=$reportId";
-    
-    if ($biteType === 'Category III') {
-        $title = "Critical Case Alert";
-        $message = "A critical animal bite case (Category III) has been reported for patient: $patientName";
-        $type = "danger";
-        $icon = "exclamation-circle";
+function createReportNotification(PDO $pdo, $reportId, $patientName, $biteType = null) {
+    try {
+        // If bite type is not provided, fetch it from the database
+        if ($biteType === null) {
+            $stmt = $pdo->prepare("
+                SELECT biteType, urgency 
+                FROM reports 
+                WHERE reportId = ?
+            ");
+            $stmt->execute([$reportId]);
+            $report = $stmt->fetch(PDO::FETCH_ASSOC);
+            
+            if ($report) {
+                $biteType = $report['biteType'];
+                $urgency = $report['urgency'];
+            }
+        }
+        
+        $title = "New Animal Bite Report";
+        $message = "A new animal bite report has been submitted for patient: $patientName";
+        $type = "info";
+        $icon = "file-medical";
+        $link = "view_report.php?id=$reportId";
+        
+        // Check for critical cases
+        if (($biteType === 'Category III') || (isset($urgency) && $urgency === 'High')) {
+            $title = "Critical Case Alert";
+            $message = "A critical animal bite case has been reported for patient: $patientName";
+            $type = "danger";
+            $icon = "exclamation-circle";
+        }
+        
+        return add_notification($pdo, $title, $message, $type, $icon, $link);
+    } catch (PDOException $e) {
+        error_log("Error creating report notification: " . $e->getMessage());
+        return false;
     }
-    
-    return add_notification($pdo, $title, $message, $type, $icon, $link);
 }
 
 /**
@@ -369,24 +391,45 @@ function createReportNotification(PDO $pdo, $reportId, $patientName, $biteType) 
  * @param int $reportId Report ID
  * @param string $patientName Patient name
  * @param string $status New status
+ * @param string|null $staffName Staff member who updated the status
  * @return bool True if successful, false otherwise
  */
-function createStatusUpdateNotification(PDO $pdo, $reportId, $patientName, $status) {
-    $title = "Report Status Updated";
-    $message = "The status for $patientName's report has been updated to: $status";
-    $type = "info";
-    $icon = "arrow-repeat";
-    $link = "view_report.php?id=$reportId";
-    
-    if ($status === "completed") {
-        $type = "success";
-        $icon = "check-circle";
-    } elseif ($status === "referred") {
-        $type = "warning";
-        $icon = "arrow-right-circle";
+function createStatusUpdateNotification(PDO $pdo, $reportId, $patientName, $status, $staffName = null) {
+    try {
+        $title = "Report Status Updated";
+        $message = "The status for $patientName's report has been updated to: $status";
+        if ($staffName) {
+            $message .= " by $staffName";
+        }
+        
+        $type = "info";
+        $icon = "arrow-repeat";
+        $link = "view_report.php?id=$reportId";
+        
+        switch ($status) {
+            case "completed":
+                $type = "success";
+                $icon = "check-circle";
+                break;
+            case "referred":
+                $type = "warning";
+                $icon = "arrow-right-circle";
+                break;
+            case "in_progress":
+                $type = "info";
+                $icon = "arrow-repeat";
+                break;
+            case "cancelled":
+                $type = "danger";
+                $icon = "x-circle";
+                break;
+        }
+        
+        return add_notification($pdo, $title, $message, $type, $icon, $link);
+    } catch (PDOException $e) {
+        error_log("Error creating status update notification: " . $e->getMessage());
+        return false;
     }
-    
-    return add_notification($pdo, $title, $message, $type, $icon, $link);
 }
 
 /**
@@ -399,12 +442,23 @@ function createStatusUpdateNotification(PDO $pdo, $reportId, $patientName, $stat
  * @return bool True if successful, false otherwise
  */
 function createThresholdNotification(PDO $pdo, $thresholdType, $currentValue, $thresholdValue) {
-    $title = "Threshold Alert: $thresholdType";
-    $message = "The $thresholdType threshold has been exceeded. Current value: $currentValue, Threshold: $thresholdValue";
-    $type = "danger";
-    $icon = "exclamation-triangle";
-    $link = "decisionSupport.php";
-    
-    return add_notification($pdo, $title, $message, $type, $icon, $link);
+    try {
+        $title = "Threshold Alert: $thresholdType";
+        $message = "The $thresholdType threshold has been exceeded. Current value: $currentValue, Threshold: $thresholdValue";
+        $type = "warning";
+        $icon = "exclamation-triangle";
+        $link = "decisionSupport.php";
+        
+        // If the current value is significantly higher than the threshold, mark as danger
+        if ($currentValue >= ($thresholdValue * 1.5)) {
+            $type = "danger";
+            $icon = "exclamation-circle";
+        }
+        
+        return add_notification($pdo, $title, $message, $type, $icon, $link);
+    } catch (PDOException $e) {
+        error_log("Error creating threshold notification: " . $e->getMessage());
+        return false;
+    }
 }
 ?>

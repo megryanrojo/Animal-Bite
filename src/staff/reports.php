@@ -36,7 +36,13 @@ $query = "
     WHERE 1=1
 ";
 
-$countQuery = "SELECT COUNT(*) FROM reports r WHERE 1=1";
+$countQuery = "
+    SELECT COUNT(*) 
+    FROM reports r
+    LEFT JOIN patients p ON r.patientId = p.patientId
+    LEFT JOIN staff s ON r.staffId = s.staffId
+    WHERE 1=1
+";
 $params = [];
 
 if (!empty($dateFrom)) {
@@ -71,8 +77,8 @@ if (!empty($status)) {
 
 if (!empty($search)) {
     $searchTerm = "%$search%";
-    $query .= " AND (CONCAT(p.firstName, ' ', p.lastName) LIKE ? OR r.reportId LIKE ? OR r.animalType LIKE ?)";
-    $countQuery .= " AND (CONCAT(p.firstName, ' ', p.lastName) LIKE ? OR r.reportId LIKE ? OR r.animalType LIKE ?)";
+    $query .= " AND (r.reportId LIKE ? OR CONCAT(p.firstName, ' ', p.lastName) LIKE ? OR r.animalType LIKE ?)";
+    $countQuery .= " AND (r.reportId LIKE ? OR CONCAT(p.firstName, ' ', p.lastName) LIKE ? OR r.animalType LIKE ?)";
     $params[] = $searchTerm;
     $params[] = $searchTerm;
     $params[] = $searchTerm;

@@ -27,7 +27,7 @@ $current_page = basename($_SERVER['PHP_SELF']);
 
 <nav class="navbar navbar-expand-lg navbar-light sticky-top mb-4">
     <div class="container">
-        <a class="navbar-brand fw-bold" href="admin_dashboard.php">BHW Admin Portal</a>
+        <a class="navbar-brand fw-bold" href="admin_dashboard.php">Animal Bite Admin Portal</a>
         <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
             <span class="navbar-toggler-icon"></span>
         </button>

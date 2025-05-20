@@ -16,13 +16,202 @@ try {
     $admin = ['firstName' => 'Admin', 'lastName' => ''];
 }
 
-// Initialize filter variables
-$dateFrom = isset($_GET['date_from']) ? $_GET['date_from'] : date('Y-m-d', strtotime('-90 days'));
+// Initialize filter variables with default dates (from January 2025)
 $dateTo = isset($_GET['date_to']) ? $_GET['date_to'] : date('Y-m-d');
-$compareFrom = isset($_GET['compare_from']) ? $_GET['compare_from'] : date('Y-m-d', strtotime('-180 days'));
-$compareTo = isset($_GET['compare_to']) ? $_GET['compare_to'] : date('Y-m-d', strtotime('-91 days'));
+$dateFrom = isset($_GET['date_from']) ? $_GET['date_from'] : '2025-01-01';
 $animalType = isset($_GET['animal_type']) ? $_GET['animal_type'] : '';
 $barangay = isset($_GET['barangay']) ? $_GET['barangay'] : '';
+
+// Ensure dates are valid
+if (empty($dateFrom) || $dateFrom === '1970-01-01') {
+    $dateFrom = '2025-01-01';
+}
+if (empty($dateTo) || $dateTo === '1970-01-01') {
+    $dateTo = date('Y-m-d');
+}
+
+// --- Total Cases ---
+$totalWhere = " WHERE r.biteDate BETWEEN ? AND ?";
+$totalParams = [$dateFrom, $dateTo];
+
+if (!empty($animalType)) {
+    $totalWhere .= " AND r.animalType = ?";
+    $totalParams[] = $animalType;
+}
+if (!empty($barangay)) {
+    $totalWhere .= " AND p.barangay = ?";
+    $totalParams[] = $barangay;
+}
+try {
+    $totalQuery = "SELECT COUNT(*) as total_cases FROM reports r JOIN patients p ON r.patientId = p.patientId $totalWhere";
+    $totalStmt = $pdo->prepare($totalQuery);
+    $totalStmt->execute($totalParams);
+    $totalCases = $totalStmt->fetchColumn();
+} catch (PDOException $e) {
+    $totalCases = 0;
+}
+
+// --- Animal Type ---
+$animalWhere = $totalWhere;
+$animalParams = $totalParams;
+try {
+    $animalQuery = "SELECT r.animalType, COUNT(*) as count FROM reports r JOIN patients p ON r.patientId = p.patientId $animalWhere GROUP BY r.animalType ORDER BY count DESC";
+    $animalStmt = $pdo->prepare($animalQuery);
+    $animalStmt->execute($animalParams);
+    $animalData = $animalStmt->fetchAll(PDO::FETCH_ASSOC);
+} catch (PDOException $e) {
+    $animalData = [];
+}
+
+// --- Bite Category ---
+$categoryWhere = $totalWhere;
+$categoryParams = $totalParams;
+try {
+    $categoryQuery = "SELECT r.biteType, COUNT(*) as count FROM reports r JOIN patients p ON r.patientId = p.patientId $categoryWhere GROUP BY r.biteType ORDER BY CASE WHEN r.biteType = 'Category I' THEN 1 WHEN r.biteType = 'Category II' THEN 2 WHEN r.biteType = 'Category III' THEN 3 ELSE 4 END";
+    $categoryStmt = $pdo->prepare($categoryQuery);
+    $categoryStmt->execute($categoryParams);
+    $categoryData = $categoryStmt->fetchAll(PDO::FETCH_ASSOC);
+} catch (PDOException $e) {
+    $categoryData = [];
+}
+
+// --- Barangay (Top 10) ---
+$barangayWhere = $totalWhere . " AND p.barangay IS NOT NULL";
+$barangayParams = $totalParams;
+try {
+    $barangayQuery = "SELECT p.barangay, COUNT(*) as count FROM reports r JOIN patients p ON r.patientId = p.patientId $barangayWhere GROUP BY p.barangay ORDER BY count DESC LIMIT 10";
+    $barangayStmt = $pdo->prepare($barangayQuery);
+    $barangayStmt->execute($barangayParams);
+    $barangayData = $barangayStmt->fetchAll(PDO::FETCH_ASSOC);
+} catch (PDOException $e) {
+    $barangayData = [];
+}
+
+// --- Trend (Cases by Month) ---
+$trendWhere = $totalWhere;
+$trendParams = $totalParams;
+try {
+    $trendQuery = "SELECT DATE_FORMAT(r.biteDate, '%Y-%m') as month, COUNT(*) as count FROM reports r JOIN patients p ON r.patientId = p.patientId $trendWhere GROUP BY DATE_FORMAT(r.biteDate, '%Y-%m') ORDER BY month";
+    $trendStmt = $pdo->prepare($trendQuery);
+    $trendStmt->execute($trendParams);
+    $trendData = $trendStmt->fetchAll(PDO::FETCH_ASSOC);
+    $trendLabels = [];
+    $trendCounts = [];
+    foreach ($trendData as $data) {
+        $date = DateTime::createFromFormat('Y-m', $data['month']);
+        $trendLabels[] = $date->format('M Y');
+        $trendCounts[] = $data['count'];
+    }
+} catch (PDOException $e) {
+    $trendData = [];
+    $trendLabels = [];
+    $trendCounts = [];
+}
+
+// --- Age Group ---
+$ageWhere = " WHERE r.biteDate BETWEEN ? AND ? AND p.dateOfBirth IS NOT NULL";
+$ageParams = [$dateFrom, $dateTo];
+
+if (!empty($animalType)) {
+    $ageWhere .= " AND r.animalType = ?";
+    $ageParams[] = $animalType;
+}
+if (!empty($barangay)) {
+    $ageWhere .= " AND p.barangay = ?";
+    $ageParams[] = $barangay;
+}
+try {
+    $ageQuery = "SELECT CASE WHEN TIMESTAMPDIFF(YEAR, p.dateOfBirth, r.biteDate) < 5 THEN 'Under 5' WHEN TIMESTAMPDIFF(YEAR, p.dateOfBirth, r.biteDate) BETWEEN 5 AND 12 THEN '5-12' WHEN TIMESTAMPDIFF(YEAR, p.dateOfBirth, r.biteDate) BETWEEN 13 AND 18 THEN '13-18' WHEN TIMESTAMPDIFF(YEAR, p.dateOfBirth, r.biteDate) BETWEEN 19 AND 30 THEN '19-30' WHEN TIMESTAMPDIFF(YEAR, p.dateOfBirth, r.biteDate) BETWEEN 31 AND 50 THEN '31-50' WHEN TIMESTAMPDIFF(YEAR, p.dateOfBirth, r.biteDate) BETWEEN 51 AND 65 THEN '51-65' WHEN TIMESTAMPDIFF(YEAR, p.dateOfBirth, r.biteDate) > 65 THEN 'Over 65' ELSE 'Unknown' END as age_group, COUNT(*) as count FROM reports r JOIN patients p ON r.patientId = p.patientId $ageWhere GROUP BY age_group ORDER BY CASE WHEN age_group = 'Under 5' THEN 1 WHEN age_group = '5-12' THEN 2 WHEN age_group = '13-18' THEN 3 WHEN age_group = '19-30' THEN 4 WHEN age_group = '31-50' THEN 5 WHEN age_group = '51-65' THEN 6 WHEN age_group = 'Over 65' THEN 7 ELSE 8 END";
+    $ageStmt = $pdo->prepare($ageQuery);
+    $ageStmt->execute($ageParams);
+    $ageData = $ageStmt->fetchAll(PDO::FETCH_ASSOC);
+} catch (PDOException $e) {
+    $ageData = [];
+}
+
+// --- Gender ---
+$genderWhere = " WHERE r.biteDate BETWEEN ? AND ? AND p.gender IS NOT NULL";
+$genderParams = [$dateFrom, $dateTo];
+
+if (!empty($animalType)) {
+    $genderWhere .= " AND r.animalType = ?";
+    $genderParams[] = $animalType;
+}
+if (!empty($barangay)) {
+    $genderWhere .= " AND p.barangay = ?";
+    $genderParams[] = $barangay;
+}
+try {
+    $genderQuery = "SELECT p.gender, COUNT(*) as count FROM reports r JOIN patients p ON r.patientId = p.patientId $genderWhere GROUP BY p.gender";
+    $genderStmt = $pdo->prepare($genderQuery);
+    $genderStmt->execute($genderParams);
+    $genderData = $genderStmt->fetchAll(PDO::FETCH_ASSOC);
+} catch (PDOException $e) {
+    $genderData = [];
+}
+
+// --- Treatment ---
+$treatmentWhere = " WHERE r.biteDate BETWEEN ? AND ?";
+$treatmentParams = [$dateFrom, $dateTo];
+
+if (!empty($animalType)) {
+    $treatmentWhere .= " AND r.animalType = ?";
+    $treatmentParams[] = $animalType;
+}
+if (!empty($barangay)) {
+    $treatmentWhere .= " AND p.barangay = ?";
+    $treatmentParams[] = $barangay;
+}
+try {
+    $treatmentQuery = "SELECT SUM(CASE WHEN r.washWithSoap = 1 THEN 1 ELSE 0 END) as wash_count, SUM(CASE WHEN r.rabiesVaccine = 1 THEN 1 ELSE 0 END) as rabies_count, SUM(CASE WHEN r.antiTetanus = 1 THEN 1 ELSE 0 END) as tetanus_count, SUM(CASE WHEN r.antibiotics = 1 THEN 1 ELSE 0 END) as antibiotics_count, SUM(CASE WHEN r.referredToHospital = 1 THEN 1 ELSE 0 END) as referred_count, COUNT(*) as total_count FROM reports r JOIN patients p ON r.patientId = p.patientId $treatmentWhere";
+    $treatmentStmt = $pdo->prepare($treatmentQuery);
+    $treatmentStmt->execute($treatmentParams);
+    $treatmentData = $treatmentStmt->fetch(PDO::FETCH_ASSOC);
+} catch (PDOException $e) {
+    $treatmentData = [ 'wash_count' => 0, 'rabies_count' => 0, 'tetanus_count' => 0, 'antibiotics_count' => 0, 'referred_count' => 0, 'total_count' => 0 ];
+}
+
+// --- Ownership ---
+$ownershipWhere = " WHERE r.biteDate BETWEEN ? AND ? AND r.animalOwnership IS NOT NULL";
+$ownershipParams = [$dateFrom, $dateTo];
+
+if (!empty($animalType)) {
+    $ownershipWhere .= " AND r.animalType = ?";
+    $ownershipParams[] = $animalType;
+}
+if (!empty($barangay)) {
+    $ownershipWhere .= " AND p.barangay = ?";
+    $ownershipParams[] = $barangay;
+}
+try {
+    $ownershipQuery = "SELECT r.animalOwnership, COUNT(*) as count FROM reports r JOIN patients p ON r.patientId = p.patientId $ownershipWhere GROUP BY r.animalOwnership";
+    $ownershipStmt = $pdo->prepare($ownershipQuery);
+    $ownershipStmt->execute($ownershipParams);
+    $ownershipData = $ownershipStmt->fetchAll(PDO::FETCH_ASSOC);
+} catch (PDOException $e) {
+    $ownershipData = [];
+}
+
+// --- Vaccination ---
+$vaccinationWhere = " WHERE r.biteDate BETWEEN ? AND ? AND r.animalVaccinated IS NOT NULL";
+$vaccinationParams = [$dateFrom, $dateTo];
+
+if (!empty($animalType)) {
+    $vaccinationWhere .= " AND r.animalType = ?";
+    $vaccinationParams[] = $animalType;
+}
+if (!empty($barangay)) {
+    $vaccinationWhere .= " AND p.barangay = ?";
+    $vaccinationParams[] = $barangay;
+}
+try {
+    $vaccinationQuery = "SELECT r.animalVaccinated, COUNT(*) as count FROM reports r JOIN patients p ON r.patientId = p.patientId $vaccinationWhere GROUP BY r.animalVaccinated";
+    $vaccinationStmt = $pdo->prepare($vaccinationQuery);
+    $vaccinationStmt->execute($vaccinationParams);
+    $vaccinationData = $vaccinationStmt->fetchAll(PDO::FETCH_ASSOC);
+} catch (PDOException $e) {
+    $vaccinationData = [];
+}
 
 // Get unique animal types for filter dropdown
 try {
@@ -40,43 +229,30 @@ try {
     $barangays = [];
 }
 
-// Get total cases for the selected period
+// Calculate percentage change for total cases
 try {
-    $totalQuery = "
-        SELECT COUNT(*) as total_cases
-        FROM reports r
-        JOIN patients p ON r.patientId = p.patientId
-        WHERE r.reportDate BETWEEN ? AND ?
-    ";
-    
-    $params = [$dateFrom, $dateTo];
-    
-    if (!empty($animalType)) {
-        $totalQuery .= " AND r.animalType = ?";
-        $params[] = $animalType;
-    }
-    
-    if (!empty($barangay)) {
-        $totalQuery .= " AND p.barangay = ?";
-        $params[] = $barangay;
-    }
-    
-    $totalStmt = $pdo->prepare($totalQuery);
-    $totalStmt->execute($params);
-    $totalCases = $totalStmt->fetchColumn();
-    
     // Get total cases for comparison period
-    $compareParams = [$compareFrom, $compareTo];
+    $compareWhere = $totalWhere;
+    $compareParams = $totalParams;
     
-    if (!empty($animalType)) {
-        $compareParams[] = $animalType;
+    // Adjust date range for comparison if needed
+    if (!empty($dateFrom) && !empty($dateTo)) {
+        $compareWhere = str_replace(
+            ["r.biteDate >= ?", "r.biteDate <= ?"],
+            ["r.biteDate >= DATE_SUB(?, INTERVAL DATEDIFF(?, ?) DAY)", "r.biteDate <= DATE_SUB(?, INTERVAL DATEDIFF(?, ?) DAY)"],
+            $compareWhere
+        );
+        
+        // Add the date parameters for comparison
+        $compareParams = array_merge(
+            [$dateFrom, $dateFrom, $dateTo], // For the first date condition
+            [$dateTo, $dateFrom, $dateTo],   // For the second date condition
+            array_slice($compareParams, 2)    // Keep the rest of the parameters
+        );
     }
     
-    if (!empty($barangay)) {
-        $compareParams[] = $barangay;
-    }
-    
-    $compareStmt = $pdo->prepare($totalQuery);
+    $compareQuery = "SELECT COUNT(*) as total_cases FROM reports r JOIN patients p ON r.patientId = p.patientId $compareWhere";
+    $compareStmt = $pdo->prepare($compareQuery);
     $compareStmt->execute($compareParams);
     $compareCases = $compareStmt->fetchColumn();
     
@@ -86,137 +262,44 @@ try {
     } else {
         $percentChange = $totalCases > 0 ? 100 : 0;
     }
-    
 } catch (PDOException $e) {
-    $totalCases = 0;
     $compareCases = 0;
     $percentChange = 0;
 }
 
 // Get cases by animal type
 try {
-    $animalQuery = "
-        SELECT r.animalType, COUNT(*) as count
-        FROM reports r
-        JOIN patients p ON r.patientId = p.patientId
-        WHERE r.reportDate BETWEEN ? AND ?
-    ";
-    
-    $animalParams = [$dateFrom, $dateTo];
-    
-    if (!empty($animalType)) {
-        $animalQuery .= " AND r.animalType = ?";
-        $animalParams[] = $animalType;
-    }
-    
-    if (!empty($barangay)) {
-        $animalQuery .= " AND p.barangay = ?";
-        $animalParams[] = $barangay;
-    }
-    
-    $animalQuery .= " GROUP BY r.animalType ORDER BY count DESC";
-    
+    $animalQuery = "SELECT r.animalType, COUNT(*) as count FROM reports r JOIN patients p ON r.patientId = p.patientId $animalWhere GROUP BY r.animalType ORDER BY count DESC";
     $animalStmt = $pdo->prepare($animalQuery);
     $animalStmt->execute($animalParams);
     $animalData = $animalStmt->fetchAll(PDO::FETCH_ASSOC);
-    
 } catch (PDOException $e) {
     $animalData = [];
 }
 
 // Get cases by bite category
 try {
-    $categoryQuery = "
-        SELECT r.biteType, COUNT(*) as count
-        FROM reports r
-        JOIN patients p ON r.patientId = p.patientId
-        WHERE r.reportDate BETWEEN ? AND ?
-    ";
-    
-    $categoryParams = [$dateFrom, $dateTo];
-    
-    if (!empty($animalType)) {
-        $categoryQuery .= " AND r.animalType = ?";
-        $categoryParams[] = $animalType;
-    }
-    
-    if (!empty($barangay)) {
-        $categoryQuery .= " AND p.barangay = ?";
-        $categoryParams[] = $barangay;
-    }
-    
-    $categoryQuery .= " GROUP BY r.biteType ORDER BY 
-        CASE 
-            WHEN r.biteType = 'Category I' THEN 1
-            WHEN r.biteType = 'Category II' THEN 2
-            WHEN r.biteType = 'Category III' THEN 3
-            ELSE 4
-        END";
-    
+    $categoryQuery = "SELECT r.biteType, COUNT(*) as count FROM reports r JOIN patients p ON r.patientId = p.patientId $categoryWhere GROUP BY r.biteType ORDER BY CASE WHEN r.biteType = 'Category I' THEN 1 WHEN r.biteType = 'Category II' THEN 2 WHEN r.biteType = 'Category III' THEN 3 ELSE 4 END";
     $categoryStmt = $pdo->prepare($categoryQuery);
     $categoryStmt->execute($categoryParams);
     $categoryData = $categoryStmt->fetchAll(PDO::FETCH_ASSOC);
-    
 } catch (PDOException $e) {
     $categoryData = [];
 }
 
 // Get cases by barangay (top 10)
 try {
-    $barangayQuery = "
-        SELECT p.barangay, COUNT(*) as count
-        FROM reports r
-        JOIN patients p ON r.patientId = p.patientId
-        WHERE r.reportDate BETWEEN ? AND ? AND p.barangay IS NOT NULL
-    ";
-    
-    $barangayParams = [$dateFrom, $dateTo];
-    
-    if (!empty($animalType)) {
-        $barangayQuery .= " AND r.animalType = ?";
-        $barangayParams[] = $animalType;
-    }
-    
-    if (!empty($barangay)) {
-        $barangayQuery .= " AND p.barangay = ?";
-        $barangayParams[] = $barangay;
-    }
-    
-    $barangayQuery .= " GROUP BY p.barangay ORDER BY count DESC LIMIT 10";
-    
+    $barangayQuery = "SELECT p.barangay, COUNT(*) as count FROM reports r JOIN patients p ON r.patientId = p.patientId $barangayWhere GROUP BY p.barangay ORDER BY count DESC LIMIT 10";
     $barangayStmt = $pdo->prepare($barangayQuery);
     $barangayStmt->execute($barangayParams);
     $barangayData = $barangayStmt->fetchAll(PDO::FETCH_ASSOC);
-    
 } catch (PDOException $e) {
     $barangayData = [];
 }
 
 // Get trend data (cases by month)
 try {
-    $trendQuery = "
-        SELECT 
-            DATE_FORMAT(r.reportDate, '%Y-%m') as month,
-            COUNT(*) as count
-        FROM reports r
-        JOIN patients p ON r.patientId = p.patientId
-        WHERE r.reportDate BETWEEN ? AND ?
-    ";
-    
-    $trendParams = [$dateFrom, $dateTo];
-    
-    if (!empty($animalType)) {
-        $trendQuery .= " AND r.animalType = ?";
-        $trendParams[] = $animalType;
-    }
-    
-    if (!empty($barangay)) {
-        $trendQuery .= " AND p.barangay = ?";
-        $trendParams[] = $barangay;
-    }
-    
-    $trendQuery .= " GROUP BY DATE_FORMAT(r.reportDate, '%Y-%m') ORDER BY month";
-    
+    $trendQuery = "SELECT DATE_FORMAT(r.biteDate, '%Y-%m') as month, COUNT(*) as count FROM reports r JOIN patients p ON r.patientId = p.patientId $trendWhere GROUP BY DATE_FORMAT(r.biteDate, '%Y-%m') ORDER BY month";
     $trendStmt = $pdo->prepare($trendQuery);
     $trendStmt->execute($trendParams);
     $trendData = $trendStmt->fetchAll(PDO::FETCH_ASSOC);
@@ -230,7 +313,6 @@ try {
         $trendLabels[] = $date->format('M Y');
         $trendCounts[] = $data['count'];
     }
-    
 } catch (PDOException $e) {
     $trendData = [];
     $trendLabels = [];
@@ -242,19 +324,19 @@ try {
     $ageQuery = "
         SELECT 
             CASE
-                WHEN TIMESTAMPDIFF(YEAR, p.dateOfBirth, r.reportDate) < 5 THEN 'Under 5'
-                WHEN TIMESTAMPDIFF(YEAR, p.dateOfBirth, r.reportDate) BETWEEN 5 AND 12 THEN '5-12'
-                WHEN TIMESTAMPDIFF(YEAR, p.dateOfBirth, r.reportDate) BETWEEN 13 AND 18 THEN '13-18'
-                WHEN TIMESTAMPDIFF(YEAR, p.dateOfBirth, r.reportDate) BETWEEN 19 AND 30 THEN '19-30'
-                WHEN TIMESTAMPDIFF(YEAR, p.dateOfBirth, r.reportDate) BETWEEN 31 AND 50 THEN '31-50'
-                WHEN TIMESTAMPDIFF(YEAR, p.dateOfBirth, r.reportDate) BETWEEN 51 AND 65 THEN '51-65'
-                WHEN TIMESTAMPDIFF(YEAR, p.dateOfBirth, r.reportDate) > 65 THEN 'Over 65'
+                WHEN TIMESTAMPDIFF(YEAR, p.dateOfBirth, r.biteDate) < 5 THEN 'Under 5'
+                WHEN TIMESTAMPDIFF(YEAR, p.dateOfBirth, r.biteDate) BETWEEN 5 AND 12 THEN '5-12'
+                WHEN TIMESTAMPDIFF(YEAR, p.dateOfBirth, r.biteDate) BETWEEN 13 AND 18 THEN '13-18'
+                WHEN TIMESTAMPDIFF(YEAR, p.dateOfBirth, r.biteDate) BETWEEN 19 AND 30 THEN '19-30'
+                WHEN TIMESTAMPDIFF(YEAR, p.dateOfBirth, r.biteDate) BETWEEN 31 AND 50 THEN '31-50'
+                WHEN TIMESTAMPDIFF(YEAR, p.dateOfBirth, r.biteDate) BETWEEN 51 AND 65 THEN '51-65'
+                WHEN TIMESTAMPDIFF(YEAR, p.dateOfBirth, r.biteDate) > 65 THEN 'Over 65'
                 ELSE 'Unknown'
             END as age_group,
             COUNT(*) as count
         FROM reports r
         JOIN patients p ON r.patientId = p.patientId
-        WHERE r.reportDate BETWEEN ? AND ? AND p.dateOfBirth IS NOT NULL
+        WHERE r.biteDate BETWEEN ? AND ? AND p.dateOfBirth IS NOT NULL
     ";
     
     $ageParams = [$dateFrom, $dateTo];
@@ -297,7 +379,7 @@ try {
             COUNT(*) as count
         FROM reports r
         JOIN patients p ON r.patientId = p.patientId
-        WHERE r.reportDate BETWEEN ? AND ? AND p.gender IS NOT NULL
+        WHERE r.biteDate BETWEEN ? AND ? AND p.gender IS NOT NULL
     ";
     
     $genderParams = [$dateFrom, $dateTo];
@@ -334,7 +416,7 @@ try {
             COUNT(*) as total_count
         FROM reports r
         JOIN patients p ON r.patientId = p.patientId
-        WHERE r.reportDate BETWEEN ? AND ?
+        WHERE r.biteDate BETWEEN ? AND ?
     ";
     
     $treatmentParams = [$dateFrom, $dateTo];
@@ -372,7 +454,7 @@ try {
             COUNT(*) as count
         FROM reports r
         JOIN patients p ON r.patientId = p.patientId
-        WHERE r.reportDate BETWEEN ? AND ? AND r.animalOwnership IS NOT NULL
+        WHERE r.biteDate BETWEEN ? AND ? AND r.animalOwnership IS NOT NULL
     ";
     
     $ownershipParams = [$dateFrom, $dateTo];
@@ -405,7 +487,7 @@ try {
             COUNT(*) as count
         FROM reports r
         JOIN patients p ON r.patientId = p.patientId
-        WHERE r.reportDate BETWEEN ? AND ? AND r.animalVaccinated IS NOT NULL
+        WHERE r.biteDate BETWEEN ? AND ? AND r.animalVaccinated IS NOT NULL
     ";
     
     $vaccinationParams = [$dateFrom, $dateTo];
@@ -505,6 +587,20 @@ function buildUrl($newParams = []) {
         .btn-outline-primary {
             color: var(--bs-primary);
             border-color: var(--bs-primary);
+        }
+
+        .btn-logout {
+            background-color: #dc3545;
+            color: white;
+            border: none;
+            padding: 0.5rem 1.25rem;
+            border-radius: 5px;
+            transition: all 0.2s;
+        }
+        
+        .btn-logout:hover {
+            background-color: #bb2d3b;
+            color: white;
         }
         
         .btn-outline-primary:hover {
@@ -754,39 +850,7 @@ function buildUrl($newParams = []) {
 </head>
 <body>
     <!-- Navbar -->
-    <nav class="navbar navbar-expand-lg navbar-light sticky-top mb-4">
-    <div class="container">
-      <a class="navbar-brand fw-bold" href="index.php">BHW Admin Portal</a>
-      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
-        <span class="navbar-toggler-icon"></span>
-      </button>
-      <div class="collapse navbar-collapse" id="navbarNav">
-        <ul class="navbar-nav ms-auto">
-          <li class="nav-item">
-            <a class="nav-link" href="admin_dashboard.php"><i class="bi bi-house-door"></i> Dashboard</a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" href="geomapping.php"><i class="bi bi-geo-alt me-1"></i> Geomapping</a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" href="view_reports.php"><i class="bi bi-file-earmark-text"></i> Reports</a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link active" href="decisionSupport.php"><i class="bi bi-graph-up me-1"></i> Decision Support</a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" href="view_staff.php"><i class="bi bi-people"></i> Staff</a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" href="admin_settings.php"><i class="bi bi-gear"></i> Settings</a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link btn-logout ms-2" href="../logout/admin_logout.php"><i class="bi bi-box-arrow-right"></i> Logout</a>
-          </li>
-        </ul>
-      </div>
-    </div>
-  </nav>
+    <?php include 'includes/navbar.php'; ?>
 
     <div class="analytics-container">
         <!-- Page Header -->
@@ -814,7 +878,7 @@ function buildUrl($newParams = []) {
         
         <!-- Filters -->
         <div class="filter-form">
-            <form method="GET" action="analytics.php">
+            <form method="GET" action="decisionSupport.php">
                 <div class="row g-3">
                     <div class="col-md-6">
                         <h5 class="mb-3">Primary Period</h5>
@@ -835,11 +899,11 @@ function buildUrl($newParams = []) {
                         <div class="row g-3">
                             <div class="col-md-6">
                                 <label for="compare_from" class="form-label">From</label>
-                                <input type="date" class="form-control" id="compare_from" name="compare_from" value="<?php echo htmlspecialchars($compareFrom); ?>">
+                                <input type="date" class="form-control" id="compare_from" name="compare_from" value="<?php echo htmlspecialchars($dateFrom); ?>">
                             </div>
                             <div class="col-md-6">
                                 <label for="compare_to" class="form-label">To</label>
-                                <input type="date" class="form-control" id="compare_to" name="compare_to" value="<?php echo htmlspecialchars($compareTo); ?>">
+                                <input type="date" class="form-control" id="compare_to" name="compare_to" value="<?php echo htmlspecialchars($dateTo); ?>">
                             </div>
                         </div>
                     </div>
@@ -873,7 +937,7 @@ function buildUrl($newParams = []) {
                             <button type="submit" class="btn btn-primary flex-grow-1">
                                 <i class="bi bi-search me-2"></i>Apply Filters
                             </button>
-                            <a href="analytics.php" class="btn btn-outline-secondary">
+                            <a href="decisionSupport.php" class="btn btn-outline-secondary">
                                 <i class="bi bi-x-circle me-2"></i>Reset
                             </a>
                         </div>

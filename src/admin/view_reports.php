@@ -21,6 +21,7 @@ $dateFrom = isset($_GET['date_from']) ? $_GET['date_from'] : '';
 $dateTo = isset($_GET['date_to']) ? $_GET['date_to'] : '';
 $animalType = isset($_GET['animal_type']) ? $_GET['animal_type'] : '';
 $biteType = isset($_GET['bite_type']) ? $_GET['bite_type'] : '';
+$barangay = isset($_GET['barangay']) ? $_GET['barangay'] : '';
 $search = isset($_GET['search']) ? $_GET['search'] : '';
 
 // Pagination
@@ -55,6 +56,11 @@ if (!empty($animalType)) {
 if (!empty($biteType)) {
    $whereConditions[] = "r.biteType = ?";
    $params[] = $biteType;
+}
+
+if (!empty($barangay)) {
+   $whereConditions[] = "p.barangay = ?";
+   $params[] = $barangay;
 }
 
 if (!empty($search)) {
@@ -169,6 +175,14 @@ try {
    $inProgressCount = 0;
    $completedCount = 0;
    $highRiskCount = 0;
+}
+
+// Get unique barangays for the filter dropdown
+try {
+    $barangaysStmt = $pdo->query("SELECT DISTINCT barangay FROM barangay_coordinates ORDER BY barangay");
+    $barangays = $barangaysStmt->fetchAll(PDO::FETCH_COLUMN);
+} catch (PDOException $e) {
+    $barangays = [];
 }
 ?>
 
@@ -416,6 +430,51 @@ try {
                <h2 class="mb-1">Animal Bite Reports</h2>
                <p class="text-muted mb-0">Manage and track all reported animal bite cases</p>
            </div>
+           <div class="d-flex gap-2">
+               <div class="dropdown">
+                   <button class="btn btn-outline-primary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                       <i class="bi bi-printer me-2"></i>Print Reports
+                   </button>
+                   <ul class="dropdown-menu">
+                       <li><a class="dropdown-item" href="print_reports.php?type=all" target="_blank">
+                           <i class="bi bi-file-text me-2"></i>Print All Reports
+                       </a></li>
+                       <li><a class="dropdown-item" href="print_reports.php?type=filtered<?php echo !empty($_GET) ? '&' . http_build_query($_GET) : ''; ?>" target="_blank">
+                           <i class="bi bi-funnel me-2"></i>Print Filtered Reports
+                       </a></li>
+                   </ul>
+               </div>
+               <div class="dropdown">
+                   <button class="btn btn-outline-primary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                       <i class="bi bi-download me-2"></i>Export
+                   </button>
+                   <ul class="dropdown-menu">
+                       <li><a class="dropdown-item" href="export_reports.php?format=csv<?php echo !empty($_GET) ? '&' . http_build_query($_GET) : ''; ?>">
+                           <i class="bi bi-file-earmark-spreadsheet me-2"></i>Export as CSV
+                       </a></li>
+                       <li><a class="dropdown-item" href="export_reports.php?format=excel<?php echo !empty($_GET) ? '&' . http_build_query($_GET) : ''; ?>">
+                           <i class="bi bi-file-earmark-excel me-2"></i>Export as Excel
+                       </a></li>
+                   </ul>
+               </div>
+               <div class="dropdown">
+                   <button class="btn btn-outline-primary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                       <i class="bi bi-three-dots me-2"></i>Quick Actions
+                   </button>
+                   <ul class="dropdown-menu">
+                       <li><a class="dropdown-item" href="#" data-bs-toggle="modal" data-bs-target="#saveFilterModal">
+                           <i class="bi bi-bookmark me-2"></i>Save Current Filter
+                       </a></li>
+                       <li><a class="dropdown-item" href="#" data-bs-toggle="modal" data-bs-target="#loadFilterModal">
+                           <i class="bi bi-bookmark-fill me-2"></i>Load Saved Filter
+                       </a></li>
+                       <li><hr class="dropdown-divider"></li>
+                       <li><a class="dropdown-item" href="#" data-bs-toggle="modal" data-bs-target="#columnVisibilityModal">
+                           <i class="bi bi-columns me-2"></i>Customize Columns
+                       </a></li>
+                   </ul>
+               </div>
+           </div>
        </div>
        
        <!-- Stats Cards -->
@@ -481,7 +540,6 @@ try {
                            <option value="in_progress" <?php echo $status === 'in_progress' ? 'selected' : ''; ?>>In Progress</option>
                            <option value="completed" <?php echo $status === 'completed' ? 'selected' : ''; ?>>Completed</option>
                            <option value="referred" <?php echo $status === 'referred' ? 'selected' : ''; ?>>Referred</option>
-                           <option value="cancelled" <?php echo $status === 'cancelled' ? 'selected' : ''; ?>>Cancelled</option>
                        </select>
                    </div>
                    
@@ -492,8 +550,6 @@ try {
                            <option value="Dog" <?php echo $animalType === 'Dog' ? 'selected' : ''; ?>>Dog</option>
                            <option value="Cat" <?php echo $animalType === 'Cat' ? 'selected' : ''; ?>>Cat</option>
                            <option value="Rat" <?php echo $animalType === 'Rat' ? 'selected' : ''; ?>>Rat</option>
-                           <option value="Monkey" <?php echo $animalType === 'Monkey' ? 'selected' : ''; ?>>Monkey</option>
-                           <option value="Bat" <?php echo $animalType === 'Bat' ? 'selected' : ''; ?>>Bat</option>
                            <option value="Other" <?php echo $animalType === 'Other' ? 'selected' : ''; ?>>Other</option>
                        </select>
                    </div>
@@ -505,6 +561,18 @@ try {
                            <option value="Category I" <?php echo $biteType === 'Category I' ? 'selected' : ''; ?>>Category I</option>
                            <option value="Category II" <?php echo $biteType === 'Category II' ? 'selected' : ''; ?>>Category II</option>
                            <option value="Category III" <?php echo $biteType === 'Category III' ? 'selected' : ''; ?>>Category III</option>
+                       </select>
+                   </div>
+                   
+                   <div class="col-md-3">
+                       <label for="barangay" class="form-label">Barangay</label>
+                       <select class="form-select" id="barangay" name="barangay">
+                           <option value="">All Barangays</option>
+                           <?php foreach ($barangays as $brgy): ?>
+                           <option value="<?php echo htmlspecialchars($brgy); ?>" <?php echo $barangay === $brgy ? 'selected' : ''; ?>>
+                               <?php echo htmlspecialchars($brgy); ?>
+                           </option>
+                           <?php endforeach; ?>
                        </select>
                    </div>
                    
@@ -540,18 +608,18 @@ try {
        <!-- Reports Table -->
        <div class="table-card">
            <div class="table-responsive">
-               <table class="table table-hover">
+               <table class="table table-hover" id="reportsTable">
                    <thead>
                        <tr>
-                           <th>ID</th>
-                           <th>Patient Name</th>
-                           <th>Contact</th>
-                           <th>Barangay</th>
-                           <th>Animal</th>
-                           <th>Bite Date</th>
-                           <th>Category</th>
-                           <th>Status</th>
-                           <th>Report Date</th>
+                           <th data-sort="reportId">ID <i class="bi bi-arrow-down-up"></i></th>
+                           <th data-sort="patientName">Patient Name <i class="bi bi-arrow-down-up"></i></th>
+                           <th data-sort="contactNumber">Contact <i class="bi bi-arrow-down-up"></i></th>
+                           <th data-sort="barangay">Barangay <i class="bi bi-arrow-down-up"></i></th>
+                           <th data-sort="animalType">Animal <i class="bi bi-arrow-down-up"></i></th>
+                           <th data-sort="biteDate">Bite Date <i class="bi bi-arrow-down-up"></i></th>
+                           <th data-sort="biteType">Category <i class="bi bi-arrow-down-up"></i></th>
+                           <th data-sort="status">Status <i class="bi bi-arrow-down-up"></i></th>
+                           <th data-sort="reportDate">Report Date <i class="bi bi-arrow-down-up"></i></th>
                            <th>Actions</th>
                        </tr>
                    </thead>
@@ -567,7 +635,12 @@ try {
                            <?php foreach ($reports as $report): ?>
                            <tr>
                                <td><?php echo htmlspecialchars($report['reportId']); ?></td>
-                               <td><?php echo htmlspecialchars($report['firstName'] . ' ' . $report['lastName']); ?></td>
+                               <td>
+                                   <a href="#" class="text-decoration-none" data-bs-toggle="modal" data-bs-target="#reportModal" 
+                                      data-report-id="<?php echo $report['reportId']; ?>">
+                                       <?php echo htmlspecialchars($report['firstName'] . ' ' . $report['lastName']); ?>
+                                   </a>
+                               </td>
                                <td><?php echo htmlspecialchars($report['contactNumber']); ?></td>
                                <td><?php echo htmlspecialchars($report['barangay']); ?></td>
                                <td><?php echo htmlspecialchars($report['animalType']); ?></td>
@@ -600,9 +673,21 @@ try {
                                </td>
                                <td><?php echo date('M d, Y', strtotime($report['reportDate'])); ?></td>
                                <td>
-                                   <a href="view_report.php?id=<?php echo $report['reportId']; ?>" class="btn btn-sm btn-primary">
-                                       <i class="bi bi-eye"></i> View
-                                   </a>
+                                   <div class="btn-group">
+                                       <a href="view_report.php?id=<?php echo $report['reportId']; ?>" class="btn btn-sm btn-primary">
+                                           <i class="bi bi-eye"></i>
+                                       </a>
+                                       <button type="button" class="btn btn-sm btn-primary dropdown-toggle dropdown-toggle-split" data-bs-toggle="dropdown">
+                                       </button>
+                                       <ul class="dropdown-menu">
+                                           <li><a class="dropdown-item" href="print_report.php?id=<?php echo $report['reportId']; ?>" target="_blank">
+                                               <i class="bi bi-printer me-2"></i>Print Report
+                                           </a></li>
+                                           <li><a class="dropdown-item" href="edit_report.php?id=<?php echo $report['reportId']; ?>">
+                                               <i class="bi bi-pencil me-2"></i>Edit Report
+                                           </a></li>
+                                       </ul>
+                                   </div>
                                </td>
                            </tr>
                            <?php endforeach; ?>
@@ -682,6 +767,266 @@ try {
        </div>
    </footer>
 
+   <!-- Report Preview Modal -->
+   <div class="modal fade" id="reportModal" tabindex="-1">
+       <div class="modal-dialog modal-lg">
+           <div class="modal-content">
+               <div class="modal-header">
+                   <h5 class="modal-title">Report Details</h5>
+                   <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+               </div>
+               <div class="modal-body">
+                   <div id="reportDetails">Loading...</div>
+               </div>
+               <div class="modal-footer">
+                   <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                   <a href="#" class="btn btn-primary" id="viewFullReport">View Full Report</a>
+               </div>
+           </div>
+       </div>
+   </div>
+
+   <!-- Save Filter Modal -->
+   <div class="modal fade" id="saveFilterModal" tabindex="-1">
+       <div class="modal-dialog">
+           <div class="modal-content">
+               <div class="modal-header">
+                   <h5 class="modal-title">Save Filter</h5>
+                   <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+               </div>
+               <div class="modal-body">
+                   <form id="saveFilterForm">
+                       <div class="mb-3">
+                           <label for="filterName" class="form-label">Filter Name</label>
+                           <input type="text" class="form-control" id="filterName" required>
+                       </div>
+                       <div class="mb-3">
+                           <label for="filterDescription" class="form-label">Description (Optional)</label>
+                           <textarea class="form-control" id="filterDescription" rows="2"></textarea>
+                       </div>
+                   </form>
+               </div>
+               <div class="modal-footer">
+                   <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                   <button type="button" class="btn btn-primary" id="saveFilterBtn">Save Filter</button>
+               </div>
+           </div>
+       </div>
+   </div>
+
+   <!-- Load Filter Modal -->
+   <div class="modal fade" id="loadFilterModal" tabindex="-1">
+       <div class="modal-dialog">
+           <div class="modal-content">
+               <div class="modal-header">
+                   <h5 class="modal-title">Load Saved Filter</h5>
+                   <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+               </div>
+               <div class="modal-body">
+                   <div id="savedFiltersList">
+                       <!-- Saved filters will be loaded here -->
+                   </div>
+               </div>
+               <div class="modal-footer">
+                   <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+               </div>
+           </div>
+       </div>
+   </div>
+
+   <!-- Column Visibility Modal -->
+   <div class="modal fade" id="columnVisibilityModal" tabindex="-1">
+       <div class="modal-dialog">
+           <div class="modal-content">
+               <div class="modal-header">
+                   <h5 class="modal-title">Customize Columns</h5>
+                   <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+               </div>
+               <div class="modal-body">
+                   <div class="form-check mb-2">
+                       <input class="form-check-input column-toggle" type="checkbox" value="reportId" id="colReportId" checked>
+                       <label class="form-check-label" for="colReportId">ID</label>
+                   </div>
+                   <div class="form-check mb-2">
+                       <input class="form-check-input column-toggle" type="checkbox" value="patientName" id="colPatientName" checked>
+                       <label class="form-check-label" for="colPatientName">Patient Name</label>
+                   </div>
+                   <div class="form-check mb-2">
+                       <input class="form-check-input column-toggle" type="checkbox" value="contactNumber" id="colContactNumber" checked>
+                       <label class="form-check-label" for="colContactNumber">Contact</label>
+                   </div>
+                   <div class="form-check mb-2">
+                       <input class="form-check-input column-toggle" type="checkbox" value="barangay" id="colBarangay" checked>
+                       <label class="form-check-label" for="colBarangay">Barangay</label>
+                   </div>
+                   <div class="form-check mb-2">
+                       <input class="form-check-input column-toggle" type="checkbox" value="animalType" id="colAnimalType" checked>
+                       <label class="form-check-label" for="colAnimalType">Animal Type</label>
+                   </div>
+                   <div class="form-check mb-2">
+                       <input class="form-check-input column-toggle" type="checkbox" value="biteDate" id="colBiteDate" checked>
+                       <label class="form-check-label" for="colBiteDate">Bite Date</label>
+                   </div>
+                   <div class="form-check mb-2">
+                       <input class="form-check-input column-toggle" type="checkbox" value="biteType" id="colBiteType" checked>
+                       <label class="form-check-label" for="colBiteType">Category</label>
+                   </div>
+                   <div class="form-check mb-2">
+                       <input class="form-check-input column-toggle" type="checkbox" value="status" id="colStatus" checked>
+                       <label class="form-check-label" for="colStatus">Status</label>
+                   </div>
+                   <div class="form-check mb-2">
+                       <input class="form-check-input column-toggle" type="checkbox" value="reportDate" id="colReportDate" checked>
+                       <label class="form-check-label" for="colReportDate">Report Date</label>
+                   </div>
+                   <div class="form-check mb-2">
+                       <input class="form-check-input column-toggle" type="checkbox" value="actions" id="colActions" checked>
+                       <label class="form-check-label" for="colActions">Actions</label>
+                   </div>
+               </div>
+               <div class="modal-footer">
+                   <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                   <button type="button" class="btn btn-primary" id="applyColumnVisibility">Apply Changes</button>
+               </div>
+           </div>
+       </div>
+   </div>
+
    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+   <script>
+       // Table sorting functionality
+       document.querySelectorAll('th[data-sort]').forEach(header => {
+           header.addEventListener('click', () => {
+               const sortField = header.dataset.sort;
+               const currentOrder = new URLSearchParams(window.location.search).get('order') || 'asc';
+               const newOrder = currentOrder === 'asc' ? 'desc' : 'asc';
+               
+               const url = new URL(window.location.href);
+               url.searchParams.set('sort', sortField);
+               url.searchParams.set('order', newOrder);
+               window.location.href = url.toString();
+           });
+       });
+
+       // Report preview modal
+       const reportModal = document.getElementById('reportModal');
+       reportModal.addEventListener('show.bs.modal', event => {
+           const button = event.relatedTarget;
+           const reportId = button.dataset.reportId;
+           const modalBody = reportModal.querySelector('#reportDetails');
+           const viewFullReportBtn = document.getElementById('viewFullReport');
+           
+           // Update view full report link
+           viewFullReportBtn.href = `view_report.php?id=${reportId}`;
+           
+           // Load report details
+           fetch(`get_report_details.php?id=${reportId}`)
+               .then(response => response.json())
+               .then(data => {
+                   modalBody.innerHTML = `
+                       <div class="row">
+                           <div class="col-md-6">
+                               <p><strong>Patient:</strong> ${data.patientName}</p>
+                               <p><strong>Contact:</strong> ${data.contactNumber}</p>
+                               <p><strong>Barangay:</strong> ${data.barangay}</p>
+                           </div>
+                           <div class="col-md-6">
+                               <p><strong>Animal Type:</strong> ${data.animalType}</p>
+                               <p><strong>Bite Category:</strong> ${data.biteType}</p>
+                               <p><strong>Status:</strong> ${data.status}</p>
+                           </div>
+                       </div>
+                   `;
+               })
+               .catch(error => {
+                   modalBody.innerHTML = 'Error loading report details.';
+               });
+       });
+
+       // Column visibility functionality
+       document.addEventListener('DOMContentLoaded', function() {
+           // Load saved column preferences
+           const savedColumns = JSON.parse(localStorage.getItem('reportColumns') || '{}');
+           
+           // Initialize column visibility
+           function initializeColumnVisibility() {
+               const table = document.getElementById('reportsTable');
+               if (!table) return; // Guard clause if table doesn't exist
+               
+               const headers = table.querySelectorAll('th');
+               const checkboxes = document.querySelectorAll('.column-toggle');
+               
+               // Set initial checkbox states
+               checkboxes.forEach(checkbox => {
+                   const columnName = checkbox.value;
+                   const isVisible = savedColumns[columnName] !== false; // Default to true if not saved
+                   checkbox.checked = isVisible;
+                   
+                   // Find corresponding column index
+                   const columnIndex = Array.from(headers).findIndex(th => 
+                       th.getAttribute('data-sort') === columnName || 
+                       (columnName === 'actions' && th.textContent.trim() === 'Actions')
+                   );
+                   
+                   if (columnIndex !== -1) {
+                       // Hide/show column in table
+                       const cells = table.querySelectorAll(`td:nth-child(${columnIndex + 1}), th:nth-child(${columnIndex + 1})`);
+                       cells.forEach(cell => {
+                           cell.style.display = isVisible ? '' : 'none';
+                       });
+                   }
+               });
+           }
+           
+           // Apply column visibility changes
+           const applyButton = document.getElementById('applyColumnVisibility');
+           if (applyButton) {
+               applyButton.addEventListener('click', function() {
+                   const table = document.getElementById('reportsTable');
+                   if (!table) return; // Guard clause if table doesn't exist
+                   
+                   const headers = table.querySelectorAll('th');
+                   const checkboxes = document.querySelectorAll('.column-toggle');
+                   const columnPreferences = {};
+                   
+                   checkboxes.forEach(checkbox => {
+                       const columnName = checkbox.value;
+                       const isVisible = checkbox.checked;
+                       columnPreferences[columnName] = isVisible;
+                       
+                       // Find corresponding column index
+                       const columnIndex = Array.from(headers).findIndex(th => 
+                           th.getAttribute('data-sort') === columnName || 
+                           (columnName === 'actions' && th.textContent.trim() === 'Actions')
+                       );
+                       
+                       if (columnIndex !== -1) {
+                           // Hide/show column in table
+                           const cells = table.querySelectorAll(`td:nth-child(${columnIndex + 1}), th:nth-child(${columnIndex + 1})`);
+                           cells.forEach(cell => {
+                               cell.style.display = isVisible ? '' : 'none';
+                           });
+                       }
+                   });
+                   
+                   // Save preferences to localStorage
+                   localStorage.setItem('reportColumns', JSON.stringify(columnPreferences));
+                   
+                   // Close the modal
+                   const modal = bootstrap.Modal.getInstance(document.getElementById('columnVisibilityModal'));
+                   if (modal) {
+                       modal.hide();
+                   }
+               });
+           }
+           
+           // Initialize column visibility when page loads
+           initializeColumnVisibility();
+           
+           // Debug logging
+           console.log('Column visibility initialized');
+           console.log('Saved columns:', savedColumns);
+       });
+   </script>
 </body>
 </html>

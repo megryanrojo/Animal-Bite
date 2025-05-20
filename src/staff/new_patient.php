@@ -38,6 +38,17 @@ $formData = [
     'previousRabiesVaccine' => ''
 ];
 
+// Fetch barangay options from the barangay_coordinates table
+$barangayOptions = [];
+try {
+    $stmt = $pdo->query("SELECT barangay FROM barangay_coordinates ORDER BY id ASC");
+    while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+        $barangayOptions[] = $row['barangay'];
+    }
+} catch (PDOException $e) {
+    $error = 'Error fetching barangay list: ' . $e->getMessage();
+}
+
 // Process form submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // Collect form data
@@ -373,7 +384,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             
                             <div class="col-md-4">
                                 <label for="barangay" class="form-label required-field">Barangay</label>
-                                <input type="text" class="form-control" id="barangay" name="barangay" value="<?php echo htmlspecialchars($formData['barangay']); ?>" required>
+                                <select class="form-select" id="barangay" name="barangay" required>
+                                    <option value="">Select Barangay</option>
+                                    <?php foreach ($barangayOptions as $option): ?>
+                                        <option value="<?php echo htmlspecialchars($option); ?>" <?php echo $formData['barangay'] === $option ? 'selected' : ''; ?>><?php echo htmlspecialchars($option); ?></option>
+                                    <?php endforeach; ?>
+                                </select>
                             </div>
                             
                             <div class="col-md-4">

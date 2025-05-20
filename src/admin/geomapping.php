@@ -18,8 +18,8 @@ try {
 }
 
 // Initialize filter variables
-$dateFrom = isset($_GET['date_from']) ? $_GET['date_from'] : date('Y-m-d', strtotime('-30 days'));
-$dateTo = isset($_GET['date_to']) ? $_GET['date_to'] : date('Y-m-d');
+$dateFrom = isset($_GET['date_from']) ? $_GET['date_from'] : '';
+$dateTo = isset($_GET['date_to']) ? $_GET['date_to'] : '';
 $animalType = isset($_GET['animal_type']) ? $_GET['animal_type'] : '';
 $biteCategory = isset($_GET['bite_category']) ? $_GET['bite_category'] : '';
 $status = isset($_GET['status']) ? $_GET['status'] : '';
@@ -40,7 +40,32 @@ try {
     $barangays = [];
 }
 
-// Build the query for heatmap data
+// Build the WHERE clause for filters
+$where = " WHERE p.barangay IS NOT NULL";
+$params = [];
+
+if (!empty($dateFrom)) {
+    $where .= " AND r.biteDate >= ?";
+    $params[] = $dateFrom;
+}
+if (!empty($dateTo)) {
+    $where .= " AND r.biteDate <= ?";
+    $params[] = $dateTo;
+}
+if (!empty($animalType)) {
+    $where .= " AND r.animalType = ?";
+    $params[] = $animalType;
+}
+if (!empty($biteCategory)) {
+    $where .= " AND r.biteType = ?";
+    $params[] = $biteCategory;
+}
+if (!empty($status)) {
+    $where .= " AND r.status = ?";
+    $params[] = $status;
+}
+
+// Main query for heatmapData (Top Affected Areas): count all reports per barangay
 $query = "
     SELECT 
         p.barangay,
@@ -49,113 +74,56 @@ $query = "
         reports r
     JOIN 
         patients p ON r.patientId = p.patientId
-    WHERE 
-        p.barangay IS NOT NULL
+    $where
+    GROUP BY p.barangay
+    ORDER BY case_count DESC
 ";
 
-$params = [];
+// Total cases query: count all reports
+$totalQuery = "
+    SELECT 
+        COUNT(*) as total_cases
+    FROM 
+        reports r
+    JOIN 
+        patients p ON r.patientId = p.patientId
+    $where
+";
 
-// Add filters to query
-if (!empty($dateFrom)) {
-    $query .= " AND r.reportDate >= ?";
-    $params[] = $dateFrom;
-}
-
-if (!empty($dateTo)) {
-    $query .= " AND r.reportDate <= ?";
-    $params[] = $dateTo;
-}
-
-if (!empty($animalType)) {
-    $query .= " AND r.animalType = ?";
-    $params[] = $animalType;
-}
-
-if (!empty($biteCategory)) {
-    $query .= " AND r.biteType = ?";
-    $params[] = $biteCategory;
-}
-
-if (!empty($status)) {
-    $query .= " AND r.status = ?";
-    $params[] = $status;
-}
-
-$query .= " GROUP BY p.barangay ORDER BY case_count DESC";
-
-// Execute query
 try {
     $stmt = $pdo->prepare($query);
     $stmt->execute($params);
     $heatmapData = $stmt->fetchAll(PDO::FETCH_ASSOC);
-} catch (PDOException $e) {
-    $heatmapData = [];
-}
 
-// Get total cases for the selected filters
-try {
-    $totalQuery = "
-        SELECT 
-            COUNT(*) as total_cases
-        FROM 
-            reports r
-        JOIN 
-            patients p ON r.patientId = p.patientId
-        WHERE 
-            1=1
-    ";
-    
-    $totalStmt = $pdo->prepare($totalQuery . substr($query, strpos($query, 'WHERE') + 5, strpos($query, 'GROUP BY') - strpos($query, 'WHERE') - 5));
+    $totalStmt = $pdo->prepare($totalQuery);
     $totalStmt->execute($params);
     $totalCases = $totalStmt->fetchColumn();
 } catch (PDOException $e) {
+    $heatmapData = [];
     $totalCases = 0;
 }
 
-// Get recent cases for the selected filters (last 5)
+// Recent Cases: show the 5 most recent reports (regardless of patient)
+$recentQuery = "
+    SELECT 
+        r.reportId,
+        r.biteDate,
+        r.animalType,
+        r.biteType,
+        p.barangay,
+        CONCAT(p.firstName, ' ', p.lastName) as patientName
+    FROM 
+        reports r
+    JOIN 
+        patients p ON r.patientId = p.patientId
+    $where
+    ORDER BY r.biteDate DESC
+    LIMIT 5
+";
+
 try {
-    $recentQuery = "
-        SELECT 
-            r.reportId,
-            r.reportDate,
-            r.animalType,
-            r.biteType,
-            p.barangay,
-            CONCAT(p.firstName, ' ', p.lastName) as patientName
-        FROM 
-            reports r
-        JOIN 
-            patients p ON r.patientId = p.patientId
-        WHERE 
-            1=1
-    ";
-    
-    $recentParams = $params;
-    
-    if (!empty($dateFrom)) {
-        $recentQuery .= " AND r.reportDate >= ?";
-    }
-    
-    if (!empty($dateTo)) {
-        $recentQuery .= " AND r.reportDate <= ?";
-    }
-    
-    if (!empty($animalType)) {
-        $recentQuery .= " AND r.animalType = ?";
-    }
-    
-    if (!empty($biteCategory)) {
-        $recentQuery .= " AND r.biteType = ?";
-    }
-    
-    if (!empty($status)) {
-        $recentQuery .= " AND r.status = ?";
-    }
-    
-    $recentQuery .= " ORDER BY r.reportDate DESC LIMIT 5";
-    
     $recentStmt = $pdo->prepare($recentQuery);
-    $recentStmt->execute($recentParams);
+    $recentStmt->execute($params);
     $recentCases = $recentStmt->fetchAll(PDO::FETCH_ASSOC);
 } catch (PDOException $e) {
     $recentCases = [];
@@ -176,26 +144,46 @@ function buildUrl($newParams = []) {
     return 'geomapping.php?' . http_build_query($params);
 }
 
-// Get coordinates for each barangay (you would need to populate this with actual coordinates)
-// This is a placeholder - in a real implementation, you would store these in your database
-$barangayCoordinates = [
-    // Actual coordinates for Talisay City, Negros Occidental barangays
-    'Barangay 1' => ['lat' => 10.7386, 'lng' => 122.9700],
-    'Barangay 2' => ['lat' => 10.7405, 'lng' => 122.9720],
-    'Barangay 3' => ['lat' => 10.7425, 'lng' => 122.9740],
-    'Barangay 4' => ['lat' => 10.7445, 'lng' => 122.9760],
-    'Barangay 5' => ['lat' => 10.7465, 'lng' => 122.9780],
-    // Add more barangays as needed
-];
+// Fetch coordinates for each barangay dynamically from the database
+$barangayCoordinates = [];
+try {
+    $stmt = $pdo->query("SELECT barangay, latitude, longitude FROM barangay_coordinates");
+    while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+        $barangayCoordinates[$row['barangay']] = [
+            'lat' => (float)$row['latitude'],
+            'lng' => (float)$row['longitude']
+        ];
+    }
+    // Debug: Log fetched coordinates
+    error_log('Fetched Barangay Coordinates: ' . print_r($barangayCoordinates, true));
+} catch (PDOException $e) {
+    error_log('Error fetching barangay coordinates: ' . $e->getMessage());
+}
 
-// Center coordinates for the map (average of all barangay coordinates)
-$centerLat = 10.7445; // Center latitude for Talisay City, Negros Occidental
-$centerLng = 122.9760; // Center longitude for Talisay City, Negros Occidental
+// Center coordinates for the map (use the average if available)
+if (count($barangayCoordinates) > 0) {
+    $latSum = 0;
+    $lngSum = 0;
+    $count = 0;
+    foreach ($barangayCoordinates as $coord) {
+        $latSum += $coord['lat'];
+        $lngSum += $coord['lng'];
+        $count++;
+    }
+    $centerLat = $latSum / $count;
+    $centerLng = $lngSum / $count;
+} else {
+    $centerLat = 10.7425;
+    $centerLng = 122.9740;
+}
 
 // Prepare heatmap data for JavaScript
 $jsHeatmapData = [];
 foreach ($heatmapData as $data) {
     $barangay = $data['barangay'];
+    // Debug: Log each barangay being processed
+    error_log("Processing barangay: " . $barangay);
+    
     if (isset($barangayCoordinates[$barangay])) {
         $jsHeatmapData[] = [
             'lat' => $barangayCoordinates[$barangay]['lat'],
@@ -203,8 +191,16 @@ foreach ($heatmapData as $data) {
             'count' => (int)$data['case_count'],
             'barangay' => $barangay
         ];
+        // Debug: Log successful data point
+        error_log("Added heatmap point for " . $barangay . " with count: " . $data['case_count']);
+    } else {
+        // Debug: Log missing coordinates
+        error_log("No coordinates found for barangay: " . $barangay);
     }
 }
+
+// Debug: Log final JavaScript data
+error_log("Final Heatmap Data for JavaScript: " . print_r($jsHeatmapData, true));
 ?>
 
 <!DOCTYPE html>
@@ -268,6 +264,20 @@ foreach ($heatmapData as $data) {
         .btn-outline-primary {
             color: var(--bs-primary);
             border-color: var(--bs-primary);
+        }
+
+        .btn-logout {
+            background-color: #dc3545;
+            color: white;
+            border: none;
+            padding: 0.5rem 1.25rem;
+            border-radius: 5px;
+            transition: all 0.2s;
+        }
+        
+        .btn-logout:hover {
+            background-color: #bb2d3b;
+            color: white;
         }
         
         .btn-outline-primary:hover {
@@ -753,7 +763,7 @@ foreach ($heatmapData as $data) {
                                         echo '<span class="badge ' . $biteTypeClass . '">' . $biteType . '</span>';
                                     ?>
                                 </td>
-                                <td><?php echo date('M d, Y', strtotime($case['reportDate'])); ?></td>
+                                <td><?php echo date('M d, Y', strtotime($case['biteDate'])); ?></td>
                                 <td>
                                     <a href="view_report.php?id=<?php echo $case['reportId']; ?>" class="btn btn-sm btn-outline-primary">
                                         View
@@ -820,28 +830,41 @@ foreach ($heatmapData as $data) {
         }).addTo(map);
         
         var heatData = <?php echo json_encode($jsHeatmapData); ?>;
+        console.log('Heatmap Data:', heatData); // Debug output
+        
         var heatPoints = [];
         var markers = L.markerClusterGroup();
 
         heatData.forEach(function(point) {
-            heatPoints.push([point.lat, point.lng, point.count]);
+            // Add intensity based on case count
+            var intensity = Math.min(point.count / 2, 1); // Adjusted for smaller numbers
+            heatPoints.push([point.lat, point.lng, intensity]);
+            console.log('Adding point:', point.barangay, 'with intensity:', intensity); // Debug output
             
+            // Create marker with popup
             var marker = L.marker([point.lat, point.lng])
                 .bindPopup('<strong>' + point.barangay + '</strong><br>Cases: ' + point.count);
             
             markers.addLayer(marker);
         });
         
-        // Create heatmap layer
+        // Create heatmap layer with adjusted parameters
         var heat = L.heatLayer(heatPoints, {
-            radius: 25,
-            blur: 15,
-            maxZoom: 17,
-            gradient: {0.4: 'blue', 0.65: 'lime', 0.85: 'yellow', 1: 'red'}
+            radius: 50, // Increased radius
+            blur: 25,   // Increased blur
+            maxZoom: 18,
+            minOpacity: 0.6,
+            gradient: {
+                0.4: 'blue',
+                0.6: 'lime',
+                0.8: 'yellow',
+                1.0: 'red'
+            }
         }).addTo(map);
         
-        // Initially hide markers
+        // Initially show both heatmap and markers
         map.addLayer(heat);
+        map.addLayer(markers);
         
         // Toggle between heatmap and markers
         document.getElementById('heatmapView').addEventListener('click', function() {

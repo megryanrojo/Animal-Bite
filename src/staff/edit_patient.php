@@ -85,6 +85,14 @@ try {
     // error_log("Database error fetching patient: " . $e->getMessage());
 }
 
+// Get unique barangays for the dropdown
+try {
+    $barangaysStmt = $pdo->query("SELECT barangay FROM barangay_coordinates ORDER BY barangay");
+    $barangays = $barangaysStmt->fetchAll(PDO::FETCH_COLUMN);
+} catch (PDOException $e) {
+    $barangays = [];
+}
+
 // Process form submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // Collect form data
@@ -420,17 +428,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             
                             <div class="col-md-6">
                                 <label for="barangay" class="form-label">Barangay</label>
-                                <input type="text" class="form-control" id="barangay" name="barangay" value="<?php echo htmlspecialchars($patient['barangay'] ?? ''); ?>">
+                                <select class="form-select" id="barangay" name="barangay" required>
+                                    <option value="">Select Barangay</option>
+                                    <?php foreach ($barangays as $brgy): ?>
+                                    <option value="<?php echo htmlspecialchars($brgy); ?>" <?php echo ($patient['barangay'] ?? '') === $brgy ? 'selected' : ''; ?>>
+                                        <?php echo htmlspecialchars($brgy); ?>
+                                    </option>
+                                    <?php endforeach; ?>
+                                </select>
                             </div>
                             
                             <div class="col-md-6">
                                 <label for="city" class="form-label">City/Municipality</label>
-                                <input type="text" class="form-control" id="city" name="city" value="<?php echo htmlspecialchars($patient['city'] ?? ''); ?>">
+                                <input type="text" class="form-control" id="city" name="city" value="Talisay City" readonly>
                             </div>
 
                             <div class="col-md-6">
                                 <label for="province" class="form-label">Province</label>
-                                <input type="text" class="form-control" id="province" name="province" value="<?php echo htmlspecialchars($patient['province'] ?? ''); ?>">
+                                <input type="text" class="form-control" id="province" name="province" value="Negros Occidental" readonly>
                             </div>
                         </div>
                     </div>

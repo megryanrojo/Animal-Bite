@@ -27,7 +27,7 @@ try {
 // Check if a patient is selected and has existing reports
 $selectedPatientId = null;
 $existingReports = [];
-$showForm = false;
+$showForm = true; // Always show the form by default
 
 if (isset($_GET['patient_id'])) {
     $selectedPatientId = $_GET['patient_id'];
@@ -41,9 +41,6 @@ if (isset($_GET['patient_id'])) {
         ");
         $reportsStmt->execute([$selectedPatientId]);
         $existingReports = $reportsStmt->fetchAll(PDO::FETCH_ASSOC);
-        
-        // Show form if explicitly requested with new=true
-        $showForm = isset($_GET['new']) && $_GET['new'] === 'true';
     } catch (PDOException $e) {
         $existingReports = [];
     }
@@ -53,6 +50,17 @@ if (isset($_GET['patient_id'])) {
 $formSubmitted = false;
 $formSuccess = false;
 $errorMessage = '';
+
+// Fetch barangay options from the barangay_coordinates table
+$barangayOptions = [];
+try {
+    $stmt = $pdo->query("SELECT barangay FROM barangay_coordinates ORDER BY id ASC");
+    while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+        $barangayOptions[] = $row['barangay'];
+    }
+} catch (PDOException $e) {
+    // Optionally handle error
+}
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $formSubmitted = true;
@@ -460,12 +468,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   <?php $activePage = 'reports'; include 'navbar.php'; ?>
 
   <div class="form-container">
-    <?php if (!empty($existingReports) && !$showForm): ?>
+    <?php if (!empty($existingReports)): ?>
     <div class="alert alert-info">
         <h4 class="alert-heading"><i class="bi bi-info-circle me-2"></i>Existing Reports Found</h4>
         <p>This patient already has <?php echo count($existingReports); ?> report(s).</p>
     </div>
-    
     <div class="table-card">
         <div class="table-responsive">
             <table class="table table-hover">
@@ -522,16 +529,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             </table>
         </div>
     </div>
-    
-    <div class="d-flex justify-content-between mt-4">
-        <a href="new_report.php" class="btn btn-outline-secondary">
-            <i class="bi bi-arrow-left me-2"></i>Back to New Report
-        </a>
-        <a href="new_report.php?patient_id=<?php echo $selectedPatientId; ?>&new=true" class="btn btn-primary">
-            <i class="bi bi-plus-circle me-2"></i>Create Another Report
-        </a>
-    </div>
-    <?php else: ?>
+    <?php endif; ?>
+    <?php if ($showForm): ?>
     <div class="form-container">
         <?php if ($formSubmitted && $formSuccess): ?>
         <div class="success-message">
@@ -624,7 +623,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                   </div>
                   <div class="col-md-6">
                     <label for="new_barangay" class="form-label">Barangay</label>
-                    <input type="text" class="form-control" id="new_barangay" name="new_barangay">
+                    <select class="form-select" id="new_barangay" name="new_barangay">
+                      <option value="">Select Barangay</option>
+                      <?php foreach ($barangayOptions as $option): ?>
+                        <option value="<?php echo htmlspecialchars($option); ?>"><?php echo htmlspecialchars($option); ?></option>
+                      <?php endforeach; ?>
+                    </select>
                   </div>
                   <div class="col-12">
                     <label for="new_address" class="form-label">Address</label>
@@ -650,8 +654,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                       <option value="Dog">Dog</option>
                       <option value="Cat">Cat</option>
                       <option value="Rat">Rat</option>
-                      <option value="Monkey">Monkey</option>
-                      <option value="Bat">Bat</option>
                       <option value="Other">Other</option>
                     </select>
                   </div>
@@ -960,10 +962,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       const ownerContactSection = document.getElementById('ownerContactSection');
       
       animalOwnershipSelect.addEventListener('change', function() {
-        if (this.value === 'Owned by patient' || this.value === 'Owned by neighbor' || this.value === 'Owned by unknown person') {
+        if (this.value === 'Owned by patient') {
+          // Hide owner fields since it's the same as the patient
+          ownerSection.style.display = 'none';
+          ownerContactSection.style.display = 'none';
+        } else if (this.value === 'Owned by neighbor' || this.value === 'Owned by unknown person') {
+          // Show owner fields for other ownership types
           ownerSection.style.display = 'block';
           ownerContactSection.style.display = 'block';
         } else {
+          // Hide for stray/unknown
           ownerSection.style.display = 'none';
           ownerContactSection.style.display = 'none';
         }

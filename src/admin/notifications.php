@@ -68,15 +68,86 @@ if (!empty($search)) {
 }
 
 // Get notifications
-$notifications = get_notifications($pdo, $filters, $recordsPerPage, $offset);
+try {
+    $query = "SELECT n.*, 
+              CASE 
+                WHEN n.type = 'info' THEN 'bi-info-circle'
+                WHEN n.type = 'warning' THEN 'bi-exclamation-triangle'
+                WHEN n.type = 'danger' THEN 'bi-exclamation-circle'
+                WHEN n.type = 'success' THEN 'bi-check-circle'
+                ELSE 'bi-bell'
+              END as icon
+              FROM notifications n 
+              WHERE 1=1";
+    $params = [];
 
-// Get total count for pagination
-$countFilters = $filters;
-$totalNotifications = count(get_notifications($pdo, $countFilters));
-$totalPages = ceil($totalNotifications / $recordsPerPage);
+    if (!empty($type)) {
+        $query .= " AND n.type = ?";
+        $params[] = $type;
+    }
+    if ($is_read !== null) {
+        $query .= " AND n.is_read = ?";
+        $params[] = $is_read;
+    }
+    if (!empty($search)) {
+        $query .= " AND (n.title LIKE ? OR n.message LIKE ?)";
+        $params[] = "%$search%";
+        $params[] = "%$search%";
+    }
 
-// Get notification stats
-$stats = get_notification_stats($pdo);
+    $query .= " ORDER BY n.created_at DESC LIMIT ? OFFSET ?";
+    $params[] = $recordsPerPage;
+    $params[] = $offset;
+
+    $stmt = $pdo->prepare($query);
+    $stmt->execute($params);
+    $notifications = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    // Get total count for pagination
+    $countQuery = "SELECT COUNT(*) FROM notifications n WHERE 1=1";
+    $countParams = [];
+
+    if (!empty($type)) {
+        $countQuery .= " AND n.type = ?";
+        $countParams[] = $type;
+    }
+    if ($is_read !== null) {
+        $countQuery .= " AND n.is_read = ?";
+        $countParams[] = $is_read;
+    }
+    if (!empty($search)) {
+        $countQuery .= " AND (n.title LIKE ? OR n.message LIKE ?)";
+        $countParams[] = "%$search%";
+        $countParams[] = "%$search%";
+    }
+
+    $countStmt = $pdo->prepare($countQuery);
+    $countStmt->execute($countParams);
+    $totalNotifications = $countStmt->fetchColumn();
+    $totalPages = ceil($totalNotifications / $recordsPerPage);
+
+    // Get notification stats
+    $statsQuery = "SELECT 
+        COUNT(*) as total,
+        SUM(CASE WHEN is_read = 0 THEN 1 ELSE 0 END) as unread,
+        SUM(CASE WHEN type = 'danger' THEN 1 ELSE 0 END) as danger,
+        SUM(CASE WHEN type = 'success' THEN 1 ELSE 0 END) as success
+        FROM notifications";
+    $statsStmt = $pdo->query($statsQuery);
+    $stats = $statsStmt->fetch(PDO::FETCH_ASSOC);
+
+} catch (PDOException $e) {
+    $error = "Database error: " . $e->getMessage();
+    $notifications = [];
+    $totalNotifications = 0;
+    $totalPages = 0;
+    $stats = [
+        'total' => 0,
+        'unread' => 0,
+        'danger' => 0,
+        'success' => 0
+    ];
+}
 ?>
 
 <!DOCTYPE html>

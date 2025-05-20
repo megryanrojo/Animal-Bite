@@ -19,12 +19,15 @@ try {
 // Get unread notifications
 try {
     $notificationsStmt = $pdo->prepare("
-        SELECT r.reportId, r.referenceNumber, r.reportDate, r.urgency, 
+        SELECT r.reportId, r.referenceNumber, r.reportDate, r.urgency, r.status,
                CONCAT(p.firstName, ' ', p.lastName) as patientName,
-               p.contactNumber, p.barangay
+               p.contactNumber, p.barangay, p.address,
+               r.animalType, r.biteType, r.biteDate
         FROM reports r
         JOIN patients p ON r.patientId = p.patientId
-        WHERE r.status = 'pending' AND r.source = 'online'
+        WHERE r.status = 'pending' 
+        AND r.source = 'online'
+        AND r.reportDate >= DATE_SUB(NOW(), INTERVAL 7 DAY)
         ORDER BY 
             CASE WHEN r.urgency = 'High' THEN 0 ELSE 1 END,
             r.reportDate DESC
@@ -34,8 +37,12 @@ try {
     
     // Get count of high urgency reports
     $highUrgencyStmt = $pdo->prepare("
-        SELECT COUNT(*) FROM reports 
-        WHERE status = 'pending' AND source = 'online' AND urgency = 'High'
+        SELECT COUNT(*) 
+        FROM reports 
+        WHERE status = 'pending' 
+        AND source = 'online' 
+        AND urgency = 'High'
+        AND reportDate >= DATE_SUB(NOW(), INTERVAL 7 DAY)
     ");
     $highUrgencyStmt->execute();
     $highUrgencyCount = $highUrgencyStmt->fetchColumn();
@@ -53,13 +60,33 @@ if (isset($_POST['mark_in_progress']) && isset($_POST['report_id'])) {
     try {
         $updateStmt = $pdo->prepare("
             UPDATE reports 
-            SET status = 'in_progress', staffId = ? 
+            SET status = 'in_progress', 
+                staffId = ?,
+                updatedAt = NOW()
             WHERE reportId = ?
         ");
         $updateStmt->execute([$_SESSION['staffId'], $reportId]);
         
-        // Redirect to prevent form resubmission
-        header("Location: notifications.php");
+        // Create a notification for the admin
+        $notificationStmt = $pdo->prepare("
+            INSERT INTO notifications (
+                title, message, type, link, created_at
+            ) VALUES (
+                'Report Status Updated',
+                'Report #' . ? . ' has been marked as in progress by ' . ?,
+                'info',
+                'view_report.php?id=' . ?,
+                NOW()
+            )
+        ");
+        $notificationStmt->execute([
+            $reportId,
+            $_SESSION['staffId'],
+            $reportId
+        ]);
+        
+        $_SESSION['message'] = "Report has been marked as in progress.";
+        header("Location: notification.php");
         exit;
     } catch (PDOException $e) {
         $error = "Error updating report: " . $e->getMessage();

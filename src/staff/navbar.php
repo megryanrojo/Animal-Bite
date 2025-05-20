@@ -10,7 +10,7 @@ if (!isset($staff) && isset($_SESSION['staffId'])) {
   <div class="container">
     <a class="navbar-brand" href="dashboard.php">
       <i class="bi bi-heart-pulse"></i>
-      <span class="fw-bold">BHW Portal</span>
+      <span class="fw-bold">BHW Animal Bite Portal</span>
     </a>
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
       <span class="navbar-toggler-icon"></span>
@@ -36,9 +36,6 @@ if (!isset($staff) && isset($_SESSION['staffId'])) {
             <i class="bi bi-person-circle me-1"></i> <?php echo isset($staff) ? htmlspecialchars($staff['firstName'] . ' ' . $staff['lastName']) : 'Staff'; ?>
           </a>
           <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="userDropdown">
-            <li><a class="dropdown-item" href="profile.php"><i class="bi bi-person me-2"></i> My Profile</a></li>
-            <li><a class="dropdown-item" href="settings.php"><i class="bi bi-gear me-2"></i> Settings</a></li>
-            <li><hr class="dropdown-divider"></li>
             <li><a class="dropdown-item text-danger" href="../logout/staff_logout.php"><i class="bi bi-box-arrow-right me-2"></i> Logout</a></li>
           </ul>
         </div>

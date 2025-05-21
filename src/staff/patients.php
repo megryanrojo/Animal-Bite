@@ -16,18 +16,15 @@ try {
     $staff = ['firstName' => 'User', 'lastName' => ''];
 }
 
-// Initialize filter variables
 $search = isset($_GET['search']) ? $_GET['search'] : '';
 $gender = isset($_GET['gender']) ? $_GET['gender'] : '';
 $barangay = isset($_GET['barangay']) ? $_GET['barangay'] : '';
-// Remove the hasRabiesVaccine filter since it doesn't exist in the table
 
 // Pagination settings
 $page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
 $recordsPerPage = 10;
 $offset = ($page - 1) * $recordsPerPage;
 
-// Build the query
 $query = "
     SELECT p.*, 
            (SELECT COUNT(*) FROM reports r WHERE r.patientId = p.patientId) as reportCount,
@@ -39,7 +36,6 @@ $query = "
 $countQuery = "SELECT COUNT(*) FROM patients p WHERE 1=1";
 $params = [];
 
-// Add filters to query
 if (!empty($search)) {
     $searchTerm = "%$search%";
     $query .= " AND (p.firstName LIKE ? OR p.lastName LIKE ? OR p.contactNumber LIKE ? OR p.patientId LIKE ?)";
@@ -62,34 +58,27 @@ if (!empty($barangay)) {
     $params[] = $barangay;
 }
 
-// Get sort parameters
 $sortColumn = isset($_GET['sort']) ? $_GET['sort'] : 'registrationDate';
 $sortOrder = isset($_GET['order']) && $_GET['order'] === 'asc' ? 'ASC' : 'DESC';
 
-// Validate sort column to prevent SQL injection
 $allowedColumns = ['patientId', 'firstName', 'lastName', 'gender', 'dateOfBirth', 'contactNumber', 'barangay', 'reportCount', 'lastVisit', 'created_at', 'updated_at'];
 if (!in_array($sortColumn, $allowedColumns)) {
-    $sortColumn = 'created_at'; // Default sort by creation date instead of registrationDate
+    $sortColumn = 'created_at'; 
 }
 
 $query .= " ORDER BY $sortColumn $sortOrder LIMIT $offset, $recordsPerPage";
 
-// Execute queries
 try {
-    // Get total records count
     $countStmt = $pdo->prepare($countQuery);
     $countStmt->execute($params);
     $totalRecords = $countStmt->fetchColumn();
     
-    // Calculate total pages
     $totalPages = ceil($totalRecords / $recordsPerPage);
     
-    // Get patients for current page
     $stmt = $pdo->prepare($query);
     $stmt->execute($params);
     $patients = $stmt->fetchAll(PDO::FETCH_ASSOC);
     
-    // Get unique barangays for filter dropdown
     $barangaysStmt = $pdo->query("SELECT DISTINCT barangay FROM patients WHERE barangay != '' ORDER BY barangay");
     $barangays = $barangaysStmt->fetchAll(PDO::FETCH_COLUMN);
     

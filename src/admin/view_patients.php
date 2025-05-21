@@ -253,7 +253,7 @@ function calculateAge($dateOfBirth) {
             <h2 class="mb-0">Patients</h2>
         </div>
         <div class="content-card-body">
-            <form class="row g-3 mb-3" method="get" action="patients.php">
+            <form class="row g-3 mb-3" method="get" action="view_patients.php">
                 <div class="col-md-4">
                     <input type="text" class="form-control" name="search" placeholder="Search by name, contact, or ID" value="<?php echo htmlspecialchars($search); ?>">
                 </div>

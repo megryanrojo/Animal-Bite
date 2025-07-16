@@ -138,17 +138,13 @@ foreach ($reports as $report) {
 $filename = 'animal_bite_reports_' . date('Y-m-d_His');
 
 if ($format === 'csv') {
-    // Set headers for CSV download
     header('Content-Type: text/csv');
     header('Content-Disposition: attachment; filename="' . $filename . '.csv"');
     
-    // Create CSV file
     $output = fopen('php://output', 'w');
     
-    // Add UTF-8 BOM for proper Excel encoding
     fprintf($output, chr(0xEF).chr(0xBB).chr(0xBF));
     
-    // Write headers
     fputcsv($output, $headers);
     
     // Write data

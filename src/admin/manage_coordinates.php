@@ -473,4 +473,8 @@ try {
         // View on map button
         document.querySelectorAll('.view-on-map').forEach(function(button) {
             button.addEventListener('click', function() {
-                var lat = parseFloat(
+                var lat = parseFloat(this.getAttribute('data-lat'));
+                var lng = parseFloat(this.getAttribute('data-lng'));
+                map.setView([lat, lng], 13);
+            });
+        });

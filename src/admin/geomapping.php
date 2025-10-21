@@ -129,6 +129,16 @@ try {
     $recentCases = [];
 }
 
+/**
+ * Build a filtered URL for `geomapping.php` preserving existing query params.
+ *
+ * Intended to be used when toggling filters/links in this page. Keeps current
+ * GET parameters, applies overrides from $newParams, and removes keys whose
+ * values are explicitly set to null.
+ *
+ * @param array $newParams Key-value overrides for the query string. Use null to remove a key.
+ * @return string A URL like `geomapping.php?key=value&...` suitable for anchors.
+ */
 function buildUrl($newParams = []) {
     $params = $_GET;
     
@@ -607,6 +617,43 @@ error_log("Final Heatmap Data for JavaScript: " . print_r($jsHeatmapData, true))
             </form>
         </div>
         
+        <!-- Location Search -->
+        <div class="content-card mb-4">
+            <div class="content-card-header">
+                <h5 class="mb-0"><i class="bi bi-search me-2"></i>Search Location</h5>
+            </div>
+            <div class="content-card-body">
+                <div class="row g-3">
+                    <div class="col-md-8">
+                        <label for="location_search" class="form-label">Search for a specific location in Talisay City</label>
+                        <div class="input-group">
+                            <input type="text" class="form-control" id="location_search" placeholder="Enter barangay name or location...">
+                            <button class="btn btn-outline-primary" type="button" id="search_location_btn">
+                                <i class="bi bi-search"></i> Search
+                            </button>
+                        </div>
+                        <div class="form-text">
+                            <i class="bi bi-info-circle me-1"></i>Search is limited to Talisay City locations only. Map view is restricted to city boundaries.
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Quick Search</label>
+                        <div class="d-grid">
+                            <button class="btn btn-outline-secondary" type="button" id="show_all_locations">
+                                <i class="bi bi-globe"></i> Show All Locations
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <div id="search_results" class="mt-3" style="display: none;">
+                    <div class="alert alert-info">
+                        <h6><i class="bi bi-info-circle me-2"></i>Search Results</h6>
+                        <div id="search_results_content"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
         <!-- Statistics Cards -->
         <div class="row g-4 mb-4">
             <div class="col-md-4">
@@ -818,7 +865,18 @@ error_log("Final Heatmap Data for JavaScript: " . print_r($jsHeatmapData, true))
     <script src="https://unpkg.com/leaflet.markercluster@1.4.1/dist/leaflet.markercluster.js"></script>
     
     <script>
-        var map = L.map('map').setView([<?php echo $centerLat; ?>, <?php echo $centerLng; ?>], 14);
+        // Talisay City boundaries (approximate bounding box)
+        var talisayBounds = L.latLngBounds(
+            [10.6500, 122.9000], // Southwest corner
+            [10.8500, 123.1000]  // Northeast corner
+        );
+        
+        var map = L.map('map', {
+            maxBounds: talisayBounds,
+            maxBoundsViscosity: 1.0, // Prevent panning outside bounds
+            minZoom: 12, // Minimum zoom level to keep city in view
+            maxZoom: 18  // Maximum zoom level for detail
+        }).setView([<?php echo $centerLat; ?>, <?php echo $centerLng; ?>], 14);
         
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
@@ -829,6 +887,8 @@ error_log("Final Heatmap Data for JavaScript: " . print_r($jsHeatmapData, true))
         
         var heatPoints = [];
         var markers = L.markerClusterGroup();
+        var searchMarker = null; // Marker for search results
+        var allBarangays = <?php echo json_encode($barangays); ?>; // All available barangays
 
         heatData.forEach(function(point) {
             var intensity = Math.min(point.count / 2, 1); 
@@ -897,9 +957,247 @@ error_log("Final Heatmap Data for JavaScript: " . print_r($jsHeatmapData, true))
         
         legend.addTo(map);
         
+        // Add a subtle border to show Talisay City boundaries
+        var cityBorder = L.rectangle(talisayBounds, {
+            color: '#ff6b6b',
+            weight: 2,
+            opacity: 0.8,
+            fillColor: 'transparent',
+            fillOpacity: 0,
+            dashArray: '5, 5'
+        }).addTo(map);
+        
+        // Add a label for Talisay City
+        var cityLabel = L.marker([10.7500, 122.9500], {
+            icon: L.divIcon({
+                className: 'city-label',
+                html: '<div style="background-color: rgba(255, 107, 107, 0.9); color: white; padding: 5px 10px; border-radius: 15px; font-weight: bold; font-size: 12px; white-space: nowrap; box-shadow: 0 2px 5px rgba(0,0,0,0.3);">Talisay City</div>',
+                iconSize: [100, 30],
+                iconAnchor: [50, 15]
+            })
+        }).addTo(map);
+        
+        /**
+         * Print the current map view using the browser's print dialog.
+         * Minimal wrapper to allow future enhancements (e.g., hiding UI chrome).
+         */
         function printMap() {
-            window.print();
+            try {
+                window.print();
+            } catch (err) {
+                console.error('printMap error:', err);
+            }
         }
+        
+        // Search functionality
+        /**
+         * Perform a case-insensitive search across known barangays and heat data.
+         * Returns a deduplicated list of barangay names that include the search term.
+         *
+         * @param {string} searchTerm
+         * @returns {string[]} matching barangay names
+         */
+        function searchLocation(searchTerm) {
+            try {
+                var results = [];
+                var searchLower = String(searchTerm || '').toLowerCase();
+                
+                // Search through all barangays
+                allBarangays.forEach(function(barangay) {
+                    if (typeof barangay === 'string' && barangay.toLowerCase().includes(searchLower)) {
+                        results.push(barangay);
+                    }
+                });
+                
+                // Also search through heatmap data for exact matches
+                heatData.forEach(function(point) {
+                    if (point && typeof point.barangay === 'string' && point.barangay.toLowerCase().includes(searchLower)) {
+                        if (results.indexOf(point.barangay) === -1) {
+                            results.push(point.barangay);
+                        }
+                    }
+                });
+                
+                return results;
+            } catch (err) {
+                console.error('searchLocation error:', err);
+                return [];
+            }
+        }
+        
+        /**
+         * Highlight a specific barangay on the map with a distinct marker and popup.
+         * Returns true if the barangay was found in heat data; otherwise false.
+         *
+         * @param {string} barangay
+         * @returns {boolean}
+         */
+        function highlightLocation(barangay) {
+            try {
+                // Remove previous search marker
+                if (searchMarker) {
+                    map.removeLayer(searchMarker);
+                }
+                
+                // Find the location in heatmap data
+                var foundLocation = heatData.find(function(point) {
+                    return point && typeof point.barangay === 'string' && point.barangay.toLowerCase() === String(barangay || '').toLowerCase();
+                });
+                
+                if (foundLocation) {
+                    // Create a special marker for search results
+                    var searchIcon = L.divIcon({
+                        className: 'search-marker',
+                        html: '<div style="background-color: #ff6b6b; color: white; border-radius: 50%; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; font-weight: bold; border: 3px solid white; box-shadow: 0 2px 10px rgba(0,0,0,0.3);">📍</div>',
+                        iconSize: [30, 30],
+                        iconAnchor: [15, 15]
+                    });
+                    
+                    searchMarker = L.marker([foundLocation.lat, foundLocation.lng], {icon: searchIcon})
+                        .bindPopup('<strong>📍 ' + foundLocation.barangay + '</strong><br>Cases: ' + foundLocation.count + '<br><small>Search Result</small>')
+                        .addTo(map);
+                    
+                    // Zoom to the location (respecting min zoom level)
+                    var zoomLevel = Math.max(16, map.getMinZoom());
+                    map.setView([foundLocation.lat, foundLocation.lng], zoomLevel);
+                    
+                    // Open popup
+                    searchMarker.openPopup();
+                    
+                    return true;
+                }
+                return false;
+            } catch (err) {
+                console.error('highlightLocation error:', err);
+                return false;
+            }
+        }
+        
+        /**
+         * Render up to six search results as quick-select buttons.
+         * Falls back to an informative message if there are no results or on error.
+         *
+         * @param {string[]} results
+         */
+        function showSearchResults(results) {
+            try {
+                var resultsDiv = document.getElementById('search_results');
+                var contentDiv = document.getElementById('search_results_content');
+                
+                if (!Array.isArray(results) || results.length === 0) {
+                    contentDiv.innerHTML = '<p class="mb-0">No locations found matching your search.</p>';
+                } else {
+                    var html = '<div class="row">';
+                    results.forEach(function(barangay, index) {
+                        if (index < 6) { // Show max 6 results
+                            html += '<div class="col-md-6 mb-2">';
+                            html += '<button class="btn btn-outline-primary btn-sm w-100 text-start" onclick="selectLocation(\'' + barangay + '\')">';
+                            html += '<i class="bi bi-geo-alt me-2"></i>' + barangay;
+                            html += '</button>';
+                            html += '</div>';
+                        }
+                    });
+                    if (results.length > 6) {
+                        html += '<div class="col-12"><small class="text-muted">... and ' + (results.length - 6) + ' more results</small></div>';
+                    }
+                    html += '</div>';
+                    contentDiv.innerHTML = html;
+                }
+                
+                resultsDiv.style.display = 'block';
+            } catch (err) {
+                console.error('showSearchResults error:', err);
+                var resultsDiv = document.getElementById('search_results');
+                var contentDiv = document.getElementById('search_results_content');
+                contentDiv.innerHTML = '<p class="mb-0">An error occurred while showing results.</p>';
+                resultsDiv.style.display = 'block';
+            }
+        }
+        
+        /**
+         * Select and focus a barangay from the search results.
+         * Hides the results panel on success.
+         *
+         * @param {string} barangay
+         */
+        function selectLocation(barangay) {
+            try {
+                if (highlightLocation(barangay)) {
+                    document.getElementById('search_results').style.display = 'none';
+                    document.getElementById('location_search').value = barangay;
+                }
+            } catch (err) {
+                console.error('selectLocation error:', err);
+            }
+        }
+        
+        /**
+         * Clear any highlighted marker and reset the map to the city bounds.
+         * Also clears the search UI state.
+         */
+        function showAllLocations() {
+            try {
+                // Remove search marker
+                if (searchMarker) {
+                    map.removeLayer(searchMarker);
+                }
+                
+                // Reset view to show all locations (fit to Talisay City bounds)
+                map.fitBounds(talisayBounds, {padding: [20, 20]});
+                
+                // Hide search results
+                document.getElementById('search_results').style.display = 'none';
+                document.getElementById('location_search').value = '';
+            } catch (err) {
+                console.error('showAllLocations error:', err);
+            }
+        }
+        
+        // Event listeners
+        document.getElementById('search_location_btn').addEventListener('click', function() {
+            try {
+                var searchTerm = document.getElementById('location_search').value.trim();
+                if (searchTerm) {
+                    var results = searchLocation(searchTerm);
+                    showSearchResults(results);
+                    
+                    // If only one result, automatically select it
+                    if (results.length === 1) {
+                        selectLocation(results[0]);
+                    }
+                }
+            } catch (err) {
+                console.error('search button handler error:', err);
+            }
+        });
+        
+        document.getElementById('location_search').addEventListener('keypress', function(e) {
+            try {
+                if (e.key === 'Enter') {
+                    document.getElementById('search_location_btn').click();
+                }
+            } catch (err) {
+                console.error('location_search keypress error:', err);
+            }
+        });
+        
+        document.getElementById('show_all_locations').addEventListener('click', function() {
+            try { showAllLocations(); } catch (err) { console.error('show_all_locations click error:', err); }
+        });
+        
+        // Add some CSS for the search marker and city label
+        var style = document.createElement('style');
+        style.textContent = `
+            .search-marker {
+                background: transparent !important;
+                border: none !important;
+            }
+            .city-label {
+                background: transparent !important;
+                border: none !important;
+            }
+        `;
+        document.head.appendChild(style);
     </script>
 </body>
 </html>

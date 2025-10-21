@@ -9,8 +9,8 @@ ini_set('display_errors', 1);
 // Start the session
 session_start();
 
-// Check if user is logged in
-if (!isset($_SESSION['staffId']) || empty($_SESSION['staffId'])) {
+// Check if admin is logged in
+if (!isset($_SESSION['admin_id']) || empty($_SESSION['admin_id'])) {
     ob_end_clean();
     header("Location: ../login/admin_login.php");
     exit;
@@ -19,21 +19,7 @@ if (!isset($_SESSION['staffId']) || empty($_SESSION['staffId'])) {
 // Include database connection
 require_once '../conn/conn.php';
 
-// Get admin information
-try {
-    $stmt = $pdo->prepare("SELECT firstName, lastName FROM staff WHERE staffId = ?");
-    $stmt->execute([$_SESSION['staffId']]);
-    $admin = $stmt->fetch(PDO::FETCH_ASSOC);
-    
-    if (!$admin) {
-        session_destroy();
-        ob_end_clean();
-        header("Location: ../login/admin_login.php");
-        exit;
-    }
-} catch (PDOException $e) {
-    $admin = ['firstName' => 'User', 'lastName' => ''];
-}
+// Admin info is not required here; skip fetching profile
 
 // Check if report ID is provided
 if (!isset($_GET['id']) || !is_numeric($_GET['id'])) {

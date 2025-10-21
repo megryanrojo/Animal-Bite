@@ -154,7 +154,7 @@ if ($format === 'csv') {
     
     fclose($output);
 } else {
-    // For Excel format, we'll use a simple HTML table that Excel can open
+    // Excel format, simple HTML table that Excel can open
     header('Content-Type: application/vnd.ms-excel');
     header('Content-Disposition: attachment; filename="' . $filename . '.xls"');
     

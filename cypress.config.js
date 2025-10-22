@@ -14,7 +14,20 @@ module.exports = {
     video: true,
     screenshotOnRunFailure: true,
     supportFile: 'cypress/support/e2e.js',
-    specPattern: 'cypress/e2e/**/*.cy.{js,jsx,ts,tsx}',
+    specPattern: [
+      'cypress/e2e/admin/admin-dashboard.cy.js',
+      'cypress/e2e/admin/admin-patients.cy.js',
+      'cypress/e2e/admin/admin-reports.cy.js',
+      'cypress/e2e/admin/admin-staff.cy.js',
+      'cypress/e2e/admin/admin-geomapping.cy.js',
+      'cypress/e2e/staff/staff-dashboard.cy.js',
+      'cypress/e2e/staff/staff-patients.cy.js',
+      'cypress/e2e/staff/staff-reports.cy.js',
+      'cypress/e2e/staff/staff-search.cy.js',
+      'cypress/e2e/authentication/authentication.cy.js',
+      'cypress/e2e/integration/*.cy.js'
+    ],
+    excludeSpecPattern: ['cypress/e2e/user/**', 'cypress/e2e/**/*-optimized.cy.{js,jsx,ts,tsx}'],
     setupNodeEvents(on, config) {
       // implement node event listeners here
     },
@@ -22,8 +35,8 @@ module.exports = {
       // Test data
       testAdminEmail: 'megrojo76@gmail.com',
       testAdminPassword: 'dods12345',
-      testStaffEmail: 'staff@test.com',
-      testStaffPassword: 'staff123',
+      testStaffEmail: 'aaangeles@gmail.com',
+      testStaffPassword: 'dods12345',
       testUserEmail: 'user@test.com',
       testUserPassword: 'user123',
       

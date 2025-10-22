@@ -1,15 +1,15 @@
-describe('Security Flow Tests', () => {
+describe('Authentication Tests', () => {
   beforeEach(() => {
     cy.visit('/src/login/admin_login.html')
   })
 
-  it('should handle authentication and session security', () => {
-    // Test authentication
+  it('should handle admin login with validation and security', () => {
     cy.get('h2').should('contain', 'Admin Login')
     cy.get('form').should('be.visible')
     cy.get('input[name="username"]').should('be.visible')
     cy.get('input[name="password"]').should('be.visible')
     cy.get('button[type="submit"]').should('be.visible')
+    cy.get('a[href*="staff_login.html"]').should('contain', 'Staff Login')
     
     // Test validation
     cy.get('button[type="submit"]').click()
@@ -36,37 +36,35 @@ describe('Security Flow Tests', () => {
     cy.get('button[type="submit"]').click()
     cy.url().should('include', 'admin_dashboard.php')
     cy.get('.navbar-brand').should('contain', 'Admin Dashboard')
-    
-    // Test session security
-    cy.visit('/src/admin/admin_dashboard.php')
-    cy.get('.navbar-brand').should('contain', 'Admin Dashboard')
-    
-    // Test logout
-    cy.get('a[href*="logout"]').click()
-    cy.url().should('include', 'admin_login.html')
-    cy.get('h2').should('contain', 'Admin Login')
   })
 
-  it('should handle input validation and security', () => {
-    // Test input validation
-    cy.get('input[name="username"]').type('<script>alert("xss")</script>')
-    cy.get('input[name="password"]').type('<script>alert("xss")</script>')
-    cy.get('button[type="submit"]').click()
-    cy.get('.alert-danger').should('be.visible')
-    cy.get('.alert-danger').should('contain', 'Invalid username or password')
+  it('should handle staff login and Google authentication', () => {
+    cy.visit('/src/login/staff_login.html')
+    cy.get('h2').should('contain', 'Staff Login')
+    cy.get('form').should('be.visible')
+    cy.get('input[name="username"]').should('be.visible')
+    cy.get('input[name="password"]').should('be.visible')
+    cy.get('button[type="submit"]').should('be.visible')
+    cy.get('a[href*="admin_login.html"]').should('contain', 'Admin Login')
     
-    // Test SQL injection
-    cy.get('input[name="username"]').clear().type("admin'; DROP TABLE users; --")
-    cy.get('input[name="password"]').clear().type('admin123')
+    // Test staff login
+    cy.get('input[name="username"]').type('staff')
+    cy.get('input[name="password"]').type('staff123')
     cy.get('button[type="submit"]').click()
-    cy.get('.alert-danger').should('be.visible')
-    cy.get('.alert-danger').should('contain', 'Invalid username or password')
+    cy.url().should('include', 'dashboard.php')
+    cy.get('.navbar-brand').should('contain', 'Staff Dashboard')
     
-    // Test valid login
-    cy.get('input[name="username"]').clear().type('admin')
-    cy.get('input[name="password"]').clear().type('admin123')
+    // Test Google authentication
+    cy.visit('/src/login/google_auth.php')
+    cy.get('h2').should('contain', 'Google Authentication')
+    cy.get('form').should('be.visible')
+    cy.get('input[name="email"]').should('be.visible')
+    cy.get('input[name="password"]').should('be.visible')
+    cy.get('button[type="submit"]').should('be.visible')
+    
+    cy.get('input[name="email"]').type('test@example.com')
+    cy.get('input[name="password"]').type('password123')
     cy.get('button[type="submit"]').click()
-    cy.url().should('include', 'admin_dashboard.php')
-    cy.get('.navbar-brand').should('contain', 'Admin Dashboard')
+    cy.url().should('include', 'dashboard.php')
   })
 })

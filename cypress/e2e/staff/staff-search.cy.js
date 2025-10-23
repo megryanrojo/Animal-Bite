@@ -4,63 +4,51 @@ describe('Staff Search Tests', () => {
     cy.visit('/src/staff/search.php')
   })
 
-  it('should perform basic and advanced search operations', () => {
-    cy.contains('.navbar a.nav-link.active, .navbar a.nav-link', 'Search').should('exist')
+  it('should display search page layout', () => {
+    cy.contains('.navbar a.nav-link', 'Search').should('have.class', 'active')
+    cy.contains('h1', 'Search Patients & Reports').should('be.visible')
+    cy.contains('p', 'Find patient records or animal bite reports quickly and easily.').should('be.visible')
+    })
+
+    it('should display search form', () => {
     cy.get('form').should('be.visible')
-    cy.get('input[type="search"]').should('be.visible')
-    cy.get('button[type="submit"]').should('be.visible')
-    cy.get('select[name="searchType"]').should('be.visible')
-    cy.get('button').contains('Advanced Search').should('be.visible')
-    
-    // Test basic search
-    cy.get('select[name="searchType"]').select('Reports')
-    cy.get('input[type="search"]').type('John')
-    cy.get('button[type="submit"]').click()
-    cy.get('.search-results').should('be.visible')
-    
-    cy.get('select[name="searchType"]').select('Patients')
-    cy.get('input[type="search"]').type('Doe')
-    cy.get('button[type="submit"]').click()
-    cy.get('.search-results').should('be.visible')
-    
-    // Test empty results
-    cy.get('input[type="search"]').type('nonexistent')
-    cy.get('button[type="submit"]').click()
-    cy.get('.no-results').should('be.visible')
-    
-    cy.get('button').contains('Clear').click()
-    cy.get('.search-results').should('not.exist')
+    cy.get('input[name="q"]').should('be.visible')
+    cy.contains('button', 'Search').should('be.visible')
   })
 
-  it('should handle advanced search and search results', () => {
-    // Test advanced search
-    cy.get('button').contains('Advanced Search').click()
-    cy.get('.advanced-search').should('be.visible')
-    cy.get('input[name="firstName"]').should('be.visible')
-    cy.get('input[name="lastName"]').should('be.visible')
-    cy.get('input[name="contactNumber"]').should('be.visible')
-    
-    cy.get('input[name="firstName"]').type('John')
-    cy.get('button[type="submit"]').click()
-    cy.get('.search-results').should('be.visible')
-    
-    cy.get('input[name="lastName"]').type('Doe')
-    cy.get('select[name="animalType"]').select('Dog')
-    cy.get('button[type="submit"]').click()
-    cy.get('.search-results').should('be.visible')
-    
-    // Test search results
-    cy.get('.search-results .result-item').should('have.length.at.least', 1)
-    cy.get('.search-results .result-item').first().should('contain', 'Name:')
-    cy.get('.search-results .result-item').first().should('contain', 'Type:')
-    cy.get('.search-results .result-item').first().should('contain', 'Date:')
-    
-    cy.get('.search-results-count').should('be.visible')
-    cy.get('.search-results-count').should('contain', 'results found')
-    
-    cy.get('.search-results .result-item').first().find('button').contains('View Details').click()
-    cy.get('.modal').should('be.visible')
-    cy.get('.modal-title').should('contain', 'Details')
-    cy.get('.modal .btn-close').click()
+  it('should handle basic search', () => {
+    cy.get('input[name="q"]').type('test')
+    cy.contains('button', 'Search').click()
+    cy.url().should('include', 'q=test')
+    })
+
+    it('should display search results', () => {
+    cy.get('input[name="q"]').type('test')
+    cy.contains('button', 'Search').click()
+    cy.get('.result-section-title').should('be.visible')
+    cy.get('.result-card').should('have.length.at.least', 1)
+  })
+
+  it('should display patients and reports sections', () => {
+    cy.contains('.result-section-title', 'Patients').should('be.visible')
+    cy.contains('.result-section-title', 'Reports').should('be.visible')
+    cy.get('.table').should('be.visible')
+  })
+
+  it('should display report data in table', () => {
+    cy.get('.table tbody tr').should('have.length.at.least', 1)
+    cy.get('.table th').should('contain', 'Report #')
+    cy.get('.table th').should('contain', 'Patient')
+    cy.get('.table th').should('contain', 'Contact')
+    cy.get('.table th').should('contain', 'Barangay')
+    cy.get('.table th').should('contain', 'Animal')
+    cy.get('.table th').should('contain', 'Bite Type')
+    cy.get('.table th').should('contain', 'Date')
+    cy.get('.table th').should('contain', 'Actions')
+  })
+
+  it('should display pagination', () => {
+    cy.get('.pagination').should('be.visible')
+    cy.get('.page-link').should('be.visible')
   })
 })

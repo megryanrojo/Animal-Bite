@@ -1,12 +1,12 @@
 describe('Complete Workflow Tests (Staff/Admin only)', () => {
   beforeEach(() => {
-      cy.loginAsStaff()
+    cy.loginAsStaff()
   })
 
   it('staff processes existing report then admin reviews it', () => {
     cy.visit('/src/staff/reports.php')
-    cy.get('table tbody tr').first().should('be.visible')
-    cy.get('table tbody tr').first().find('a').contains('View').click()
+    cy.get('.table tbody tr').first().should('be.visible')
+    cy.get('.table tbody tr').first().find('a').contains('View').click()
     cy.url().should('include', 'view_report.php')
     cy.contains('h2, h3, .card-title', 'Report Details', { matchCase: false })
     cy.contains('button, a', 'Edit').click()
@@ -17,8 +17,8 @@ describe('Complete Workflow Tests (Staff/Admin only)', () => {
 
     cy.loginAsAdmin()
     cy.visit('/src/admin/view_reports.php')
-    cy.get('table tbody tr').first().should('be.visible')
-    cy.get('table tbody tr').first().find('a').contains('View').click()
+    cy.get('.table tbody tr').first().should('be.visible')
+    cy.get('.table tbody tr').first().find('a').contains('View').click()
     cy.url().should('include', 'view_report.php')
     cy.contains('h2, h3, .card-title', 'Report Details', { matchCase: false })
     cy.contains('button, a', 'Edit').click()
@@ -30,8 +30,8 @@ describe('Complete Workflow Tests (Staff/Admin only)', () => {
 
   it('data stays consistent between staff edit and admin view', () => {
     cy.visit('/src/staff/reports.php')
-    cy.get('table tbody tr').first().should('be.visible')
-    cy.get('table tbody tr').first().find('a').contains('View').click()
+    cy.get('.table tbody tr').first().should('be.visible')
+    cy.get('.table tbody tr').first().find('a').contains('View').click()
     cy.url().should('include', 'view_report.php')
     cy.contains('button, a', 'Edit').click()
     cy.url().should('include', 'edit_report.php')
@@ -40,7 +40,7 @@ describe('Complete Workflow Tests (Staff/Admin only)', () => {
 
     cy.loginAsAdmin()
     cy.visit('/src/admin/view_reports.php')
-    cy.get('table tbody tr').first().find('a').contains('View').click()
+    cy.get('.table tbody tr').first().find('a').contains('View').click()
     cy.url().should('include', 'view_report.php')
     cy.contains('.notes, textarea, .form-control', 'Consistency check', { matchCase: false })
   })

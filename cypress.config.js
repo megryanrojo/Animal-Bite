@@ -35,7 +35,7 @@ module.exports = {
       // Test data
       testAdminEmail: 'megrojo76@gmail.com',
       testAdminPassword: 'dods12345',
-      testStaffEmail: 'aaangeles@gmail.com',
+      testStaffEmail: 'aaangeles.chmsu@gmail.com',
       testStaffPassword: 'dods12345',
       testUserEmail: 'user@test.com',
       testUserPassword: 'user123',

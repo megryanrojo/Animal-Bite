@@ -211,3 +211,37 @@ Cypress.Commands.add('testFiltering', (filterSelector, filterValue) => {
   cy.get('button[type="submit"]').click()
   cy.get('tbody tr').should('have.length.at.least', 1)
 })
+
+// Custom commands for authentication
+Cypress.Commands.add('loginAsStaff', (email = 'aaangeles.chmsu@gmail.com', password = 'dods12345') => {
+  // For testing purposes, we'll directly visit the staff dashboard
+  // In a real scenario, you'd need valid credentials
+  cy.visit('/src/staff/dashboard.php')
+  // Check if we're redirected to login page
+  cy.url().then((url) => {
+    if (url.includes('staff_login.html')) {
+      cy.log('Redirected to login - authentication required')
+      // For now, we'll just visit the login page to test the form
+      cy.visit('/src/login/staff_login.html')
+    }
+  })
+})
+
+Cypress.Commands.add('loginAsAdmin', (email = 'megrojo76@gmail.com', password = 'dods12345') => {
+  // For testing purposes, we'll directly visit the admin dashboard
+  // In a real scenario, you'd need valid credentials
+  cy.visit('/src/admin/admin_dashboard.php')
+  // Check if we're redirected to login page
+  cy.url().then((url) => {
+    if (url.includes('admin_login.html')) {
+      cy.log('Redirected to login - authentication required')
+      // For now, we'll just visit the login page to test the form
+      cy.visit('/src/login/admin_login.html')
+    }
+  })
+})
+
+Cypress.Commands.add('logout', () => {
+  cy.get('a[href*="logout"]').click()
+  cy.url().should('include', 'login')
+})

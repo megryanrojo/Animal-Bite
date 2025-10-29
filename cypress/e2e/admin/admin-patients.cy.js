@@ -38,7 +38,8 @@ describe('Admin Patients Tests', () => {
 
   it('should handle patient actions', () => {
     cy.get('.table tbody tr').first().within(() => {
-      cy.contains('button', 'View').should('be.visible')
+      // Actions use an anchor styled as a button
+      cy.contains('a', 'View').should('be.visible')
     })
   })
 

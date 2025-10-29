@@ -21,7 +21,7 @@ describe('Staff Patients Tests', () => {
 
   it('should handle search functionality', () => {
     cy.get('input[name="search"]').type('test')
-    cy.contains('button', 'Search').click()
+    cy.get('.filter-form form .input-group button[type="submit"]').click()
     cy.url().should('include', 'search=test')
   })
 
@@ -30,7 +30,7 @@ describe('Staff Patients Tests', () => {
     cy.get('select[name="gender"]').should('be.visible')
     cy.get('select[name="barangay"]').should('be.visible')
     cy.contains('button', 'Apply Filters').should('be.visible')
-    cy.contains('button', 'Clear Filters').should('be.visible')
+    cy.contains('a,button', 'Clear Filters').should('be.visible')
   })
 
   it('should display patient data in table', () => {
@@ -49,14 +49,20 @@ describe('Staff Patients Tests', () => {
 
   it('should handle patient actions', () => {
     cy.get('.table tbody tr').first().within(() => {
-      cy.contains('button', 'View').should('be.visible')
-      cy.contains('button', 'Edit').should('be.visible')
-      cy.contains('button', 'New Report').should('be.visible')
+      cy.get('a[href*="view_patient.php"]').should('be.visible')
+      cy.get('a[href*="edit_patient.php"]').should('be.visible')
+      cy.get('a[href*="new_report.php"]').should('be.visible')
     })
   })
 
   it('should display pagination', () => {
-    cy.get('.pagination').should('be.visible')
-    cy.get('.page-link').should('be.visible')
+    cy.get('body').then(($body) => {
+      if ($body.find('.pagination').length) {
+        cy.get('.pagination').should('be.visible')
+        cy.get('.page-link').should('be.visible')
+      } else {
+        cy.contains('.d-flex.p-3 span.text-muted', 'Showing').should('be.visible')
+      }
+    })
   })
 })

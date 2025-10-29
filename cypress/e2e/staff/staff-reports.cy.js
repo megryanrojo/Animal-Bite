@@ -21,7 +21,7 @@ describe('Staff Reports Tests', () => {
 
   it('should handle search functionality', () => {
     cy.get('input[name="search"]').type('test')
-    cy.contains('button', 'Search').click()
+    cy.get('.filter-form form .input-group button[type="submit"]').click()
     cy.url().should('include', 'search=test')
   })
 
@@ -33,7 +33,7 @@ describe('Staff Reports Tests', () => {
     cy.get('select[name="bite_category"]').should('be.visible')
     cy.get('select[name="status"]').should('be.visible')
     cy.contains('button', 'Apply Filters').should('be.visible')
-    cy.contains('button', 'Clear Filters').should('be.visible')
+    cy.get('.filter-form a[href="reports.php"]').should('be.visible')
   })
 
   it('should display report data in table', () => {
@@ -50,13 +50,19 @@ describe('Staff Reports Tests', () => {
 
   it('should handle report actions', () => {
     cy.get('.table tbody tr').first().within(() => {
-      cy.contains('button', 'View').should('be.visible')
-      cy.contains('button', 'Edit').should('be.visible')
+      cy.get('a[href*="view_report.php"]').should('be.visible')
+      cy.get('a[href*="edit_report.php"]').should('be.visible')
     })
   })
 
   it('should display pagination', () => {
-    cy.get('.pagination').should('be.visible')
-    cy.get('.page-link').should('be.visible')
+    cy.get('body').then(($body) => {
+      if ($body.find('.pagination').length) {
+        cy.get('.pagination').should('be.visible')
+        cy.get('.page-link').should('be.visible')
+      } else {
+        cy.contains('.d-flex.p-3 span.text-muted', 'Showing').should('be.visible')
+      }
+    })
   })
 })

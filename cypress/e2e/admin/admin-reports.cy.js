@@ -43,8 +43,11 @@ describe('Admin Reports Tests', () => {
 
   it('should handle report actions', () => {
     cy.get('.table tbody tr').first().within(() => {
-      cy.contains('button', 'View').should('be.visible')
-      cy.contains('button', 'Edit').should('be.visible')
+      // The Actions column uses an anchor icon for View and a dropdown for Edit
+      cy.get('.btn-group > a.btn.btn-sm.btn-primary').should('be.visible')
+      cy.get('.btn-group .dropdown-toggle').click()
+      cy.get('.dropdown-menu').should('be.visible')
+      cy.contains('.dropdown-menu a', 'Edit Report').should('be.visible')
     })
   })
 

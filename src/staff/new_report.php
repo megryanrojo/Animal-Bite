@@ -309,15 +309,56 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
     
     .form-section {
-      margin-bottom: 2rem;
-      padding-bottom: 1rem;
-      border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+      margin-bottom: 1rem;
+      border: 1px solid rgba(0, 0, 0, 0.1);
+      border-radius: 8px;
+      overflow: hidden;
+      background-color: #fff;
+      transition: box-shadow 0.2s;
     }
     
-    .form-section:last-child {
-      margin-bottom: 0;
-      padding-bottom: 0;
-      border-bottom: none;
+    .form-section:hover {
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+    }
+    
+    .section-header {
+      padding: 1rem 1.5rem;
+      background-color: rgba(var(--bs-primary-rgb), 0.05);
+      border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      transition: background-color 0.2s;
+    }
+    
+    .section-header:hover {
+      background-color: rgba(var(--bs-primary-rgb), 0.08);
+    }
+    
+    .section-header h3 {
+      font-size: 1.1rem;
+      font-weight: 600;
+      margin: 0;
+      color: var(--bs-primary);
+      display: flex;
+      align-items: center;
+    }
+    
+    .section-header h3 i {
+      margin-right: 0.5rem;
+    }
+    
+    .section-header .bi-chevron-down {
+      transition: transform 0.3s ease;
+    }
+    
+    .section-header[aria-expanded="false"] .bi-chevron-down {
+      transform: rotate(-90deg);
+    }
+    
+    .section-content {
+      padding: 1.5rem;
     }
     
     .section-title {
@@ -331,6 +372,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     
     .section-title i {
       margin-right: 0.5rem;
+    }
+    
+    /* Smooth transitions for conditional fields */
+    .conditional-field {
+      transition: all 0.3s ease;
+      overflow: hidden;
+      max-height: 0;
+      opacity: 0;
+      margin: 0 !important;
+      padding: 0 !important;
+    }
+    
+    .conditional-field.show {
+      max-height: 200px;
+      opacity: 1;
+      margin-top: 1rem !important;
+      padding: 0 !important;
+    }
+    
+    .conditional-field.show > * {
+      padding: 0;
     }
     
     .form-label {
@@ -567,8 +629,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <form method="POST" action="new_report.php" enctype="multipart/form-data">
               <!-- Patient Information Section -->
               <div class="form-section">
-                <h3 class="section-title"><i class="bi bi-person"></i> Patient Information</h3>
-                
+                <div class="section-header" data-bs-toggle="collapse" data-bs-target="#patientSection" aria-expanded="true">
+                  <h3><i class="bi bi-person"></i> Patient Information</h3>
+                  <i class="bi bi-chevron-down"></i>
+                </div>
+                <div class="section-content collapse show" id="patientSection">
                 <div class="mb-3">
                   <label class="form-label d-block">Patient Selection</label>
                   <div class="form-check form-check-inline">
@@ -635,12 +700,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     <textarea class="form-control" id="new_address" name="new_address" rows="2"></textarea>
                   </div>
                 </div>
+                </div>
               </div>
               
               <!-- Animal Bite Details Section -->
               <div class="form-section">
-                <h3 class="section-title"><i class="bi bi-exclamation-triangle"></i> Animal Bite Details</h3>
-                
+                <div class="section-header" data-bs-toggle="collapse" data-bs-target="#biteDetailsSection" aria-expanded="true">
+                  <h3><i class="bi bi-exclamation-triangle"></i> Animal Bite Details</h3>
+                  <i class="bi bi-chevron-down"></i>
+                </div>
+                <div class="section-content collapse show" id="biteDetailsSection">
                 <div class="row g-3">
                   <div class="col-md-6">
                     <label for="bite_date" class="form-label required-field">Date of Bite</label>
@@ -658,7 +727,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     </select>
                   </div>
                   
-                  <div class="col-md-6" id="otherAnimalSection" style="display: none;">
+                  <div class="col-md-6 conditional-field" id="otherAnimalSection">
                     <label for="animal_other_type" class="form-label required-field">Specify Animal</label>
                     <input type="text" class="form-control" id="animal_other_type" name="animal_other_type">
                   </div>
@@ -675,12 +744,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     </select>
                   </div>
                   
-                  <div class="col-md-6" id="ownerSection" style="display: none;">
+                  <div class="col-md-6 conditional-field" id="ownerSection">
                     <label for="owner_name" class="form-label">Owner's Name</label>
                     <input type="text" class="form-control" id="owner_name" name="owner_name">
                   </div>
                   
-                  <div class="col-md-6" id="ownerContactSection" style="display: none;">
+                  <div class="col-md-6 conditional-field" id="ownerContactSection">
                     <label for="owner_contact" class="form-label">Owner's Contact</label>
                     <input type="text" class="form-control" id="owner_contact" name="owner_contact">
                   </div>
@@ -721,12 +790,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     </div>
                   </div>
                 </div>
+                </div>
               </div>
               
               <!-- Bite Location and Classification -->
               <div class="form-section">
-                <h3 class="section-title"><i class="bi bi-bullseye"></i> Bite Location & Classification</h3>
-                
+                <div class="section-header" data-bs-toggle="collapse" data-bs-target="#biteLocationSection" aria-expanded="true">
+                  <h3><i class="bi bi-bullseye"></i> Bite Location & Classification</h3>
+                  <i class="bi bi-chevron-down"></i>
+                </div>
+                <div class="section-content collapse show" id="biteLocationSection">
                 <div class="row g-3">
                   <div class="col-md-12">
                     <label for="bite_location" class="form-label required-field">Bite Location (Body Part)</label>
@@ -751,11 +824,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     </div>
                   </div>
                 </div>
+                </div>
               </div>
               
               <!-- Bite Images Section -->
               <div class="form-section">
-                <h3 class="section-title"><i class="bi bi-camera"></i> Bite Images</h3>
+                <div class="section-header" data-bs-toggle="collapse" data-bs-target="#biteImagesSection" aria-expanded="false">
+                  <h3><i class="bi bi-camera"></i> Bite Images</h3>
+                  <i class="bi bi-chevron-down"></i>
+                </div>
+                <div class="section-content collapse" id="biteImagesSection">
                 <div class="mb-3">
                   <label class="form-label">Upload Images of the Bite</label>
                   <label for="bite_images" class="btn btn-outline-primary" style="cursor:pointer;">
@@ -765,12 +843,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                   <div class="form-text">Upload clear images of the bite area. You can upload multiple images.</div>
                   <div id="imagePreviewContainer" class="image-preview-container mt-3"></div>
                 </div>
+                </div>
               </div>
               
               <!-- Treatment Information -->
               <div class="form-section">
-                <h3 class="section-title"><i class="bi bi-bandaid"></i> Treatment Information</h3>
-                
+                <div class="section-header" data-bs-toggle="collapse" data-bs-target="#treatmentSection" aria-expanded="false">
+                  <h3><i class="bi bi-bandaid"></i> Treatment Information</h3>
+                  <i class="bi bi-chevron-down"></i>
+                </div>
+                <div class="section-content collapse" id="treatmentSection">
                 <div class="row g-3">
                   <div class="col-md-6">
                     <div class="form-check">
@@ -790,7 +872,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     </div>
                   </div>
                   
-                  <div class="col-md-6" id="rabiesVaccineDateSection" style="display: none;">
+                  <div class="col-md-6 conditional-field" id="rabiesVaccineDateSection">
                     <label for="rabies_vaccine_date" class="form-label">Date of Rabies Vaccine</label>
                     <input type="date" class="form-control" id="rabies_vaccine_date" name="rabies_vaccine_date">
                   </div>
@@ -804,7 +886,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     </div>
                   </div>
                   
-                  <div class="col-md-6" id="antiTetanusDateSection" style="display: none;">
+                  <div class="col-md-6 conditional-field" id="antiTetanusDateSection">
                     <label for="anti_tetanus_date" class="form-label">Date of Anti-tetanus</label>
                     <input type="date" class="form-control" id="anti_tetanus_date" name="anti_tetanus_date">
                   </div>
@@ -818,7 +900,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     </div>
                   </div>
                   
-                  <div class="col-md-6" id="antibioticsDetailsSection" style="display: none;">
+                  <div class="col-md-6 conditional-field" id="antibioticsDetailsSection">
                     <label for="antibiotics_details" class="form-label">Antibiotics Details</label>
                     <input type="text" class="form-control" id="antibiotics_details" name="antibiotics_details" placeholder="Type, dosage, etc.">
                   </div>
@@ -832,7 +914,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     </div>
                   </div>
                   
-                  <div class="col-md-6" id="hospitalNameSection" style="display: none;">
+                  <div class="col-md-6 conditional-field" id="hospitalNameSection">
                     <label for="hospital_name" class="form-label">Hospital Name</label>
                     <input type="text" class="form-control" id="hospital_name" name="hospital_name">
                   </div>
@@ -852,16 +934,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     </select>
                   </div>
                 </div>
+                </div>
               </div>
               
               <!-- Additional Notes Section -->
               <div class="form-section">
-                <h3 class="section-title"><i class="bi bi-journal"></i> Additional Notes</h3>
-                
+                <div class="section-header" data-bs-toggle="collapse" data-bs-target="#notesSection" aria-expanded="false">
+                  <h3><i class="bi bi-journal"></i> Additional Notes</h3>
+                  <i class="bi bi-chevron-down"></i>
+                </div>
+                <div class="section-content collapse" id="notesSection">
                 <div class="mb-3">
                   <label for="notes" class="form-label">Notes</label>
                   <textarea class="form-control" id="notes" name="notes" rows="4"></textarea>
                   <div class="form-text">Any additional information or observations about the case</div>
+                </div>
                 </div>
               </div>
               
@@ -941,19 +1028,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       existingPatientRadio.addEventListener('change', togglePatientSections);
       newPatientRadio.addEventListener('change', togglePatientSections);
       
+      // Helper function to toggle conditional fields smoothly
+      function toggleConditionalField(element, show) {
+        if (show) {
+          element.classList.add('show');
+          // Enable required fields
+          const requiredInput = element.querySelector('[required]');
+          if (requiredInput) requiredInput.required = true;
+        } else {
+          element.classList.remove('show');
+          // Disable required fields
+          const requiredInput = element.querySelector('[required]');
+          if (requiredInput) requiredInput.required = false;
+        }
+      }
+      
       // Show/hide other animal type field
       const animalTypeSelect = document.getElementById('animal_type');
       const otherAnimalSection = document.getElementById('otherAnimalSection');
       const animalOtherTypeInput = document.getElementById('animal_other_type');
       
       animalTypeSelect.addEventListener('change', function() {
-        if (this.value === 'Other') {
-          otherAnimalSection.style.display = 'block';
-          animalOtherTypeInput.required = true;
-        } else {
-          otherAnimalSection.style.display = 'none';
-          animalOtherTypeInput.required = false;
-        }
+        toggleConditionalField(otherAnimalSection, this.value === 'Other');
       });
       
       // Show/hide owner information fields
@@ -962,19 +1058,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       const ownerContactSection = document.getElementById('ownerContactSection');
       
       animalOwnershipSelect.addEventListener('change', function() {
-        if (this.value === 'Owned by patient') {
-          // Hide owner fields since it's the same as the patient
-          ownerSection.style.display = 'none';
-          ownerContactSection.style.display = 'none';
-        } else if (this.value === 'Owned by neighbor' || this.value === 'Owned by unknown person') {
-          // Show owner fields for other ownership types
-          ownerSection.style.display = 'block';
-          ownerContactSection.style.display = 'block';
-        } else {
-          // Hide for stray/unknown
-          ownerSection.style.display = 'none';
-          ownerContactSection.style.display = 'none';
-        }
+        const shouldShow = (this.value === 'Owned by neighbor' || this.value === 'Owned by unknown person');
+        toggleConditionalField(ownerSection, shouldShow);
+        toggleConditionalField(ownerContactSection, shouldShow);
       });
       
       // Show/hide treatment date fields
@@ -982,28 +1068,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       const rabiesVaccineDateSection = document.getElementById('rabiesVaccineDateSection');
       
       rabiesVaccineCheckbox.addEventListener('change', function() {
-        rabiesVaccineDateSection.style.display = this.checked ? 'block' : 'none';
+        toggleConditionalField(rabiesVaccineDateSection, this.checked);
       });
       
       const antiTetanusCheckbox = document.getElementById('anti_tetanus');
       const antiTetanusDateSection = document.getElementById('antiTetanusDateSection');
       
       antiTetanusCheckbox.addEventListener('change', function() {
-        antiTetanusDateSection.style.display = this.checked ? 'block' : 'none';
+        toggleConditionalField(antiTetanusDateSection, this.checked);
       });
       
       const antibioticsCheckbox = document.getElementById('antibiotics');
       const antibioticsDetailsSection = document.getElementById('antibioticsDetailsSection');
       
       antibioticsCheckbox.addEventListener('change', function() {
-        antibioticsDetailsSection.style.display = this.checked ? 'block' : 'none';
+        toggleConditionalField(antibioticsDetailsSection, this.checked);
       });
       
       const referredToHospitalCheckbox = document.getElementById('referred_to_hospital');
       const hospitalNameSection = document.getElementById('hospitalNameSection');
       
       referredToHospitalCheckbox.addEventListener('change', function() {
-        hospitalNameSection.style.display = this.checked ? 'block' : 'none';
+        toggleConditionalField(hospitalNameSection, this.checked);
       });
       
       // Set initial state

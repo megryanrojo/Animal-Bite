@@ -281,6 +281,32 @@
     </div>
   </div>
   
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
+    import { getAuth, signInWithEmailAndPassword, signInWithPopup, GoogleAuthProvider, getIdToken } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyCFBtZ_T_hNpqNyDRQjLy2aA_J6rxvVlhQ",
+      authDomain: "animalbitemapping.firebaseapp.com",
+      projectId: "animalbitemapping",
+      storageBucket: "animalbitemapping.firebasestorage.app",
+      messagingSenderId: "363708456089",
+      appId: "1:363708456089:web:911890a45c177d0289ac08",
+      measurementId: "G-KFCC50YQ7J"
+    };
+
+    // Initialize Firebase
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const googleProvider = new GoogleAuthProvider();
+
+    // Make auth, provider and functions available globally
+    window.firebaseAuth = auth;
+    window.googleProvider = googleProvider;
+    window.getIdToken = getIdToken;
+    window.signInWithPopup = signInWithPopup;
+  </script>
+
   <script>
     document.getElementById('togglePassword').addEventListener('click', function() {
       const passwordInput = document.getElementById('password');
@@ -344,14 +370,81 @@
       }
     });
     
-    // Google Sign-In functionality
-    document.getElementById('googleSignInBtn').addEventListener('click', function() {
-      // Initialize Google Sign-In
-      if (typeof google !== 'undefined' && google.accounts) {
-        google.accounts.id.prompt();
-      } else {
-        // Fallback: redirect to Google OAuth
-        window.location.href = 'google_auth.php?type=admin';
+    // Google Sign-In functionality with Firebase
+    document.getElementById('googleSignInBtn').addEventListener('click', async function() {
+      const btn = this;
+      const originalText = btn.innerHTML;
+      
+      // Disable button and show loading
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span>Signing in...';
+      
+      try {
+        // Wait for Firebase to be initialized
+        if (!window.firebaseAuth || !window.googleProvider) {
+          await new Promise(resolve => setTimeout(resolve, 500));
+        }
+
+        // Sign in with Google using Firebase
+        const result = await window.signInWithPopup(window.firebaseAuth, window.googleProvider);
+        const user = result.user;
+        
+        // Get ID token
+        const idToken = await window.getIdToken(user, true);
+        
+        // Send token to backend for verification
+        const response = await fetch('firebase_auth.php', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            idToken: idToken,
+            type: 'admin'
+          })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+          // Show success message
+          const successMessage = document.getElementById('success-message');
+          successMessage.classList.remove('d-none');
+          document.getElementById('success-text').textContent = 'Login successful! Redirecting...';
+          
+          // Redirect to dashboard
+          setTimeout(() => {
+            window.location.href = data.redirect || '../admin/admin_dashboard.php';
+          }, 1000);
+        } else {
+          // Show error message
+          const errorMessage = document.getElementById('error-message');
+          errorMessage.classList.remove('d-none');
+          document.getElementById('error-text').textContent = data.error || 'Google authentication failed. Please try again.';
+          
+          // Re-enable button
+          btn.disabled = false;
+          btn.innerHTML = originalText;
+        }
+      } catch (error) {
+        console.error('Google sign-in error:', error);
+        
+        // Show error message
+        const errorMessage = document.getElementById('error-message');
+        errorMessage.classList.remove('d-none');
+        
+        let errorText = 'Google authentication failed. Please try again.';
+        if (error.code === 'auth/popup-closed-by-user') {
+          errorText = 'Sign-in was cancelled. Please try again.';
+        } else if (error.code === 'auth/popup-blocked') {
+          errorText = 'Popup was blocked. Please allow popups and try again.';
+        }
+        
+        document.getElementById('error-text').textContent = errorText;
+        
+        // Re-enable button
+        btn.disabled = false;
+        btn.innerHTML = originalText;
       }
     });
     

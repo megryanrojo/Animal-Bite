@@ -316,6 +316,19 @@ error_log("Final Heatmap Data for JavaScript: " . print_r($jsHeatmapData, true))
             display: flex;
             justify-content: space-between;
             align-items: center;
+            transition: background-color 0.2s;
+        }
+        
+        .content-card-header:hover {
+            background-color: rgba(var(--bs-primary-rgb), 0.06);
+        }
+        
+        .content-card-header .bi-chevron-down {
+            transition: transform 0.3s ease;
+        }
+        
+        .content-card-header[aria-expanded="false"] .bi-chevron-down {
+            transform: rotate(-90deg);
         }
         
         .content-card-body {
@@ -330,10 +343,28 @@ error_log("Final Heatmap Data for JavaScript: " . print_r($jsHeatmapData, true))
             box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
         }
         
-        #map {
-            height: 600px;
-            width: 100%;
+        #location_dropdown {
+            font-size: 1rem;
+            padding: 0.75rem 1rem;
             border-radius: 5px;
+            transition: all 0.2s;
+            cursor: pointer;
+        }
+        
+        #location_dropdown:hover {
+            border-color: rgba(var(--bs-primary-rgb), 0.5);
+        }
+        
+        #location_dropdown:focus {
+            border-color: var(--bs-primary);
+            box-shadow: 0 0 0 0.2rem rgba(var(--bs-primary-rgb), 0.25);
+            outline: 0;
+        }
+        
+        #map {
+            height: 650px;
+            width: 100%;
+            border-radius: 0;
         }
         
         .legend {
@@ -548,7 +579,7 @@ error_log("Final Heatmap Data for JavaScript: " . print_r($jsHeatmapData, true))
 <body>
     <?php include 'includes/navbar.php'; ?>
     <div class="geomapping-container">
-        <div class="d-flex justify-content-between align-items-center mb-4">
+        <div class="d-flex justify-content-between align-items-center mb-3">
             <div>
                 <h2 class="mb-1">Geomapping Analysis</h2>
                 <p class="text-muted mb-0">Visualize animal bite cases by location for better decision making</p>
@@ -563,81 +594,91 @@ error_log("Final Heatmap Data for JavaScript: " . print_r($jsHeatmapData, true))
             </div>
         </div>
         
-        <div class="filter-form">
-            <form method="GET" action="geomapping.php">
-                <div class="row g-3">
-                    <div class="col-md-3">
-                        <label for="date_from" class="form-label">Date From</label>
-                        <input type="date" class="form-control" id="date_from" name="date_from" value="<?php echo htmlspecialchars($dateFrom); ?>">
+        <!-- Filter Form Section -->
+        <div class="content-card mb-4">
+            <div class="content-card-header" data-bs-toggle="collapse" data-bs-target="#filterCollapse" aria-expanded="true" style="cursor: pointer;">
+                <h5 class="mb-0"><i class="bi bi-funnel me-2"></i>Filters</h5>
+                <i class="bi bi-chevron-down"></i>
+            </div>
+            <div class="content-card-body collapse show" id="filterCollapse">
+                <form method="GET" action="geomapping.php">
+                    <div class="row g-3">
+                        <div class="col-md-3">
+                            <label for="date_from" class="form-label">Date From</label>
+                            <input type="date" class="form-control" id="date_from" name="date_from" value="<?php echo htmlspecialchars($dateFrom); ?>">
+                        </div>
+                        
+                        <div class="col-md-3">
+                            <label for="date_to" class="form-label">Date To</label>
+                            <input type="date" class="form-control" id="date_to" name="date_to" value="<?php echo htmlspecialchars($dateTo); ?>">
+                        </div>
+                        
+                        <div class="col-md-2">
+                            <label for="animal_type" class="form-label">Animal Type</label>
+                            <select class="form-select" id="animal_type" name="animal_type">
+                                <option value="">All Types</option>
+                                <?php foreach ($animalTypes as $type): ?>
+                                <option value="<?php echo htmlspecialchars($type); ?>" <?php echo $animalType === $type ? 'selected' : ''; ?>>
+                                    <?php echo htmlspecialchars($type); ?>
+                                </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        
+                        <div class="col-md-2">
+                            <label for="bite_category" class="form-label">Bite Category</label>
+                            <select class="form-select" id="bite_category" name="bite_category">
+                                <option value="">All Categories</option>
+                                <option value="Category I" <?php echo $biteCategory === 'Category I' ? 'selected' : ''; ?>>Category I</option>
+                                <option value="Category II" <?php echo $biteCategory === 'Category II' ? 'selected' : ''; ?>>Category II</option>
+                                <option value="Category III" <?php echo $biteCategory === 'Category III' ? 'selected' : ''; ?>>Category III</option>
+                            </select>
+                        </div>
+                        
+                        <div class="col-md-2">
+                            <label for="status" class="form-label">Status</label>
+                            <select class="form-select" id="status" name="status">
+                                <option value="">All Statuses</option>
+                                <option value="pending" <?php echo $status === 'pending' ? 'selected' : ''; ?>>Pending</option>
+                                <option value="in_progress" <?php echo $status === 'in_progress' ? 'selected' : ''; ?>>In Progress</option>
+                                <option value="completed" <?php echo $status === 'completed' ? 'selected' : ''; ?>>Completed</option>
+                                <option value="cancelled" <?php echo $status === 'cancelled' ? 'selected' : ''; ?>>Cancelled</option>
+                            </select>
+                        </div>
+                        
+                        <div class="col-12 d-flex justify-content-end">
+                            <a href="geomapping.php" class="btn btn-outline-secondary me-2">Reset Filters</a>
+                            <button type="submit" class="btn btn-primary">Apply Filters</button>
+                        </div>
                     </div>
-                    
-                    <div class="col-md-3">
-                        <label for="date_to" class="form-label">Date To</label>
-                        <input type="date" class="form-control" id="date_to" name="date_to" value="<?php echo htmlspecialchars($dateTo); ?>">
-                    </div>
-                    
-                    <div class="col-md-2">
-                        <label for="animal_type" class="form-label">Animal Type</label>
-                        <select class="form-select" id="animal_type" name="animal_type">
-                            <option value="">All Types</option>
-                            <?php foreach ($animalTypes as $type): ?>
-                            <option value="<?php echo htmlspecialchars($type); ?>" <?php echo $animalType === $type ? 'selected' : ''; ?>>
-                                <?php echo htmlspecialchars($type); ?>
-                            </option>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
-                    
-                    <div class="col-md-2">
-                        <label for="bite_category" class="form-label">Bite Category</label>
-                        <select class="form-select" id="bite_category" name="bite_category">
-                            <option value="">All Categories</option>
-                            <option value="Category I" <?php echo $biteCategory === 'Category I' ? 'selected' : ''; ?>>Category I</option>
-                            <option value="Category II" <?php echo $biteCategory === 'Category II' ? 'selected' : ''; ?>>Category II</option>
-                            <option value="Category III" <?php echo $biteCategory === 'Category III' ? 'selected' : ''; ?>>Category III</option>
-                        </select>
-                    </div>
-                    
-                    <div class="col-md-2">
-                        <label for="status" class="form-label">Status</label>
-                        <select class="form-select" id="status" name="status">
-                            <option value="">All Statuses</option>
-                            <option value="pending" <?php echo $status === 'pending' ? 'selected' : ''; ?>>Pending</option>
-                            <option value="in_progress" <?php echo $status === 'in_progress' ? 'selected' : ''; ?>>In Progress</option>
-                            <option value="completed" <?php echo $status === 'completed' ? 'selected' : ''; ?>>Completed</option>
-                            <option value="cancelled" <?php echo $status === 'cancelled' ? 'selected' : ''; ?>>Cancelled</option>
-                        </select>
-                    </div>
-                    
-                    <div class="col-12 d-flex justify-content-end">
-                        <a href="geomapping.php" class="btn btn-outline-secondary me-2">Reset Filters</a>
-                        <button type="submit" class="btn btn-primary">Apply Filters</button>
-                    </div>
-                </div>
-            </form>
+                </form>
+            </div>
         </div>
         
         <!-- Location Search -->
         <div class="content-card mb-4">
-            <div class="content-card-header">
+            <div class="content-card-header" data-bs-toggle="collapse" data-bs-target="#searchLocationCollapse" aria-expanded="false" style="cursor: pointer;">
                 <h5 class="mb-0"><i class="bi bi-search me-2"></i>Search Location</h5>
+                <i class="bi bi-chevron-down"></i>
             </div>
-            <div class="content-card-body">
+            <div class="content-card-body collapse" id="searchLocationCollapse">
                 <div class="row g-3">
                     <div class="col-md-8">
-                        <label for="location_search" class="form-label">Search for a specific location in Talisay City</label>
-                        <div class="input-group">
-                            <input type="text" class="form-control" id="location_search" placeholder="Enter barangay name or location...">
-                            <button class="btn btn-outline-primary" type="button" id="search_location_btn">
-                                <i class="bi bi-search"></i> Search
-                            </button>
-                        </div>
+                        <label for="location_dropdown" class="form-label">Select a barangay in Talisay City</label>
+                        <select class="form-select" id="location_dropdown">
+                            <option value="">Choose a location...</option>
+                            <?php foreach ($barangays as $barangay): ?>
+                            <option value="<?php echo htmlspecialchars($barangay); ?>">
+                                <?php echo htmlspecialchars($barangay); ?>
+                            </option>
+                            <?php endforeach; ?>
+                        </select>
                         <div class="form-text">
-                            <i class="bi bi-info-circle me-1"></i>Search is limited to Talisay City locations only. Map view is restricted to city boundaries.
+                            <i class="bi bi-info-circle me-1"></i>Select a location to zoom and highlight it on the map.
                         </div>
                     </div>
                     <div class="col-md-4">
-                        <label class="form-label">Quick Search</label>
+                        <label class="form-label">Quick Actions</label>
                         <div class="d-grid">
                             <button class="btn btn-outline-secondary" type="button" id="show_all_locations">
                                 <i class="bi bi-globe"></i> Show All Locations
@@ -645,65 +686,67 @@ error_log("Final Heatmap Data for JavaScript: " . print_r($jsHeatmapData, true))
                         </div>
                     </div>
                 </div>
-                <div id="search_results" class="mt-3" style="display: none;">
-                    <div class="alert alert-info">
-                        <h6><i class="bi bi-info-circle me-2"></i>Search Results</h6>
-                        <div id="search_results_content"></div>
-                    </div>
-                </div>
             </div>
         </div>
         
-        <!-- Statistics Cards -->
-        <div class="row g-4 mb-4">
-            <div class="col-md-4">
-                <div class="stats-card">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <div>
-                            <h5 class="mb-0">Total Cases</h5>
-                            <div class="stats-number"><?php echo $totalCases; ?></div>
-                            <p class="text-muted mb-0">In selected period</p>
-                        </div>
-                        <div class="card-icon">
-                            <i class="bi bi-file-earmark-text"></i>
-                        </div>
-                    </div>
-                </div>
+        <!-- Statistics Cards Row -->
+        <div class="content-card mb-4">
+            <div class="content-card-header" data-bs-toggle="collapse" data-bs-target="#statsCollapse" aria-expanded="true" style="cursor: pointer;">
+                <h5 class="mb-0"><i class="bi bi-bar-chart-line me-2"></i>Statistics Overview</h5>
+                <i class="bi bi-chevron-down"></i>
             </div>
-            
-            <div class="col-md-4">
-                <div class="stats-card">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <div>
-                            <h5 class="mb-0">Hotspot Areas</h5>
-                            <div class="stats-number"><?php echo count($heatmapData) > 0 ? count($heatmapData) : 0; ?></div>
-                            <p class="text-muted mb-0">Affected barangays</p>
-                        </div>
-                        <div class="card-icon">
-                            <i class="bi bi-geo-alt"></i>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="col-md-4">
-                <div class="stats-card">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <div>
-                            <h5 class="mb-0">Highest Concentration</h5>
-                            <div class="stats-number">
-                                <?php 
-                                    echo count($heatmapData) > 0 ? $heatmapData[0]['case_count'] : 0; 
-                                ?>
+            <div class="content-card-body collapse show" id="statsCollapse">
+                <div class="row g-4">
+                    <div class="col-md-4">
+                        <div class="stats-card">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <h5 class="mb-0">Total Cases</h5>
+                                    <div class="stats-number"><?php echo $totalCases; ?></div>
+                                    <p class="text-muted mb-0">In selected period</p>
+                                </div>
+                                <div class="card-icon">
+                                    <i class="bi bi-file-earmark-text"></i>
+                                </div>
                             </div>
-                            <p class="text-muted mb-0">
-                                <?php 
-                                    echo count($heatmapData) > 0 ? htmlspecialchars($heatmapData[0]['barangay']) : 'N/A'; 
-                                ?>
-                            </p>
                         </div>
-                        <div class="card-icon">
-                            <i class="bi bi-exclamation-triangle"></i>
+                    </div>
+                    
+                    <div class="col-md-4">
+                        <div class="stats-card">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <h5 class="mb-0">Hotspot Areas</h5>
+                                    <div class="stats-number"><?php echo count($heatmapData) > 0 ? count($heatmapData) : 0; ?></div>
+                                    <p class="text-muted mb-0">Affected barangays</p>
+                                </div>
+                                <div class="card-icon">
+                                    <i class="bi bi-geo-alt"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-4">
+                        <div class="stats-card">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <h5 class="mb-0">Highest Concentration</h5>
+                                    <div class="stats-number">
+                                        <?php 
+                                            echo count($heatmapData) > 0 ? $heatmapData[0]['case_count'] : 0; 
+                                        ?>
+                                    </div>
+                                    <p class="text-muted mb-0">
+                                        <?php 
+                                            echo count($heatmapData) > 0 ? htmlspecialchars($heatmapData[0]['barangay']) : 'N/A'; 
+                                        ?>
+                                    </p>
+                                </div>
+                                <div class="card-icon">
+                                    <i class="bi bi-exclamation-triangle"></i>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -711,7 +754,7 @@ error_log("Final Heatmap Data for JavaScript: " . print_r($jsHeatmapData, true))
         </div>
         
         <!-- Map Section -->
-        <div class="content-card">
+        <div class="content-card mb-4">
             <div class="content-card-header">
                 <h5 class="mb-0"><i class="bi bi-geo-alt me-2"></i>Animal Bite Cases Heatmap</h5>
                 <div class="btn-group">
@@ -719,17 +762,18 @@ error_log("Final Heatmap Data for JavaScript: " . print_r($jsHeatmapData, true))
                     <button type="button" class="btn btn-sm btn-outline-primary" id="markerView">Markers</button>
                 </div>
             </div>
-            <div class="content-card-body">
+            <div class="content-card-body p-0">
                 <div id="map"></div>
             </div>
         </div>
         
         <!-- Top Affected Areas -->
         <div class="content-card">
-            <div class="content-card-header">
+            <div class="content-card-header" data-bs-toggle="collapse" data-bs-target="#topAffectedCollapse" aria-expanded="true" style="cursor: pointer;">
                 <h5 class="mb-0"><i class="bi bi-bar-chart me-2"></i>Top Affected Areas</h5>
+                <i class="bi bi-chevron-down"></i>
             </div>
-            <div class="content-card-body">
+            <div class="content-card-body collapse show" id="topAffectedCollapse">
                 <?php if (count($heatmapData) > 0): ?>
                 <div class="table-responsive">
                     <table class="table table-hover">
@@ -773,10 +817,11 @@ error_log("Final Heatmap Data for JavaScript: " . print_r($jsHeatmapData, true))
         
         <!-- Recent Cases -->
         <div class="content-card">
-            <div class="content-card-header">
+            <div class="content-card-header" data-bs-toggle="collapse" data-bs-target="#recentCasesCollapse" aria-expanded="false" style="cursor: pointer;">
                 <h5 class="mb-0"><i class="bi bi-clock-history me-2"></i>Recent Cases</h5>
+                <i class="bi bi-chevron-down"></i>
             </div>
-            <div class="content-card-body">
+            <div class="content-card-body collapse" id="recentCasesCollapse">
                 <?php if (count($recentCases) > 0): ?>
                 <div class="table-responsive">
                     <table class="table table-hover">
@@ -825,10 +870,11 @@ error_log("Final Heatmap Data for JavaScript: " . print_r($jsHeatmapData, true))
         </div>
         
         <div class="content-card">
-            <div class="content-card-header">
+            <div class="content-card-header" data-bs-toggle="collapse" data-bs-target="#recommendationsCollapse" aria-expanded="false" style="cursor: pointer;">
                 <h5 class="mb-0"><i class="bi bi-lightbulb me-2"></i>Recommendations</h5>
+                <i class="bi bi-chevron-down"></i>
             </div>
-            <div class="content-card-body">
+            <div class="content-card-body collapse" id="recommendationsCollapse">
                 <div class="alert alert-primary">
                     <h5><i class="bi bi-info-circle me-2"></i>Decision Support Recommendations</h5>
                     <p>Based on the current data analysis, here are some recommendations:</p>
@@ -865,10 +911,10 @@ error_log("Final Heatmap Data for JavaScript: " . print_r($jsHeatmapData, true))
     <script src="https://unpkg.com/leaflet.markercluster@1.4.1/dist/leaflet.markercluster.js"></script>
     
     <script>
-        // Talisay City boundaries (approximate bounding box)
+        // Talisay City boundaries (adjusted to include all barangays)
         var talisayBounds = L.latLngBounds(
             [10.6500, 122.9000], // Southwest corner
-            [10.8500, 123.1000]  // Northeast corner
+            [10.8500, 123.2000]  // Northeast corner (expanded to include Katilingban)
         );
         
         var map = L.map('map', {
@@ -887,8 +933,7 @@ error_log("Final Heatmap Data for JavaScript: " . print_r($jsHeatmapData, true))
         
         var heatPoints = [];
         var markers = L.markerClusterGroup();
-        var searchMarker = null; // Marker for search results
-        var allBarangays = <?php echo json_encode($barangays); ?>; // All available barangays
+        var searchMarker = null; // Marker for selected location
 
         heatData.forEach(function(point) {
             var intensity = Math.min(point.count / 2, 1); 
@@ -934,6 +979,13 @@ error_log("Final Heatmap Data for JavaScript: " . print_r($jsHeatmapData, true))
             document.getElementById('heatmapView').classList.remove('btn-primary');
             document.getElementById('heatmapView').classList.add('btn-outline-primary');
         });
+        
+        // Initialize button states - hide markers by default
+        document.getElementById('heatmapView').classList.remove('btn-outline-primary');
+        document.getElementById('heatmapView').classList.add('btn-primary');
+        document.getElementById('markerView').classList.remove('btn-primary');
+        document.getElementById('markerView').classList.add('btn-outline-primary');
+        map.removeLayer(markers);
         
         var legend = L.control({position: 'bottomright'});
         
@@ -989,42 +1041,7 @@ error_log("Final Heatmap Data for JavaScript: " . print_r($jsHeatmapData, true))
             }
         }
         
-        // Search functionality
-        /**
-         * Perform a case-insensitive search across known barangays and heat data.
-         * Returns a deduplicated list of barangay names that include the search term.
-         *
-         * @param {string} searchTerm
-         * @returns {string[]} matching barangay names
-         */
-        function searchLocation(searchTerm) {
-            try {
-                var results = [];
-                var searchLower = String(searchTerm || '').toLowerCase();
-                
-                // Search through all barangays
-                allBarangays.forEach(function(barangay) {
-                    if (typeof barangay === 'string' && barangay.toLowerCase().includes(searchLower)) {
-                        results.push(barangay);
-                    }
-                });
-                
-                // Also search through heatmap data for exact matches
-                heatData.forEach(function(point) {
-                    if (point && typeof point.barangay === 'string' && point.barangay.toLowerCase().includes(searchLower)) {
-                        if (results.indexOf(point.barangay) === -1) {
-                            results.push(point.barangay);
-                        }
-                    }
-                });
-                
-                return results;
-            } catch (err) {
-                console.error('searchLocation error:', err);
-                return [];
-            }
-        }
-        
+        // Location dropdown functionality
         /**
          * Highlight a specific barangay on the map with a distinct marker and popup.
          * Returns true if the barangay was found in heat data; otherwise false.
@@ -1039,13 +1056,17 @@ error_log("Final Heatmap Data for JavaScript: " . print_r($jsHeatmapData, true))
                     map.removeLayer(searchMarker);
                 }
                 
+                if (!barangay) {
+                    return false;
+                }
+                
                 // Find the location in heatmap data
                 var foundLocation = heatData.find(function(point) {
                     return point && typeof point.barangay === 'string' && point.barangay.toLowerCase() === String(barangay || '').toLowerCase();
                 });
                 
                 if (foundLocation) {
-                    // Create a special marker for search results
+                    // Create a special marker for the selected location
                     var searchIcon = L.divIcon({
                         className: 'search-marker',
                         html: '<div style="background-color: #ff6b6b; color: white; border-radius: 50%; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; font-weight: bold; border: 3px solid white; box-shadow: 0 2px 10px rgba(0,0,0,0.3);">📍</div>',
@@ -1054,7 +1075,7 @@ error_log("Final Heatmap Data for JavaScript: " . print_r($jsHeatmapData, true))
                     });
                     
                     searchMarker = L.marker([foundLocation.lat, foundLocation.lng], {icon: searchIcon})
-                        .bindPopup('<strong>📍 ' + foundLocation.barangay + '</strong><br>Cases: ' + foundLocation.count + '<br><small>Search Result</small>')
+                        .bindPopup('<strong>📍 ' + foundLocation.barangay + '</strong><br>Cases: ' + foundLocation.count + '<br><small>Selected Location</small>')
                         .addTo(map);
                     
                     // Zoom to the location (respecting min zoom level)
@@ -1074,66 +1095,8 @@ error_log("Final Heatmap Data for JavaScript: " . print_r($jsHeatmapData, true))
         }
         
         /**
-         * Render up to six search results as quick-select buttons.
-         * Falls back to an informative message if there are no results or on error.
-         *
-         * @param {string[]} results
-         */
-        function showSearchResults(results) {
-            try {
-                var resultsDiv = document.getElementById('search_results');
-                var contentDiv = document.getElementById('search_results_content');
-                
-                if (!Array.isArray(results) || results.length === 0) {
-                    contentDiv.innerHTML = '<p class="mb-0">No locations found matching your search.</p>';
-                } else {
-                    var html = '<div class="row">';
-                    results.forEach(function(barangay, index) {
-                        if (index < 6) { // Show max 6 results
-                            html += '<div class="col-md-6 mb-2">';
-                            html += '<button class="btn btn-outline-primary btn-sm w-100 text-start" onclick="selectLocation(\'' + barangay + '\')">';
-                            html += '<i class="bi bi-geo-alt me-2"></i>' + barangay;
-                            html += '</button>';
-                            html += '</div>';
-                        }
-                    });
-                    if (results.length > 6) {
-                        html += '<div class="col-12"><small class="text-muted">... and ' + (results.length - 6) + ' more results</small></div>';
-                    }
-                    html += '</div>';
-                    contentDiv.innerHTML = html;
-                }
-                
-                resultsDiv.style.display = 'block';
-            } catch (err) {
-                console.error('showSearchResults error:', err);
-                var resultsDiv = document.getElementById('search_results');
-                var contentDiv = document.getElementById('search_results_content');
-                contentDiv.innerHTML = '<p class="mb-0">An error occurred while showing results.</p>';
-                resultsDiv.style.display = 'block';
-            }
-        }
-        
-        /**
-         * Select and focus a barangay from the search results.
-         * Hides the results panel on success.
-         *
-         * @param {string} barangay
-         */
-        function selectLocation(barangay) {
-            try {
-                if (highlightLocation(barangay)) {
-                    document.getElementById('search_results').style.display = 'none';
-                    document.getElementById('location_search').value = barangay;
-                }
-            } catch (err) {
-                console.error('selectLocation error:', err);
-            }
-        }
-        
-        /**
          * Clear any highlighted marker and reset the map to the city bounds.
-         * Also clears the search UI state.
+         * Also clears the dropdown selection.
          */
         function showAllLocations() {
             try {
@@ -1145,44 +1108,33 @@ error_log("Final Heatmap Data for JavaScript: " . print_r($jsHeatmapData, true))
                 // Reset view to show all locations (fit to Talisay City bounds)
                 map.fitBounds(talisayBounds, {padding: [20, 20]});
                 
-                // Hide search results
-                document.getElementById('search_results').style.display = 'none';
-                document.getElementById('location_search').value = '';
+                // Clear dropdown
+                document.getElementById('location_dropdown').value = '';
             } catch (err) {
                 console.error('showAllLocations error:', err);
             }
         }
         
         // Event listeners
-        document.getElementById('search_location_btn').addEventListener('click', function() {
+        document.getElementById('location_dropdown').addEventListener('change', function() {
             try {
-                var searchTerm = document.getElementById('location_search').value.trim();
-                if (searchTerm) {
-                    var results = searchLocation(searchTerm);
-                    showSearchResults(results);
-                    
-                    // If only one result, automatically select it
-                    if (results.length === 1) {
-                        selectLocation(results[0]);
-                    }
+                var selectedBarangay = this.value;
+                if (selectedBarangay) {
+                    highlightLocation(selectedBarangay);
+                } else {
+                    showAllLocations();
                 }
             } catch (err) {
-                console.error('search button handler error:', err);
-            }
-        });
-        
-        document.getElementById('location_search').addEventListener('keypress', function(e) {
-            try {
-                if (e.key === 'Enter') {
-                    document.getElementById('search_location_btn').click();
-                }
-            } catch (err) {
-                console.error('location_search keypress error:', err);
+                console.error('location_dropdown change error:', err);
             }
         });
         
         document.getElementById('show_all_locations').addEventListener('click', function() {
-            try { showAllLocations(); } catch (err) { console.error('show_all_locations click error:', err); }
+            try { 
+                showAllLocations(); 
+            } catch (err) { 
+                console.error('show_all_locations click error:', err); 
+            }
         });
         
         // Add some CSS for the search marker and city label

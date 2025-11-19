@@ -244,8 +244,9 @@ function calculateAge($dateOfBirth) {
             }
         }
     </style>
+    <link rel="stylesheet" href="../css/system-theme.css">
 </head>
-<body>
+<body class="theme-admin">
 <?php include 'includes/navbar.php'; ?>
 <div class="patients-container">
     <div class="content-card mb-4">

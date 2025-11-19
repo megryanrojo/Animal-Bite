@@ -25,6 +25,7 @@ if (!isset($admin) && isset($_SESSION['admin_id'])) {
 $current_page = basename($_SERVER['PHP_SELF']);
 ?>
 
+<link rel="stylesheet" href="../css/system-theme.css">
 <nav class="navbar navbar-expand-lg navbar-light sticky-top mb-4">
     <div class="container">
         <a class="navbar-brand fw-bold" href="admin_dashboard.php">Animal Bite Admin Portal</a>

@@ -1,19 +1,19 @@
 <?php
 session_start();
-if (!isset($_SESSION['staffId'])) {
-    header("Location: ../staff_login.html");
+if (!isset($_SESSION['admin_id'])) {
+    header("Location: ../login/admin_login.html");
     exit;
 }
 
 require_once '../conn/conn.php';
 
-// Get staff information
+// Get admin information
 try {
-    $stmt = $pdo->prepare("SELECT firstName, lastName FROM staff WHERE staffId = ?");
-    $stmt->execute([$_SESSION['staffId']]);
-    $staff = $stmt->fetch(PDO::FETCH_ASSOC);
+    $stmt = $pdo->prepare("SELECT firstName, lastName FROM admin WHERE adminId = ?");
+    $stmt->execute([$_SESSION['admin_id']]);
+    $admin = $stmt->fetch(PDO::FETCH_ASSOC);
 } catch (PDOException $e) {
-    $staff = ['firstName' => 'User', 'lastName' => ''];
+    $admin = ['firstName' => 'Admin', 'lastName' => ''];
 }
 
 // Get all patients for dropdown
@@ -138,7 +138,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         
         $reportStmt->execute([
             $patientId,
-            $_SESSION['staffId'],
+            null, // Admin-created reports don't have a staffId
             $_POST['bite_date'],
             $_POST['animal_type'],
             $_POST['animal_type'] === 'Other' ? $_POST['animal_other_type'] : null,
@@ -234,14 +234,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>New Animal Bite Report | BHW Portal</title>
+  <title>New Animal Bite Report | Admin Portal</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
   <style>
     :root {
-      --bs-primary: #28a745;
-      --bs-primary-rgb: 40, 167, 69;
+      --bs-primary: #0d6efd;
+      --bs-primary-rgb: 13, 110, 253;
       --bs-secondary: #f8f9fa;
       --bs-secondary-rgb: 248, 249, 250;
     }
@@ -281,8 +281,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
     
     .btn-primary:hover {
-      background-color: #218838;
-      border-color: #1e7e34;
+      background-color: #0b5ed7;
+      border-color: #0a58ca;
     }
     
     .btn-outline-primary {
@@ -427,8 +427,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
     
     .success-message {
-      background-color: rgba(40, 167, 69, 0.1);
-      border: 1px solid rgba(40, 167, 69, 0.2);
+      background-color: rgba(13, 110, 253, 0.1);
+      border: 1px solid rgba(13, 110, 253, 0.2);
       border-radius: 10px;
       padding: 2rem;
       text-align: center;
@@ -616,6 +616,61 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       to { opacity: 1; transform: translateY(0); }
     }
     
+    .table-card {
+      background-color: white;
+      border-radius: 10px;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+      overflow: hidden;
+      margin-bottom: 1.5rem;
+    }
+    
+    .status-badge {
+      font-size: 0.75rem;
+      padding: 0.35em 0.65em;
+      border-radius: 0.25rem;
+      font-weight: 600;
+    }
+    
+    .status-pending {
+      background-color: #ffc107;
+      color: #212529;
+    }
+    
+    .status-in-progress {
+      background-color: #17a2b8;
+      color: white;
+    }
+    
+    .status-completed {
+      background-color: #28a745;
+      color: white;
+    }
+    
+    .status-referred {
+      background-color: #6f42c1;
+      color: white;
+    }
+    
+    .status-cancelled {
+      background-color: #dc3545;
+      color: white;
+    }
+    
+    .bite-category-1 {
+      background-color: #28a745;
+      color: white;
+    }
+    
+    .bite-category-2 {
+      background-color: #fd7e14;
+      color: white;
+    }
+    
+    .bite-category-3 {
+      background-color: #dc3545;
+      color: white;
+    }
+    
     @media (max-width: 768px) {
       .form-container {
         padding: 1rem;
@@ -626,11 +681,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       }
     }
   </style>
+  <link rel="stylesheet" href="../css/system-theme.css">
 </head>
-<body>
-  <?php $activePage = 'reports'; include 'navbar.php'; ?>
+<body class="theme-admin">
+  <?php include 'includes/navbar.php'; ?>
 
-  <div class="form-container">
+  <div class="form-container app-shell">
     <?php if (!empty($existingReports)): ?>
     <div class="alert alert-info">
         <h4 class="alert-heading"><i class="bi bi-info-circle me-2"></i>Existing Reports Found</h4>
@@ -656,28 +712,48 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         <td><?php echo date('M d, Y', strtotime($report['biteDate'])); ?></td>
                         <td><?php echo htmlspecialchars($report['animalType']); ?></td>
                         <td>
-                            <span class="status-badge <?php 
-                                switch($report['biteType']) {
-                                    case 'Category I': echo 'bite-category-1'; break;
-                                    case 'Category II': echo 'bite-category-2'; break;
-                                    case 'Category III': echo 'bite-category-3'; break;
-                                    default: echo '';
+                            <?php
+                                switch ($report['biteType']) {
+                                    case 'Category I':
+                                        $existingBiteClass = 'badge-category-i';
+                                        break;
+                                    case 'Category II':
+                                        $existingBiteClass = 'badge-category-ii';
+                                        break;
+                                    case 'Category III':
+                                        $existingBiteClass = 'badge-category-iii';
+                                        break;
+                                    default:
+                                        $existingBiteClass = 'badge-category-ii';
                                 }
-                            ?>">
+                            ?>
+                            <span class="badge <?php echo $existingBiteClass; ?>">
                                 <?php echo $report['biteType']; ?>
                             </span>
                         </td>
                         <td>
-                            <span class="status-badge <?php 
-                                switch($report['status']) {
-                                    case 'pending': echo 'status-pending'; break;
-                                    case 'in_progress': echo 'status-in-progress'; break;
-                                    case 'completed': echo 'status-completed'; break;
-                                    case 'referred': echo 'status-referred'; break;
-                                    case 'cancelled': echo 'status-cancelled'; break;
-                                    default: echo 'status-pending';
+                            <?php
+                                switch ($report['status']) {
+                                    case 'pending':
+                                        $existingStatusClass = 'badge-status-pending';
+                                        break;
+                                    case 'in_progress':
+                                        $existingStatusClass = 'badge-status-inprogress';
+                                        break;
+                                    case 'completed':
+                                        $existingStatusClass = 'badge-status-completed';
+                                        break;
+                                    case 'referred':
+                                        $existingStatusClass = 'badge-status-referred';
+                                        break;
+                                    case 'cancelled':
+                                        $existingStatusClass = 'badge-status-cancelled';
+                                        break;
+                                    default:
+                                        $existingStatusClass = 'badge-status-pending';
                                 }
-                            ?>">
+                            ?>
+                            <span class="badge <?php echo $existingStatusClass; ?>">
                                 <?php echo ucfirst(str_replace('_', ' ', $report['status'])); ?>
                             </span>
                         </td>
@@ -703,7 +779,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
           <h3>Animal Bite Report Created Successfully!</h3>
           <p class="mb-4">The animal bite report has been added to the system.</p>
           <div class="d-flex justify-content-center gap-3">
-            <a href="dashboard.php" class="btn btn-outline-primary">
+            <a href="admin_dashboard.php" class="btn btn-outline-primary">
               <i class="bi bi-house-door me-2"></i>Back to Dashboard
             </a>
             <a href="new_report.php" class="btn btn-primary">
@@ -1072,7 +1148,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
               </div>
               
               <div class="d-flex justify-content-between mt-4">
-                <a href="dashboard.php" class="btn btn-outline-secondary">
+                <a href="view_reports.php" class="btn btn-outline-secondary">
                   <i class="bi bi-x-circle me-2"></i>Cancel
                 </a>
                 <button type="submit" class="btn btn-primary">
@@ -1092,7 +1168,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <div class="container">
       <div class="d-flex justify-content-between align-items-center">
         <div>
-          <small class="text-muted">&copy; <?php echo date('Y'); ?> Barangay Health Workers Management System</small>
+          <small class="text-muted">&copy; 2025 City Health Office · Barangay Health Workers Management System</small>
         </div>
         <div>
           <small><a href="help.php" class="text-decoration-none">Help & Support</a></small>

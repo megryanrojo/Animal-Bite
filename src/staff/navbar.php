@@ -20,15 +20,6 @@ if (!isset($staff) && isset($_SESSION['staffId'])) {
         <li class="nav-item">
           <a class="nav-link<?php if(isset($activePage) && $activePage=="dashboard") echo " active fw-bold"; ?>" href="dashboard.php"><i class="bi bi-house-door me-1"></i> Dashboard</a>
         </li>
-        <li class="nav-item">
-          <a class="nav-link<?php if(isset($activePage) && $activePage=="reports") echo " active fw-bold"; ?>" href="reports.php"><i class="bi bi-file-earmark-text me-1"></i> Reports</a>
-        </li>
-        <li class="nav-item">
-          <a class="nav-link<?php if(isset($activePage) && $activePage=="patients") echo " active fw-bold"; ?>" href="patients.php"><i class="bi bi-people me-1"></i> Patients</a>
-        </li>
-        <li class="nav-item">
-          <a class="nav-link<?php if(isset($activePage) && $activePage=="search") echo " active fw-bold"; ?>" href="search.php"><i class="bi bi-search me-1"></i> Search</a>
-        </li>
       </ul>
       <div class="d-flex align-items-center">
         <div class="dropdown">
@@ -75,3 +66,4 @@ if (!isset($staff) && isset($_SESSION['staffId'])) {
     background-color: rgba(40,167,69,0.1);
 }
 </style> 
+<link rel="stylesheet" href="../css/system-theme.css">

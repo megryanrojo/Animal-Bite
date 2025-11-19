@@ -425,91 +425,9 @@ try {
             <h5>New Bite Report</h5>
             <p class="text-muted mb-0">Record a new animal bite case</p>
           </a>
-          
-          <a href="new_patient.php" class="action-card">
-            <div class="action-icon">
-              <i class="bi bi-person-plus"></i>
-            </div>
-            <h5>Add Patient</h5>
-            <p class="text-muted mb-0">Register a new patient</p>
-          </a>
-          
-          <a href="search.php" class="action-card">
-            <div class="action-icon">
-              <i class="bi bi-search"></i>
-            </div>
-            <h5>Search Records</h5>
-            <p class="text-muted mb-0">Find patients or reports</p>
-          </a>
         </div>
       </div>
     </div>
-
-    <!-- Recent Reports -->
-    <div class="content-card">
-      <div class="content-card-header">
-        <h5 class="mb-0"><i class="bi bi-clock-history me-2"></i>Recent Bite Cases</h5>
-        <a href="reports.php" class="btn btn-sm btn-outline-primary">View All</a>
-      </div>
-      <div class="content-card-body p-0">
-        <?php if (count($recentReports) > 0): ?>
-        <div class="table-responsive">
-          <table class="table table-hover mb-0">
-            <thead>
-              <tr>
-                <th>ID</th>
-                <th>Patient</th>
-                <th>Animal</th>
-                <th>Date</th>
-                <th>Category</th>
-                <th>Status</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              <?php foreach ($recentReports as $report): ?>
-              <tr>
-                <td><?php echo $report['reportId'] ?? 'N/A'; ?></td>
-                <td><?php echo htmlspecialchars($report['patientName'] ?? 'Unknown'); ?></td>
-                <td><?php echo htmlspecialchars($report['animalType'] ?? 'Unknown'); ?></td>
-                <td><?php echo isset($report['biteDate']) ? date('M d, Y', strtotime($report['biteDate'])) : 'N/A'; ?></td>
-                <td>
-                  <?php 
-                    $biteType = $report['biteType'] ?? 'Category II';
-                    $biteTypeClass = 'badge-' . strtolower(str_replace(' ', '-', $biteType));
-                    echo '<span class="badge ' . $biteTypeClass . '">' . $biteType . '</span>';
-                  ?>
-                </td>
-                <td>
-                  <?php 
-                    $status = $report['status'] ?? 'pending';
-                    $statusClass = 'badge-' . str_replace('_', '-', strtolower($status));
-                    echo '<span class="badge ' . $statusClass . '">' . ucfirst(str_replace('_', ' ', $status)) . '</span>';
-                  ?>
-                </td>
-                <td>
-                  <a href="view_report.php?id=<?php echo $report['reportId'] ?? '0'; ?>" class="btn btn-sm btn-outline-primary">View</a>
-                </td>
-              </tr>
-              <?php endforeach; ?>
-            </tbody>
-          </table>
-        </div>
-        <?php else: ?>
-        <div class="empty-state">
-          <div class="empty-state-icon">
-            <i class="bi bi-file-earmark-text"></i>
-          </div>
-          <h4>No bite reports yet</h4>
-          <p class="text-muted">Start by creating a new animal bite report</p>
-          <a href="new_report.php" class="btn btn-primary mt-3">
-            <i class="bi bi-plus-circle me-2"></i>Create Report
-          </a>
-        </div>
-        <?php endif; ?>
-      </div>
-    </div>
-  </div>
 
   <!-- Footer -->
   <footer class="footer">
@@ -517,9 +435,6 @@ try {
       <div class="d-flex justify-content-between align-items-center">
         <div>
           <small class="text-muted">&copy; <?php echo date('Y'); ?> Animal Bite Treatment Center</small>
-        </div>
-        <div>
-          <small><a href="help.php" class="text-decoration-none">Help & Support</a></small>
         </div>
       </div>
     </div>

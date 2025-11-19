@@ -22,7 +22,11 @@ $dateTo = isset($_GET['date_to']) ? $_GET['date_to'] : '';
 $animalType = isset($_GET['animal_type']) ? $_GET['animal_type'] : '';
 $biteType = isset($_GET['bite_type']) ? $_GET['bite_type'] : '';
 $barangay = isset($_GET['barangay']) ? $_GET['barangay'] : '';
-$search = isset($_GET['search']) ? $_GET['search'] : '';
+$search = isset($_GET['search']) ? trim($_GET['search']) : '';
+
+// Check if any filters are set
+$hasFilters = !empty($status) || !empty($dateFrom) || !empty($dateTo) || 
+              !empty($animalType) || !empty($biteType) || !empty($barangay) || $search !== '';
 
 // Pagination
 $page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
@@ -63,10 +67,32 @@ if (!empty($barangay)) {
    $params[] = $barangay;
 }
 
-if (!empty($search)) {
-   $whereConditions[] = "(p.firstName LIKE ? OR p.lastName LIKE ? OR p.contactNumber LIKE ? OR r.referenceNumber LIKE ?)";
+if ($search !== '') {
+   $whereConditions[] = "(
+        p.firstName LIKE ? OR
+        p.lastName LIKE ? OR
+        CONCAT_WS(' ', p.firstName, p.lastName) LIKE ? OR
+        p.contactNumber LIKE ? OR
+        p.barangay LIKE ? OR
+        r.animalType LIKE ? OR
+        r.biteType LIKE ? OR
+        r.status LIKE ? OR
+        r.referenceNumber LIKE ? OR
+        CAST(r.reportId AS CHAR) LIKE ? OR
+        CAST(p.patientId AS CHAR) LIKE ?
+   )";
    $searchParam = "%$search%";
+   // Patient name variations
    $params[] = $searchParam;
+   $params[] = $searchParam;
+   $params[] = $searchParam;
+   // Contact + barangay + animal/bite/status
+   $params[] = $searchParam;
+   $params[] = $searchParam;
+   $params[] = $searchParam;
+   $params[] = $searchParam;
+   $params[] = $searchParam;
+   // Reference + reportId + patientId
    $params[] = $searchParam;
    $params[] = $searchParam;
    $params[] = $searchParam;
@@ -194,227 +220,121 @@ try {
    <meta name="viewport" content="width=device-width, initial-scale=1">
    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+   <link rel="stylesheet" href="../css/system-theme.css">
    <style>
        :root {
            --bs-primary: #0d6efd;
            --bs-primary-rgb: 13, 110, 253;
-           --bs-secondary: #f8f9fa;
-           --bs-secondary-rgb: 248, 249, 250;
        }
        
-       body {
+       .stats-tabs-container {
+           display: flex;
+           flex-direction: row;
+           gap: 0;
            background-color: #f8f9fa;
-           font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+           border-bottom: 1px solid #dee2e6;
+           padding: 0;
+           border-radius: 1.2rem 1.2rem 0 0;
        }
        
-       .navbar {
-           background-color: white;
-           box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
-       }
-       
-       .nav-link.active {
-           color: var(--bs-primary) !important;
-           font-weight: 500;
-       }
-       
-       .btn-primary {
-           background-color: var(--bs-primary);
-           border-color: var(--bs-primary);
-       }
-       
-       .btn-primary:hover {
-           background-color: #0b5ed7;
-           border-color: #0a58ca;
-       }
-       
-       .reports-container {
-           max-width: 1200px;
-           margin: 0 auto;
-           padding: 2rem 1rem;
-       }
-       
-       .card {
+       .stats-tab-item {
+           flex: 1;
+           background-color: #f8f9fa;
            border: none;
-           border-radius: 10px;
-           box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
-           transition: all 0.3s ease;
+           border-bottom: 2px solid transparent;
+           border-right: 1px solid #dee2e6;
+           padding: 0.35rem 0.5rem;
+           transition: all 0.15s;
+           cursor: default;
+           text-align: center;
        }
        
-       .card:hover {
-           transform: translateY(-5px);
-           box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
+       .stats-tab-item:last-child {
+           border-right: none;
        }
        
-       .card-icon {
-           font-size: 2rem;
-           margin-bottom: 0.5rem;
+       .stats-tab-item:hover {
+           background-color: #e9ecef;
+           border-bottom-color: var(--bs-primary);
        }
        
-       .stats-number {
-           font-size: 2rem;
+       .stats-tab-label {
+           font-size: 0.6rem;
+           text-transform: uppercase;
+           letter-spacing: 0.03em;
+           color: #6b7280;
+           font-weight: 500;
+           margin-bottom: 0.15rem;
+           line-height: 1;
+       }
+       
+       .stats-tab-number {
+           font-size: 0.95rem;
            font-weight: 700;
+           margin: 0;
            color: var(--bs-primary);
+           line-height: 1;
        }
        
-       .filter-card {
-           background-color: white;
-           border-radius: 10px;
-           padding: 1.5rem;
-           margin-bottom: 2rem;
-           box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+       .stats-tab-item .card-icon {
+           display: none;
        }
        
        .table-card {
-           background-color: white;
-           border-radius: 10px;
-           overflow: hidden;
-           box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+           border-top-left-radius: 0;
+           border-top-right-radius: 0;
+           margin-top: 0;
        }
        
-       .table-responsive {
-           padding: 0;
+       .filter-card {
+           margin-bottom: 1rem;
        }
        
-       .table {
-           margin-bottom: 0;
+       .stats-tabs-container + .filter-card {
+           margin-top: 1rem;
        }
        
-       .table th {
-           background-color: rgba(var(--bs-primary-rgb), 0.03);
-           font-weight: 600;
-           border-top: none;
+       .search-bar-card {
+           margin-top: 1.25rem;
+           margin-bottom: 0.75rem;
+           padding: 0.65rem 0.9rem;
+           border-radius: 0.75rem;
+           background: white;
+           box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08);
        }
        
-       .table td, .table th {
-           padding: 1rem;
-           vertical-align: middle;
-       }
-       
-       .status-badge {
-           font-size: 0.75rem;
-           padding: 0.35em 0.65em;
-           border-radius: 0.25rem;
-       }
-       
-       .status-pending {
-           background-color: #ffc107;
-           color: #212529;
-       }
-       
-       .status-in-progress {
-           background-color: #17a2b8;
-           color: white;
-       }
-       
-       .status-completed {
-           background-color: #28a745;
-           color: white;
-       }
-       
-       .status-referred {
-           background-color: #6f42c1;
-           color: white;
-       }
-       
-       .status-cancelled {
-           background-color: #dc3545;
-           color: white;
-       }
-       
-       .bite-category-1 {
-           background-color: #28a745;
-           color: white;
-       }
-       
-       .bite-category-2 {
-           background-color: #fd7e14;
-           color: white;
-       }
-       
-       .bite-category-3 {
-           background-color: #dc3545;
-           color: white;
-       }
-       
-       .btn-logout {
-           background-color: #dc3545;
-           color: white;
-           border: none;
-           padding: 0.5rem 1.25rem;
-           border-radius: 5px;
-           transition: all 0.2s;
-       }
-       
-       .btn-logout:hover {
-           background-color: #bb2d3b;
-           color: white;
-       }
-       
-       .pagination {
-           margin-top: 1.5rem;
-           justify-content: center;
-       }
-       
-       .page-link {
-           color: var(--bs-primary);
-           border-radius: 0.25rem;
-           margin: 0 0.25rem;
-       }
-       
-       .page-item.active .page-link {
-           background-color: var(--bs-primary);
-           border-color: var(--bs-primary);
-       }
-       
-       .footer {
-           background-color: white;
-           padding: 1rem 0;
-           margin-top: 3rem;
-           border-top: 1px solid rgba(0, 0, 0, 0.05);
-       }
-       
-       /* Notification Styles */
-       .notification-dropdown {
-           min-width: 320px;
-           max-width: 320px;
-           max-height: 400px;
-           overflow-y: auto;
-           padding: 0;
-       }
-       
-       .notification-item {
-           border-left: 4px solid transparent;
-           transition: all 0.2s ease;
-       }
-       
-       .notification-item.unread {
-           background-color: rgba(var(--bs-primary-rgb), 0.05);
-       }
-       
-       .notification-item:hover {
-           background-color: rgba(var(--bs-primary-rgb), 0.03);
-       }
-       
-       .notification-icon {
-           width: 40px;
-           height: 40px;
+       .search-bar-form {
            display: flex;
+           gap: 0.65rem;
            align-items: center;
-           justify-content: center;
-           border-radius: 50%;
+           flex-wrap: wrap;
+       }
+       
+       .search-bar-form .form-control {
+           flex: 1;
+           border-radius: 999px;
+           padding: 0.4rem 1rem;
+           font-size: 0.9rem;
+       }
+       
+       .search-bar-form .btn {
+           border-radius: 999px;
+           padding: 0.4rem 1.2rem;
+           font-size: 0.9rem;
        }
        
        @media (max-width: 768px) {
-           .reports-container {
-               padding: 1rem;
+           .stats-tabs-container {
+               flex-direction: column;
            }
            
-           .stats-card {
-               margin-bottom: 1rem;
+           .stats-tab-item {
+               border-right: none;
+               border-bottom: 1px solid #dee2e6;
            }
            
-           .table-responsive {
-               border-radius: 10px;
+           .stats-tab-item:last-child {
+               border-bottom: none;
            }
        }
    </style>
@@ -431,6 +351,9 @@ try {
                <p class="text-muted mb-0">Manage and track all reported animal bite cases</p>
            </div>
            <div class="d-flex gap-2">
+               <a href="new_report.php" class="btn btn-primary">
+                   <i class="bi bi-plus-circle me-2"></i>New Report
+               </a>
                <div class="dropdown">
                    <button class="btn btn-outline-primary dropdown-toggle" type="button" data-bs-toggle="dropdown">
                        <i class="bi bi-printer me-2"></i>Print Reports
@@ -477,136 +400,110 @@ try {
            </div>
        </div>
        
-       <!-- Stats Cards -->
-       <div class="row g-4 mb-4">
-           <div class="col-md-3">
-               <div class="card h-100">
-                   <div class="card-body text-center">
-                       <div class="card-icon text-warning">
-                           <i class="bi bi-hourglass-split"></i>
-                       </div>
-                       <div class="stats-number"><?php echo $pendingCount; ?></div>
-                       <p class="card-text mb-0">Pending Reports</p>
-                   </div>
-               </div>
+       <!-- Stats Tabs -->
+       <div class="stats-tabs-container">
+           <div class="stats-tab-item">
+               <div class="stats-tab-label">Pending</div>
+               <div class="stats-tab-number"><?php echo $pendingCount; ?></div>
            </div>
-           
-           <div class="col-md-3">
-               <div class="card h-100">
-                   <div class="card-body text-center">
-                       <div class="card-icon text-info">
-                           <i class="bi bi-arrow-repeat"></i>
-                       </div>
-                       <div class="stats-number"><?php echo $inProgressCount; ?></div>
-                       <p class="card-text mb-0">In Progress</p>
-                   </div>
-               </div>
+           <div class="stats-tab-item">
+               <div class="stats-tab-label">In Progress</div>
+               <div class="stats-tab-number"><?php echo $inProgressCount; ?></div>
            </div>
-           
-           <div class="col-md-3">
-               <div class="card h-100">
-                   <div class="card-body text-center">
-                       <div class="card-icon text-success">
-                           <i class="bi bi-check-circle"></i>
-                       </div>
-                       <div class="stats-number"><?php echo $completedCount; ?></div>
-                       <p class="card-text mb-0">Completed</p>
-                   </div>
-               </div>
+           <div class="stats-tab-item">
+               <div class="stats-tab-label">Completed</div>
+               <div class="stats-tab-number"><?php echo $completedCount; ?></div>
            </div>
-           
-           <div class="col-md-3">
-               <div class="card h-100">
-                   <div class="card-body text-center">
-                       <div class="card-icon text-danger">
-                           <i class="bi bi-exclamation-triangle"></i>
-                       </div>
-                       <div class="stats-number"><?php echo $highRiskCount; ?></div>
-                       <p class="card-text mb-0">High Risk (Cat III)</p>
-                   </div>
-               </div>
+           <div class="stats-tab-item">
+               <div class="stats-tab-label">High Risk (Cat III)</div>
+               <div class="stats-tab-number"><?php echo $highRiskCount; ?></div>
            </div>
        </div>
        
-       <!-- Filter Section -->
-       <div class="filter-card">
-           <form method="GET" action="view_reports.php">
-               <div class="row g-3">
-                   <div class="col-md-3">
-                       <label for="status" class="form-label">Status</label>
-                       <select class="form-select" id="status" name="status">
-                           <option value="">All Statuses</option>
-                           <option value="pending" <?php echo $status === 'pending' ? 'selected' : ''; ?>>Pending</option>
-                           <option value="in_progress" <?php echo $status === 'in_progress' ? 'selected' : ''; ?>>In Progress</option>
-                           <option value="completed" <?php echo $status === 'completed' ? 'selected' : ''; ?>>Completed</option>
-                           <option value="referred" <?php echo $status === 'referred' ? 'selected' : ''; ?>>Referred</option>
-                       </select>
-                   </div>
-                   
-                   <div class="col-md-3">
-                       <label for="animal_type" class="form-label">Animal Type</label>
-                       <select class="form-select" id="animal_type" name="animal_type">
-                           <option value="">All Animals</option>
-                           <option value="Dog" <?php echo $animalType === 'Dog' ? 'selected' : ''; ?>>Dog</option>
-                           <option value="Cat" <?php echo $animalType === 'Cat' ? 'selected' : ''; ?>>Cat</option>
-                           <option value="Rat" <?php echo $animalType === 'Rat' ? 'selected' : ''; ?>>Rat</option>
-                           <option value="Other" <?php echo $animalType === 'Other' ? 'selected' : ''; ?>>Other</option>
-                       </select>
-                   </div>
-                   
-                   <div class="col-md-3">
-                       <label for="bite_type" class="form-label">Bite Category</label>
-                       <select class="form-select" id="bite_type" name="bite_type">
-                           <option value="">All Categories</option>
-                           <option value="Category I" <?php echo $biteType === 'Category I' ? 'selected' : ''; ?>>Category I</option>
-                           <option value="Category II" <?php echo $biteType === 'Category II' ? 'selected' : ''; ?>>Category II</option>
-                           <option value="Category III" <?php echo $biteType === 'Category III' ? 'selected' : ''; ?>>Category III</option>
-                       </select>
-                   </div>
-                   
-                   <div class="col-md-3">
-                       <label for="barangay" class="form-label">Barangay</label>
-                       <select class="form-select" id="barangay" name="barangay">
-                           <option value="">All Barangays</option>
-                           <?php foreach ($barangays as $brgy): ?>
-                           <option value="<?php echo htmlspecialchars($brgy); ?>" <?php echo $barangay === $brgy ? 'selected' : ''; ?>>
-                               <?php echo htmlspecialchars($brgy); ?>
-                           </option>
-                           <?php endforeach; ?>
-                       </select>
-                   </div>
-                   
-                   <div class="col-md-3">
-                       <label for="search" class="form-label">Search</label>
-                       <input type="text" class="form-control" id="search" name="search" placeholder="Name, Contact, Ref #" value="<?php echo htmlspecialchars($search); ?>">
-                   </div>
-                   
-                   <div class="col-md-3">
-                       <label for="date_from" class="form-label">Date From</label>
-                       <input type="date" class="form-control" id="date_from" name="date_from" value="<?php echo $dateFrom; ?>">
-                   </div>
-                   
-                   <div class="col-md-3">
-                       <label for="date_to" class="form-label">Date To</label>
-                       <input type="date" class="form-control" id="date_to" name="date_to" value="<?php echo $dateTo; ?>">
-                   </div>
-                   
-                   <div class="col-md-6 d-flex align-items-end">
-                       <div class="d-grid gap-2 d-md-flex">
-                           <button type="submit" class="btn btn-primary">
-                               <i class="bi bi-search me-2"></i>Filter Reports
-                           </button>
-                           <a href="view_reports.php" class="btn btn-outline-secondary">
-                               <i class="bi bi-x-circle me-2"></i>Clear Filters
-                           </a>
-                       </div>
-                   </div>
-               </div>
-           </form>
-       </div>
+      <form method="GET" action="view_reports.php" id="reportsFilterForm">
+          <!-- Search Bar -->
+          <div class="search-bar-card">
+              <div class="search-bar-form">
+                  <input type="text" class="form-control" id="search" name="search" placeholder="Search by name, ID, barangay, status..." value="<?php echo htmlspecialchars($search); ?>">
+                  <button type="submit" class="btn btn-primary">
+                      <i class="bi bi-search me-1"></i>Search
+                  </button>
+              </div>
+          </div>
+          
+          <!-- Filter Section -->
+          <div class="filter-card">
+              <div class="row g-3">
+                  <div class="col-md-3">
+                      <label for="status" class="form-label">Status</label>
+                      <select class="form-select" id="status" name="status">
+                          <option value="">All Statuses</option>
+                          <option value="pending" <?php echo $status === 'pending' ? 'selected' : ''; ?>>Pending</option>
+                          <option value="in_progress" <?php echo $status === 'in_progress' ? 'selected' : ''; ?>>In Progress</option>
+                          <option value="completed" <?php echo $status === 'completed' ? 'selected' : ''; ?>>Completed</option>
+                          <option value="referred" <?php echo $status === 'referred' ? 'selected' : ''; ?>>Referred</option>
+                      </select>
+                  </div>
+                  
+                  <div class="col-md-3">
+                      <label for="animal_type" class="form-label">Animal Type</label>
+                      <select class="form-select" id="animal_type" name="animal_type">
+                          <option value="">All Animals</option>
+                          <option value="Dog" <?php echo $animalType === 'Dog' ? 'selected' : ''; ?>>Dog</option>
+                          <option value="Cat" <?php echo $animalType === 'Cat' ? 'selected' : ''; ?>>Cat</option>
+                          <option value="Rat" <?php echo $animalType === 'Rat' ? 'selected' : ''; ?>>Rat</option>
+                          <option value="Other" <?php echo $animalType === 'Other' ? 'selected' : ''; ?>>Other</option>
+                      </select>
+                  </div>
+                  
+                  <div class="col-md-3">
+                      <label for="bite_type" class="form-label">Bite Category</label>
+                      <select class="form-select" id="bite_type" name="bite_type">
+                          <option value="">All Categories</option>
+                          <option value="Category I" <?php echo $biteType === 'Category I' ? 'selected' : ''; ?>>Category I</option>
+                          <option value="Category II" <?php echo $biteType === 'Category II' ? 'selected' : ''; ?>>Category II</option>
+                          <option value="Category III" <?php echo $biteType === 'Category III' ? 'selected' : ''; ?>>Category III</option>
+                      </select>
+                  </div>
+                  
+                  <div class="col-md-3">
+                      <label for="barangay" class="form-label">Barangay</label>
+                      <select class="form-select" id="barangay" name="barangay">
+                          <option value="">All Barangays</option>
+                          <?php foreach ($barangays as $brgy): ?>
+                          <option value="<?php echo htmlspecialchars($brgy); ?>" <?php echo $barangay === $brgy ? 'selected' : ''; ?>>
+                              <?php echo htmlspecialchars($brgy); ?>
+                          </option>
+                          <?php endforeach; ?>
+                      </select>
+                  </div>
+                  
+                  <div class="col-md-3">
+                      <label for="date_from" class="form-label">Date From</label>
+                      <input type="date" class="form-control" id="date_from" name="date_from" value="<?php echo $dateFrom; ?>">
+                  </div>
+                  
+                  <div class="col-md-3">
+                      <label for="date_to" class="form-label">Date To</label>
+                      <input type="date" class="form-control" id="date_to" name="date_to" value="<?php echo $dateTo; ?>">
+                  </div>
+                  
+                  <div class="col-md-6 d-flex align-items-end">
+                      <div class="d-grid gap-2 d-md-flex">
+                          <button type="submit" class="btn btn-primary">
+                              <i class="bi bi-funnel me-2"></i>Apply Filters
+                          </button>
+                          <a href="view_reports.php" class="btn btn-outline-secondary">
+                              <i class="bi bi-x-circle me-2"></i>Clear Filters
+                          </a>
+                      </div>
+                  </div>
+              </div>
+          </div>
+      </form>
        
        <!-- Reports Table -->
-       <div class="table-card">
+      <div class="table-card" id="reportsTableContainer">
            <div class="table-responsive">
                <table class="table table-hover" id="reportsTable">
                    <thead>
@@ -698,7 +595,7 @@ try {
        </div>
        
        <!-- Pagination -->
-       <?php if ($totalPages > 1): ?>
+      <?php if ($totalPages > 1): ?>
        <nav aria-label="Page navigation">
            <ul class="pagination">
                <?php if ($page > 1): ?>
@@ -744,6 +641,7 @@ try {
        <?php endif; ?>
        
        <!-- Results Summary -->
+      <?php if ($totalRecords > 0): ?>
        <div class="text-center mt-3">
            <p class="text-muted">
                Showing <?php echo min(($page - 1) * $recordsPerPage + 1, $totalRecords); ?> to 
@@ -751,6 +649,7 @@ try {
                <?php echo $totalRecords; ?> reports
            </p>
        </div>
+       <?php endif; ?>
    </div>
 
    <!-- Footer -->
@@ -894,6 +793,69 @@ try {
 
    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
    <script>
+       // Scroll to table if filters are applied
+       document.addEventListener('DOMContentLoaded', function() {
+           const urlParams = new URLSearchParams(window.location.search);
+           const hasFilters = urlParams.get('status') || urlParams.get('date_from') || 
+                             urlParams.get('date_to') || urlParams.get('animal_type') || 
+                             urlParams.get('bite_type') || urlParams.get('barangay') || 
+                             urlParams.get('search');
+           
+           if (hasFilters) {
+               // Small delay to ensure table is rendered
+               setTimeout(function() {
+                   const tableContainer = document.getElementById('reportsTableContainer');
+                   if (tableContainer) {
+                       tableContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                   }
+               }, 100);
+           }
+       });
+       
+       // Handle form submission - scroll to table after page loads
+      document.addEventListener('DOMContentLoaded', function() {
+          const filterForm = document.getElementById('reportsFilterForm');
+           if (filterForm) {
+               filterForm.addEventListener('submit', function(e) {
+                   // Check if any filter is set
+                   const formData = new FormData(filterForm);
+                   let hasAnyFilter = false;
+                   
+                   for (let [key, value] of formData.entries()) {
+                       if (key !== 'page' && value.trim() !== '') {
+                           hasAnyFilter = true;
+                           break;
+                       }
+                   }
+                   
+                   if (hasAnyFilter) {
+                       // Store flag to scroll after page loads
+                       sessionStorage.setItem('scrollToTable', 'true');
+                   }
+               });
+           }
+           
+           // Scroll if flag is set
+           if (sessionStorage.getItem('scrollToTable') === 'true') {
+               sessionStorage.removeItem('scrollToTable');
+               setTimeout(function() {
+                   const tableContainer = document.getElementById('reportsTableContainer');
+                   if (tableContainer) {
+                       tableContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                   }
+               }, 300);
+           }
+       });
+       
+       // Scroll to table on pagination click
+       document.addEventListener('DOMContentLoaded', function() {
+           document.querySelectorAll('.pagination a').forEach(link => {
+               link.addEventListener('click', function() {
+                   sessionStorage.setItem('scrollToTable', 'true');
+               });
+           });
+       });
+       
        // Table sorting functionality
        document.querySelectorAll('th[data-sort]').forEach(header => {
            header.addEventListener('click', () => {
@@ -904,6 +866,7 @@ try {
                const url = new URL(window.location.href);
                url.searchParams.set('sort', sortField);
                url.searchParams.set('order', newOrder);
+               sessionStorage.setItem('scrollToTable', 'true');
                window.location.href = url.toString();
            });
        });
@@ -1027,14 +990,15 @@ try {
        }
 
        // Function to apply filter
-       function applyFilter(filters) {
-           const form = document.querySelector('form[method="GET"]');
+      function applyFilter(filters) {
+          const form = document.getElementById('reportsFilterForm');
            Object.entries(filters).forEach(([key, value]) => {
                const input = form.querySelector(`[name="${key}"]`);
                if (input) {
                    input.value = value;
                }
            });
+           sessionStorage.setItem('scrollToTable', 'true');
            form.submit();
        }
 

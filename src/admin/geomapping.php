@@ -295,9 +295,10 @@ error_log("Final Heatmap Data for JavaScript: " . print_r($jsHeatmapData, true))
         }
         
         .geomapping-container {
-            max-width: 1200px;
+            width: 100%;
+            max-width: none;
             margin: 0 auto;
-            padding: 2rem 1rem;
+            padding: 1.5rem 1rem;
             flex-grow: 1;
         }
         
@@ -307,10 +308,11 @@ error_log("Final Heatmap Data for JavaScript: " . print_r($jsHeatmapData, true))
             box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
             margin-bottom: 2rem;
             overflow: hidden;
+            font-size: 0.88rem;
         }
         
         .content-card-header {
-            padding: 1.25rem 1.5rem;
+            padding: 1rem 1.25rem;
             border-bottom: 1px solid rgba(0, 0, 0, 0.05);
             background-color: rgba(var(--bs-primary-rgb), 0.03);
             display: flex;
@@ -332,7 +334,134 @@ error_log("Final Heatmap Data for JavaScript: " . print_r($jsHeatmapData, true))
         }
         
         .content-card-body {
+            padding: 1.25rem;
+        }
+        
+        .compact-card {
+            border-radius: 10px;
+        }
+        
+        .compact-card .content-card-header {
+            padding: 0.65rem 0.9rem;
+        }
+        
+        .compact-card .content-card-body {
+            padding: 0.75rem 0.9rem;
+        }
+        
+        .filters-insights-card {
+            margin-bottom: 2rem;
+        }
+        
+        .filters-insights-card .content-card-body {
             padding: 1.5rem;
+        }
+        
+        .filters-layout {
+            display: flex;
+            gap: 1.5rem;
+            flex-wrap: wrap;
+            align-items: flex-start;
+        }
+        
+        .filters-form {
+            flex: 1 1 460px;
+            min-width: 280px;
+        }
+        
+        .filters-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 0.6rem 0.8rem;
+            align-items: end;
+        }
+        
+        .filters-grid .form-label {
+            font-weight: bolder;
+            margin-bottom: 0.2rem;
+            font-size: 0.8rem;
+        }
+        
+        .filters-grid .form-control,
+        .filters-grid .form-select {
+            border-radius: 999px;
+            padding: 0.3rem 0.75rem;
+            font-size: 0.8rem;
+        }
+        
+        .filters-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 0.4rem;
+        }
+        
+        .filters-actions .btn {
+            border-radius: 999px;
+            padding: 0.3rem 0.9rem;
+            font-size: 0.85rem;
+        }
+        
+        .control-hub-card {
+            width: 100%;
+        }
+        
+        .control-hub-divider {
+            margin: 1.25rem 0;
+            border-top: 1px dashed rgba(0, 0, 0, 0.08);
+        }
+        
+        .search-panel {
+            border-left: 1px dashed rgba(13, 110, 253, 0.15);
+            padding-left: 1.25rem;
+            flex: 0 0 320px;
+            max-width: 320px;
+        }
+        
+        .search-panel h6 {
+            font-size: 0.78rem;
+            letter-spacing: 0.08em;
+        }
+        
+        .search-panel select,
+        .search-panel button {
+            border-radius: 999px;
+            padding: 0.3rem 0.75rem;
+            font-size: 0.85rem;
+        }
+        
+        .stats-mini-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 0.9rem;
+            margin-top: 1.5rem;
+        }
+        
+        .stats-mini-grid .stats-card {
+            margin-bottom: 0;
+        }
+        
+        @media (max-width: 1200px) {
+            .filters-layout {
+                flex-direction: column;
+            }
+            
+            .search-panel {
+                width: 100%;
+                max-width: 100%;
+            }
+            
+            .search-panel {
+                border-left: none;
+                border-top: 1px dashed rgba(13, 110, 253, 0.15);
+                padding-left: 0;
+                padding-top: 1.25rem;
+            }
+        }
+        
+        @media (max-width: 992px) {
+            .geomapping-container {
+                padding: 1rem;
+            }
         }
         
         .filter-form {
@@ -387,30 +516,44 @@ error_log("Final Heatmap Data for JavaScript: " . print_r($jsHeatmapData, true))
             border-radius: 3px;
         }
         
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 0.85rem;
+        }
+        
         .stats-card {
             background-color: white;
-            border-radius: 10px;
-            padding: 1.5rem;
-            height: 100%;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
-            transition: transform 0.2s, box-shadow 0.2s;
+            border-radius: 8px;
+            padding: 0.85rem 0.95rem;
+            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
+            transition: transform 0.15s ease, box-shadow 0.15s ease;
         }
         
         .stats-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.1);
+            transform: translateY(-2px);
+            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.07);
+        }
+        
+        .stats-card h6 {
+            font-size: 0.75rem;
+            letter-spacing: 0.04em;
         }
         
         .stats-number {
-            font-size: 2.5rem;
-            font-weight: 700;
-            margin: 0.5rem 0;
+            font-size: 1.65rem;
+            font-weight: 600;
+            margin: 0.25rem 0;
             color: var(--bs-primary);
         }
         
+        .stats-card p {
+            font-size: 0.78rem;
+        }
+        
         .card-icon {
-            font-size: 2.5rem;
-            color: rgba(var(--bs-primary-rgb), 0.2);
+            font-size: 1.6rem;
+            color: rgba(var(--bs-primary-rgb), 0.25);
         }
         
         .table-responsive {
@@ -585,87 +728,75 @@ error_log("Final Heatmap Data for JavaScript: " . print_r($jsHeatmapData, true))
                 <p class="text-muted mb-0">Visualize animal bite cases by location for better decision making</p>
             </div>
             <div>
-                <a href="view_reports.php" class="btn btn-outline-primary me-2">
-                    <i class="bi bi-file-earmark-text me-2"></i>View Reports
-                </a>
                 <a href="#" class="btn btn-primary" onclick="printMap()">
                     <i class="bi bi-printer me-2"></i>Print Map
                 </a>
             </div>
         </div>
         
-        <!-- Filter Form Section -->
-        <div class="content-card mb-4">
-            <div class="content-card-header" data-bs-toggle="collapse" data-bs-target="#filterCollapse" aria-expanded="true" style="cursor: pointer;">
-                <h5 class="mb-0"><i class="bi bi-funnel me-2"></i>Filters</h5>
+        <div class="content-card filters-insights-card">
+            <div class="content-card-header" data-bs-toggle="collapse" data-bs-target="#filtersInsightsCollapse" aria-expanded="true" style="cursor: pointer;">
+                <h5 class="mb-0"><i class="bi bi-sliders me-2"></i>Filters & Insights</h5>
                 <i class="bi bi-chevron-down"></i>
             </div>
-            <div class="content-card-body collapse show" id="filterCollapse">
-                <form method="GET" action="geomapping.php">
-                    <div class="row g-3">
-                        <div class="col-md-3">
-                            <label for="date_from" class="form-label">Date From</label>
-                            <input type="date" class="form-control" id="date_from" name="date_from" value="<?php echo htmlspecialchars($dateFrom); ?>">
+            <div class="content-card-body collapse show" id="filtersInsightsCollapse">
+                <div class="filters-layout">
+                    <form method="GET" action="geomapping.php" class="filters-form">
+                        <h6 class="text-muted text-uppercase mb-3 small">Filters</h6>
+                        <div class="filters-grid">
+                            <div>
+                                <label for="date_from" class="form-label">Date From</label>
+                                <input type="date" class="form-control" id="date_from" name="date_from" value="<?php echo htmlspecialchars($dateFrom); ?>">
+                            </div>
+                            
+                            <div>
+                                <label for="date_to" class="form-label">Date To</label>
+                                <input type="date" class="form-control" id="date_to" name="date_to" value="<?php echo htmlspecialchars($dateTo); ?>">
+                            </div>
+                            
+                            <div>
+                                <label for="animal_type" class="form-label">Animal Type</label>
+                                <select class="form-select" id="animal_type" name="animal_type">
+                                    <option value="">All Types</option>
+                                    <?php foreach ($animalTypes as $type): ?>
+                                    <option value="<?php echo htmlspecialchars($type); ?>" <?php echo $animalType === $type ? 'selected' : ''; ?>>
+                                        <?php echo htmlspecialchars($type); ?>
+                                    </option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                            
+                            <div>
+                                <label for="bite_category" class="form-label">Bite Category</label>
+                                <select class="form-select" id="bite_category" name="bite_category">
+                                    <option value="">All Categories</option>
+                                    <option value="Category I" <?php echo $biteCategory === 'Category I' ? 'selected' : ''; ?>>Category I</option>
+                                    <option value="Category II" <?php echo $biteCategory === 'Category II' ? 'selected' : ''; ?>>Category II</option>
+                                    <option value="Category III" <?php echo $biteCategory === 'Category III' ? 'selected' : ''; ?>>Category III</option>
+                                </select>
+                            </div>
+                            
+                            <div>
+                                <label for="status" class="form-label">Status</label>
+                                <select class="form-select" id="status" name="status">
+                                    <option value="">All Statuses</option>
+                                    <option value="pending" <?php echo $status === 'pending' ? 'selected' : ''; ?>>Pending</option>
+                                    <option value="in_progress" <?php echo $status === 'in_progress' ? 'selected' : ''; ?>>In Progress</option>
+                                    <option value="completed" <?php echo $status === 'completed' ? 'selected' : ''; ?>>Completed</option>
+                                    <option value="cancelled" <?php echo $status === 'cancelled' ? 'selected' : ''; ?>>Cancelled</option>
+                                </select>
+                            </div>
                         </div>
-                        
-                        <div class="col-md-3">
-                            <label for="date_to" class="form-label">Date To</label>
-                            <input type="date" class="form-control" id="date_to" name="date_to" value="<?php echo htmlspecialchars($dateTo); ?>">
-                        </div>
-                        
-                        <div class="col-md-2">
-                            <label for="animal_type" class="form-label">Animal Type</label>
-                            <select class="form-select" id="animal_type" name="animal_type">
-                                <option value="">All Types</option>
-                                <?php foreach ($animalTypes as $type): ?>
-                                <option value="<?php echo htmlspecialchars($type); ?>" <?php echo $animalType === $type ? 'selected' : ''; ?>>
-                                    <?php echo htmlspecialchars($type); ?>
-                                </option>
-                                <?php endforeach; ?>
-                            </select>
-                        </div>
-                        
-                        <div class="col-md-2">
-                            <label for="bite_category" class="form-label">Bite Category</label>
-                            <select class="form-select" id="bite_category" name="bite_category">
-                                <option value="">All Categories</option>
-                                <option value="Category I" <?php echo $biteCategory === 'Category I' ? 'selected' : ''; ?>>Category I</option>
-                                <option value="Category II" <?php echo $biteCategory === 'Category II' ? 'selected' : ''; ?>>Category II</option>
-                                <option value="Category III" <?php echo $biteCategory === 'Category III' ? 'selected' : ''; ?>>Category III</option>
-                            </select>
-                        </div>
-                        
-                        <div class="col-md-2">
-                            <label for="status" class="form-label">Status</label>
-                            <select class="form-select" id="status" name="status">
-                                <option value="">All Statuses</option>
-                                <option value="pending" <?php echo $status === 'pending' ? 'selected' : ''; ?>>Pending</option>
-                                <option value="in_progress" <?php echo $status === 'in_progress' ? 'selected' : ''; ?>>In Progress</option>
-                                <option value="completed" <?php echo $status === 'completed' ? 'selected' : ''; ?>>Completed</option>
-                                <option value="cancelled" <?php echo $status === 'cancelled' ? 'selected' : ''; ?>>Cancelled</option>
-                            </select>
-                        </div>
-                        
-                        <div class="col-12 d-flex justify-content-end">
-                            <a href="geomapping.php" class="btn btn-outline-secondary me-2">Reset Filters</a>
+                        <div class="filters-actions mt-3">
+                            <a href="geomapping.php" class="btn btn-outline-secondary">Reset Filters</a>
                             <button type="submit" class="btn btn-primary">Apply Filters</button>
                         </div>
-                    </div>
-                </form>
-            </div>
-        </div>
-        
-        <!-- Location Search -->
-        <div class="content-card mb-4">
-            <div class="content-card-header" data-bs-toggle="collapse" data-bs-target="#searchLocationCollapse" aria-expanded="false" style="cursor: pointer;">
-                <h5 class="mb-0"><i class="bi bi-search me-2"></i>Search Location</h5>
-                <i class="bi bi-chevron-down"></i>
-            </div>
-            <div class="content-card-body collapse" id="searchLocationCollapse">
-                <div class="row g-3">
-                    <div class="col-md-8">
+                    </form>
+                    
+                    <div class="search-panel">
+                        <h6 class="text-muted text-uppercase mb-3 small">Search Location</h6>
                         <label for="location_dropdown" class="form-label">Select a barangay in Talisay City</label>
-                        <select class="form-select" id="location_dropdown">
+                        <select class="form-select mb-3" id="location_dropdown">
                             <option value="">Choose a location...</option>
                             <?php foreach ($barangays as $barangay): ?>
                             <option value="<?php echo htmlspecialchars($barangay); ?>">
@@ -673,79 +804,62 @@ error_log("Final Heatmap Data for JavaScript: " . print_r($jsHeatmapData, true))
                             </option>
                             <?php endforeach; ?>
                         </select>
-                        <div class="form-text">
+                        <div class="form-text mb-3">
                             <i class="bi bi-info-circle me-1"></i>Select a location to zoom and highlight it on the map.
                         </div>
-                    </div>
-                    <div class="col-md-4">
-                        <label class="form-label">Quick Actions</label>
-                        <div class="d-grid">
-                            <button class="btn btn-outline-secondary" type="button" id="show_all_locations">
-                                <i class="bi bi-globe"></i> Show All Locations
-                            </button>
-                        </div>
+                        <button class="btn btn-outline-secondary w-100" type="button" id="show_all_locations">
+                            <i class="bi bi-globe"></i> Show All Locations
+                        </button>
                     </div>
                 </div>
-            </div>
-        </div>
-        
-        <!-- Statistics Cards Row -->
-        <div class="content-card mb-4">
-            <div class="content-card-header" data-bs-toggle="collapse" data-bs-target="#statsCollapse" aria-expanded="true" style="cursor: pointer;">
-                <h5 class="mb-0"><i class="bi bi-bar-chart-line me-2"></i>Statistics Overview</h5>
-                <i class="bi bi-chevron-down"></i>
-            </div>
-            <div class="content-card-body collapse show" id="statsCollapse">
-                <div class="row g-4">
-                    <div class="col-md-4">
-                        <div class="stats-card">
-                            <div class="d-flex justify-content-between align-items-center">
-                                <div>
-                                    <h5 class="mb-0">Total Cases</h5>
-                                    <div class="stats-number"><?php echo $totalCases; ?></div>
-                                    <p class="text-muted mb-0">In selected period</p>
-                                </div>
-                                <div class="card-icon">
-                                    <i class="bi bi-file-earmark-text"></i>
-                                </div>
+                
+                <div class="control-hub-divider"></div>
+                
+                <h6 class="text-muted text-uppercase mb-3 small">Snapshot</h6>
+                <div class="stats-mini-grid">
+                    <div class="stats-card">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <h6 class="text-uppercase text-muted mb-1">Total Cases</h6>
+                                <div class="stats-number"><?php echo $totalCases; ?></div>
+                                <p class="text-muted mb-0 small">In selected period</p>
+                            </div>
+                            <div class="card-icon">
+                                <i class="bi bi-file-earmark-text"></i>
                             </div>
                         </div>
                     </div>
                     
-                    <div class="col-md-4">
-                        <div class="stats-card">
-                            <div class="d-flex justify-content-between align-items-center">
-                                <div>
-                                    <h5 class="mb-0">Hotspot Areas</h5>
-                                    <div class="stats-number"><?php echo count($heatmapData) > 0 ? count($heatmapData) : 0; ?></div>
-                                    <p class="text-muted mb-0">Affected barangays</p>
-                                </div>
-                                <div class="card-icon">
-                                    <i class="bi bi-geo-alt"></i>
-                                </div>
+                    <div class="stats-card">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <h6 class="text-uppercase text-muted mb-1">Hotspot Areas</h6>
+                                <div class="stats-number"><?php echo count($heatmapData) > 0 ? count($heatmapData) : 0; ?></div>
+                                <p class="text-muted mb-0 small">Affected barangays</p>
+                            </div>
+                            <div class="card-icon">
+                                <i class="bi bi-geo-alt"></i>
                             </div>
                         </div>
                     </div>
                     
-                    <div class="col-md-4">
-                        <div class="stats-card">
-                            <div class="d-flex justify-content-between align-items-center">
-                                <div>
-                                    <h5 class="mb-0">Highest Concentration</h5>
-                                    <div class="stats-number">
-                                        <?php 
-                                            echo count($heatmapData) > 0 ? $heatmapData[0]['case_count'] : 0; 
-                                        ?>
-                                    </div>
-                                    <p class="text-muted mb-0">
-                                        <?php 
-                                            echo count($heatmapData) > 0 ? htmlspecialchars($heatmapData[0]['barangay']) : 'N/A'; 
-                                        ?>
-                                    </p>
+                    <div class="stats-card">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <h6 class="text-uppercase text-muted mb-1">Highest Concentration</h6>
+                                <div class="stats-number">
+                                    <?php 
+                                        echo count($heatmapData) > 0 ? $heatmapData[0]['case_count'] : 0; 
+                                    ?>
                                 </div>
-                                <div class="card-icon">
-                                    <i class="bi bi-exclamation-triangle"></i>
-                                </div>
+                                <p class="text-muted mb-0 small">
+                                    <?php 
+                                        echo count($heatmapData) > 0 ? htmlspecialchars($heatmapData[0]['barangay']) : 'N/A'; 
+                                    ?>
+                                </p>
+                            </div>
+                            <div class="card-icon">
+                                <i class="bi bi-exclamation-triangle"></i>
                             </div>
                         </div>
                     </div>
@@ -1115,12 +1229,26 @@ error_log("Final Heatmap Data for JavaScript: " . print_r($jsHeatmapData, true))
             }
         }
         
+        /**
+         * Smoothly scroll the viewport to the map section.
+         */
+        function scrollToMap() {
+            try {
+                var mapElement = document.getElementById('map');
+                if (mapElement && typeof mapElement.scrollIntoView === 'function') {
+                    mapElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+            } catch (err) {
+                console.error('scrollToMap error:', err);
+            }
+        }
+        
         // Event listeners
         document.getElementById('location_dropdown').addEventListener('change', function() {
             try {
                 var selectedBarangay = this.value;
-                if (selectedBarangay) {
-                    highlightLocation(selectedBarangay);
+                if (selectedBarangay && highlightLocation(selectedBarangay)) {
+                    scrollToMap();
                 } else {
                     showAllLocations();
                 }
@@ -1153,3 +1281,4 @@ error_log("Final Heatmap Data for JavaScript: " . print_r($jsHeatmapData, true))
     </script>
 </body>
 </html>
+

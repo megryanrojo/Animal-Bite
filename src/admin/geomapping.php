@@ -349,29 +349,9 @@ error_log("Final Heatmap Data for JavaScript: " . print_r($jsHeatmapData, true))
             padding: 0.75rem 0.9rem;
         }
         
-        .filters-insights-card {
-            margin-bottom: 2rem;
-        }
-        
-        .filters-insights-card .content-card-body {
-            padding: 1.5rem;
-        }
-        
-        .filters-layout {
-            display: flex;
-            gap: 1.5rem;
-            flex-wrap: wrap;
-            align-items: flex-start;
-        }
-        
-        .filters-form {
-            flex: 1 1 460px;
-            min-width: 280px;
-        }
-        
         .filters-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
             gap: 0.6rem 0.8rem;
             align-items: end;
         }
@@ -403,6 +383,13 @@ error_log("Final Heatmap Data for JavaScript: " . print_r($jsHeatmapData, true))
         
         .control-hub-card {
             width: 100%;
+            margin-bottom: 1.5rem;
+        }
+        
+        .control-hub-layout {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+            gap: 1rem;
         }
         
         .control-hub-divider {
@@ -410,52 +397,11 @@ error_log("Final Heatmap Data for JavaScript: " . print_r($jsHeatmapData, true))
             border-top: 1px dashed rgba(0, 0, 0, 0.08);
         }
         
-        .search-panel {
-            border-left: 1px dashed rgba(13, 110, 253, 0.15);
-            padding-left: 1.25rem;
-            flex: 0 0 320px;
-            max-width: 320px;
-        }
-        
-        .search-panel h6 {
-            font-size: 0.78rem;
-            letter-spacing: 0.08em;
-        }
-        
         .search-panel select,
         .search-panel button {
             border-radius: 999px;
             padding: 0.3rem 0.75rem;
             font-size: 0.85rem;
-        }
-        
-        .stats-mini-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-            gap: 0.9rem;
-            margin-top: 1.5rem;
-        }
-        
-        .stats-mini-grid .stats-card {
-            margin-bottom: 0;
-        }
-        
-        @media (max-width: 1200px) {
-            .filters-layout {
-                flex-direction: column;
-            }
-            
-            .search-panel {
-                width: 100%;
-                max-width: 100%;
-            }
-            
-            .search-panel {
-                border-left: none;
-                border-top: 1px dashed rgba(13, 110, 253, 0.15);
-                padding-left: 0;
-                padding-top: 1.25rem;
-            }
         }
         
         @media (max-width: 992px) {
@@ -734,14 +680,14 @@ error_log("Final Heatmap Data for JavaScript: " . print_r($jsHeatmapData, true))
             </div>
         </div>
         
-        <div class="content-card filters-insights-card">
-            <div class="content-card-header" data-bs-toggle="collapse" data-bs-target="#filtersInsightsCollapse" aria-expanded="true" style="cursor: pointer;">
-                <h5 class="mb-0"><i class="bi bi-sliders me-2"></i>Filters & Insights</h5>
+        <div class="content-card compact-card control-hub-card">
+            <div class="content-card-header" data-bs-toggle="collapse" data-bs-target="#controlHubCollapse" aria-expanded="true" style="cursor: pointer;">
+                <h5 class="mb-0"><i class="bi bi-sliders me-2"></i>Filters & Search</h5>
                 <i class="bi bi-chevron-down"></i>
             </div>
-            <div class="content-card-body collapse show" id="filtersInsightsCollapse">
-                <div class="filters-layout">
-                    <form method="GET" action="geomapping.php" class="filters-form">
+            <div class="content-card-body collapse show" id="controlHubCollapse">
+                <div class="control-hub-layout">
+                    <form method="GET" action="geomapping.php">
                         <h6 class="text-muted text-uppercase mb-3 small">Filters</h6>
                         <div class="filters-grid">
                             <div>
@@ -812,11 +758,17 @@ error_log("Final Heatmap Data for JavaScript: " . print_r($jsHeatmapData, true))
                         </button>
                     </div>
                 </div>
-                
-                <div class="control-hub-divider"></div>
-                
-                <h6 class="text-muted text-uppercase mb-3 small">Snapshot</h6>
-                <div class="stats-mini-grid">
+            </div>
+        </div>
+        
+        <!-- Statistics Cards Row -->
+        <div class="content-card mb-4">
+            <div class="content-card-header" data-bs-toggle="collapse" data-bs-target="#statsCollapse" aria-expanded="true" style="cursor: pointer;">
+                <h5 class="mb-0"><i class="bi bi-bar-chart-line me-2"></i>Statistics Overview</h5>
+                <i class="bi bi-chevron-down"></i>
+            </div>
+            <div class="content-card-body collapse show" id="statsCollapse">
+                <div class="stats-grid">
                     <div class="stats-card">
                         <div class="d-flex justify-content-between align-items-center">
                             <div>
@@ -1229,26 +1181,12 @@ error_log("Final Heatmap Data for JavaScript: " . print_r($jsHeatmapData, true))
             }
         }
         
-        /**
-         * Smoothly scroll the viewport to the map section.
-         */
-        function scrollToMap() {
-            try {
-                var mapElement = document.getElementById('map');
-                if (mapElement && typeof mapElement.scrollIntoView === 'function') {
-                    mapElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                }
-            } catch (err) {
-                console.error('scrollToMap error:', err);
-            }
-        }
-        
         // Event listeners
         document.getElementById('location_dropdown').addEventListener('change', function() {
             try {
                 var selectedBarangay = this.value;
-                if (selectedBarangay && highlightLocation(selectedBarangay)) {
-                    scrollToMap();
+                if (selectedBarangay) {
+                    highlightLocation(selectedBarangay);
                 } else {
                     showAllLocations();
                 }
@@ -1281,4 +1219,3 @@ error_log("Final Heatmap Data for JavaScript: " . print_r($jsHeatmapData, true))
     </script>
 </body>
 </html>
-

@@ -1,20 +1,21 @@
 <?php
 session_start();
+
 if (!isset($_SESSION['admin_id'])) {
-    header("Location: ../login/admin_login.html");
+    header("Location: admin_login.html");
     exit;
 }
 
 require_once '../conn/conn.php';
 
-// Get admin information
-try {
-    $stmt = $pdo->prepare("SELECT firstName, lastName FROM admin WHERE adminId = ?");
-    $stmt->execute([$_SESSION['admin_id']]);
-    $admin = $stmt->fetch(PDO::FETCH_ASSOC);
-} catch (PDOException $e) {
-    $admin = ['firstName' => 'Admin', 'lastName' => ''];
-}
+// Initialize template state defaults
+$selectedPatientId = isset($_GET['patient_id']) ? (int) $_GET['patient_id'] : null;
+$selectedPatientInfo = null;
+$existingReports = [];
+$showForm = true;
+$formSubmitted = false;
+$formSuccess = false;
+$errorMessage = '';
 
 // Get all patients for dropdown
 try {
@@ -24,16 +25,9 @@ try {
     $patients = [];
 }
 
-// Check if a patient is selected and has existing reports
-$selectedPatientId = null;
-$selectedPatientInfo = null;
-$existingReports = [];
-$showForm = true; // Always show the form by default
-
-if (isset($_GET['patient_id'])) {
-    $selectedPatientId = $_GET['patient_id'];
+// Fetch patient info and existing reports if a patient is pre-selected
+if ($selectedPatientId) {
     try {
-        // Get patient info
         $patientInfoStmt = $pdo->prepare("
             SELECT patientId, firstName, lastName, contactNumber, barangay
             FROM patients
@@ -41,27 +35,26 @@ if (isset($_GET['patient_id'])) {
         ");
         $patientInfoStmt->execute([$selectedPatientId]);
         $selectedPatientInfo = $patientInfoStmt->fetch(PDO::FETCH_ASSOC);
-        
-        // Get existing reports
-        $reportsStmt = $pdo->prepare("
-            SELECT r.*, p.firstName, p.lastName, p.contactNumber, p.barangay
-            FROM reports r
-            JOIN patients p ON r.patientId = p.patientId
-            WHERE r.patientId = ?
-            ORDER BY r.reportDate DESC
-        ");
-        $reportsStmt->execute([$selectedPatientId]);
-        $existingReports = $reportsStmt->fetchAll(PDO::FETCH_ASSOC);
+
+        if ($selectedPatientInfo) {
+            $reportsStmt = $pdo->prepare("
+                SELECT r.*, p.firstName, p.lastName, p.contactNumber, p.barangay
+                FROM reports r
+                JOIN patients p ON r.patientId = p.patientId
+                WHERE r.patientId = ?
+                ORDER BY r.reportDate DESC
+            ");
+            $reportsStmt->execute([$selectedPatientId]);
+            $existingReports = $reportsStmt->fetchAll(PDO::FETCH_ASSOC);
+        } else {
+            $selectedPatientId = null;
+        }
     } catch (PDOException $e) {
-        $existingReports = [];
+        $selectedPatientId = null;
         $selectedPatientInfo = null;
+        $existingReports = [];
     }
 }
-
-// Process form submission
-$formSubmitted = false;
-$formSuccess = false;
-$errorMessage = '';
 
 // Fetch barangay options from the barangay_coordinates table
 $barangayOptions = [];
@@ -74,160 +67,6 @@ try {
     // Optionally handle error
 }
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $formSubmitted = true;
-    
-    try {
-        // Start transaction
-        $pdo->beginTransaction();
-        
-        // Check if we need to create a new patient first
-        if ($_POST['patient_option'] === 'new' && !empty($_POST['new_first_name']) && !empty($_POST['new_last_name'])) {
-            $newPatientStmt = $pdo->prepare("
-                INSERT INTO patients (firstName, lastName, gender, dateOfBirth, contactNumber, address, barangay) 
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-            ");
-            
-            $newPatientStmt->execute([
-                $_POST['new_first_name'],
-                $_POST['new_last_name'],
-                $_POST['new_gender'] ?? null,
-                !empty($_POST['new_dob']) ? $_POST['new_dob'] : null,
-                $_POST['new_contact'] ?? null,
-                $_POST['new_address'] ?? null,
-                $_POST['new_barangay'] ?? null
-            ]);
-            
-            $patientId = $pdo->lastInsertId();
-        } else {
-            // Use existing patient
-            $patientId = $_POST['patient_id'];
-        }
-        
-        // Insert the animal bite report
-        $reportStmt = $pdo->prepare("
-            INSERT INTO reports (
-                patientId, 
-                staffId, 
-                biteDate,
-                animalType,
-                animalOtherType,
-                animalOwnership,
-                ownerName,
-                ownerContact,
-                animalStatus,
-                animalVaccinated,
-                biteLocation,
-                biteType,
-                multipleBites,
-                provoked,
-                washWithSoap,
-                rabiesVaccine,
-                rabiesVaccineDate,
-                antiTetanus,
-                antiTetanusDate,
-                antibiotics,
-                antibioticsDetails,
-                referredToHospital,
-                hospitalName,
-                followUpDate,
-                notes,
-                status
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ");
-        
-        $reportStmt->execute([
-            $patientId,
-            null, // Admin-created reports don't have a staffId
-            $_POST['bite_date'],
-            $_POST['animal_type'],
-            $_POST['animal_type'] === 'Other' ? $_POST['animal_other_type'] : null,
-            $_POST['animal_ownership'],
-            !empty($_POST['owner_name']) ? $_POST['owner_name'] : null,
-            !empty($_POST['owner_contact']) ? $_POST['owner_contact'] : null,
-            $_POST['animal_status'],
-            $_POST['animal_vaccinated'],
-            $_POST['bite_location'],
-            $_POST['bite_type'],
-            isset($_POST['multiple_bites']) ? 1 : 0,
-            $_POST['provoked'],
-            isset($_POST['wash_with_soap']) ? 1 : 0,
-            isset($_POST['rabies_vaccine']) ? 1 : 0,
-            !empty($_POST['rabies_vaccine_date']) ? $_POST['rabies_vaccine_date'] : null,
-            isset($_POST['anti_tetanus']) ? 1 : 0,
-            !empty($_POST['anti_tetanus_date']) ? $_POST['anti_tetanus_date'] : null,
-            isset($_POST['antibiotics']) ? 1 : 0,
-            !empty($_POST['antibiotics_details']) ? $_POST['antibiotics_details'] : null,
-            isset($_POST['referred_to_hospital']) ? 1 : 0,
-            !empty($_POST['hospital_name']) ? $_POST['hospital_name'] : null,
-            !empty($_POST['followup_date']) ? $_POST['followup_date'] : null,
-            !empty($_POST['notes']) ? $_POST['notes'] : null,
-            $_POST['status']
-        ]);
-        
-        $reportId = $pdo->lastInsertId();
-        
-        // Handle image uploads
-        if (!empty($_FILES['bite_images']['name'][0])) {
-            // Create uploads directory if it doesn't exist
-            $uploadDir = '../uploads/bites/';
-            if (!file_exists($uploadDir)) {
-                mkdir($uploadDir, 0777, true);
-            }
-            
-            // Process each uploaded file
-            $fileCount = count($_FILES['bite_images']['name']);
-            
-            for ($i = 0; $i < $fileCount; $i++) {
-                if ($_FILES['bite_images']['error'][$i] === UPLOAD_ERR_OK) {
-                    $tmpName = $_FILES['bite_images']['tmp_name'][$i];
-                    $originalName = $_FILES['bite_images']['name'][$i];
-                    $fileType = $_FILES['bite_images']['type'][$i];
-                    $fileSize = $_FILES['bite_images']['size'][$i];
-                    
-                    // Generate a unique filename
-                    $fileExtension = pathinfo($originalName, PATHINFO_EXTENSION);
-                    $newFileName = 'bite_' . $reportId . '_' . uniqid() . '.' . $fileExtension;
-                    $destination = $uploadDir . $newFileName;
-                    
-                    // Move the uploaded file
-                    if (move_uploaded_file($tmpName, $destination)) {
-                        // Insert image record into database
-                        $imageStmt = $pdo->prepare("
-                            INSERT INTO report_images (
-                                report_id, 
-                                image_path, 
-                                file_name, 
-                                file_type, 
-                                file_size, 
-                                is_primary, 
-                                description
-                            ) VALUES (?, ?, ?, ?, ?, ?, ?)
-                        ");
-                        
-                        $imageStmt->execute([
-                            $reportId,
-                            $newFileName,
-                            $originalName,
-                            $fileType,
-                            $fileSize,
-                            $i === 0 ? 1 : 0, // First image is primary
-                            !empty($_POST['image_descriptions'][$i]) ? $_POST['image_descriptions'][$i] : null
-                        ]);
-                    }
-                }
-            }
-        }
-        
-        // Commit transaction
-        $pdo->commit();
-        $formSuccess = true;
-    } catch (PDOException $e) {
-        // Rollback transaction on error
-        $pdo->rollBack();
-        $errorMessage = "Error: " . $e->getMessage();
-    }
-}
 ?>
 
 <!DOCTYPE html>
@@ -239,133 +78,72 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
   <style>
-    :root {
-      --bs-primary: #0d6efd;
-      --bs-primary-rgb: 13, 110, 253;
-      --bs-secondary: #f8f9fa;
-      --bs-secondary-rgb: 248, 249, 250;
-    }
-    
     body {
-      background-color: #f8f9fa;
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
+      background-color: #f5f5f5;
+      font-family: system-ui, -apple-system, sans-serif;
     }
     
-    .navbar {
-      background-color: white;
-      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
-    }
-    
-    .navbar-brand {
-      display: flex;
-      align-items: center;
-    }
-    
-    .navbar-brand i {
-      color: var(--bs-primary);
-      margin-right: 0.5rem;
-      font-size: 1.5rem;
-    }
-    
-    .nav-link.active {
-      color: var(--bs-primary) !important;
-      font-weight: 500;
-    }
-    
-    .btn-primary {
-      background-color: var(--bs-primary);
-      border-color: var(--bs-primary);
-    }
-    
-    .btn-primary:hover {
-      background-color: #0b5ed7;
-      border-color: #0a58ca;
-    }
-    
-    .btn-outline-primary {
-      color: var(--bs-primary);
-      border-color: var(--bs-primary);
-    }
-    
-    .btn-outline-primary:hover, .btn-outline-primary:focus {
-      background-color: var(--bs-primary);
-      color: #fff;
-      border-color: var(--bs-primary);
-    }
-    
+    /* Simplified container with full width */
     .form-container {
-      max-width: 1000px;
-      margin: 0 auto;
-      padding: 2rem 1rem;
-      flex-grow: 1;
+      padding: 2rem;
+      max-width: 100%;
     }
     
+    /* Cleaner form card */
     .form-card {
-      background-color: white;
-      border-radius: 10px;
-      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
-      overflow: hidden;
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+      margin-bottom: 1.5rem;
     }
     
     .form-header {
       padding: 1.5rem;
-      border-bottom: 1px solid rgba(0, 0, 0, 0.05);
-      background-color: rgba(var(--bs-primary-rgb), 0.03);
+      border-bottom: 1px solid #e5e5e5;
+      background: #fafafa;
+    }
+    
+    .form-header h2 {
+      margin: 0;
+      font-size: 1.5rem;
+      font-weight: 600;
+      color: #333;
     }
     
     .form-body {
       padding: 1.5rem;
     }
     
+    /* Simplified section styling */
     .form-section {
+      background: white;
+      border: 1px solid #e5e5e5;
+      border-radius: 6px;
       margin-bottom: 1rem;
-      border: 1px solid rgba(0, 0, 0, 0.1);
-      border-radius: 8px;
-      overflow: hidden;
-      background-color: #fff;
-      transition: box-shadow 0.2s;
-    }
-    
-    .form-section:hover {
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
     }
     
     .section-header {
       padding: 1rem 1.5rem;
-      background-color: rgba(var(--bs-primary-rgb), 0.05);
-      border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+      background: #f9fafb;
+      border-bottom: 1px solid #e5e5e5;
+      font-weight: 600;
+      font-size: 1rem;
+      color: #111;
       cursor: pointer;
       display: flex;
       justify-content: space-between;
       align-items: center;
-      transition: background-color 0.2s;
     }
     
     .section-header:hover {
-      background-color: rgba(var(--bs-primary-rgb), 0.08);
+      background: #f3f4f6;
     }
     
-    .section-header h3 {
-      font-size: 1.1rem;
-      font-weight: 600;
-      margin: 0;
-      color: var(--bs-primary);
-      display: flex;
-      align-items: center;
+    .section-header i.bi-chevron-down {
+      transition: transform 0.2s;
     }
     
-    .section-header h3 i {
-      margin-right: 0.5rem;
-    }
-    
-    .section-header .bi-chevron-down {
-      transition: transform 0.3s ease;
-    }
-    
-    .section-header[aria-expanded="false"] .bi-chevron-down {
+    .section-header[aria-expanded="false"] i.bi-chevron-down {
       transform: rotate(-90deg);
     }
     
@@ -373,52 +151,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       padding: 1.5rem;
     }
     
-    .section-title {
-      font-size: 1.25rem;
-      font-weight: 600;
-      margin-bottom: 1.5rem;
-      color: var(--bs-primary);
-      display: flex;
-      align-items: center;
-    }
-    
-    .section-title i {
-      margin-right: 0.5rem;
-    }
-    
-    /* Smooth transitions for conditional fields */
-    .conditional-field {
-      transition: all 0.3s ease;
-      overflow: hidden;
-      max-height: 0;
-      opacity: 0;
-      margin: 0 !important;
-      padding: 0 !important;
-    }
-    
-    .conditional-field.show {
-      max-height: 200px;
-      opacity: 1;
-      margin-top: 1rem !important;
-      padding: 0 !important;
-    }
-    
-    .conditional-field.show > * {
-      padding: 0;
-    }
-    
-    .form-label {
-      font-weight: 500;
-    }
-    
-    .form-control:focus, .form-select:focus {
-      border-color: var(--bs-primary);
-      box-shadow: 0 0 0 0.25rem rgba(var(--bs-primary-rgb), 0.25);
-    }
-    
-    .form-text {
-      font-size: 0.875rem;
-    }
+    /* Removed footer styling */
     
     .required-field::after {
       content: "*";
@@ -427,107 +160,53 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
     
     .success-message {
-      background-color: rgba(13, 110, 253, 0.1);
-      border: 1px solid rgba(13, 110, 253, 0.2);
-      border-radius: 10px;
+      background: #f0f9ff;
+      border: 1px solid #38bdf8;
+      border-radius: 8px;
       padding: 2rem;
       text-align: center;
-      margin-bottom: 1.5rem;
     }
     
     .success-icon {
       font-size: 3rem;
-      color: var(--bs-primary);
+      color: #0ea5e9;
       margin-bottom: 1rem;
     }
     
-    .footer {
-      background-color: white;
-      padding: 1rem 0;
-      margin-top: auto;
-      border-top: 1px solid rgba(0, 0, 0, 0.05);
+    /* Simplified conditional fields */
+    .conditional-field {
+      display: none;
+      transition: opacity 0.2s;
+    }
+    
+    .conditional-field.show {
+      display: block;
     }
     
     .category-info {
-      background-color: #f8f9fa;
-      border-radius: 8px;
+      background: #f9fafb;
+      border-radius: 6px;
       padding: 1rem;
-      margin-bottom: 1rem;
-      font-size: 0.9rem;
+      margin-top: 1rem;
+      font-size: 0.875rem;
     }
     
     .category-info h5 {
-      font-size: 1rem;
+      font-size: 0.875rem;
+      font-weight: 600;
       margin-bottom: 0.5rem;
-      color: var(--bs-primary);
     }
     
-    .human-body-map {
-      max-width: 100%;
-      height: auto;
-      margin-bottom: 1rem;
+    .category-info p {
+      margin-bottom: 0.5rem;
+      color: #666;
     }
     
-    .image-preview-container {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 10px;
-      margin-top: 10px;
+    .category-info p:last-child {
+      margin-bottom: 0;
     }
     
-    .image-preview {
-      position: relative;
-      width: 150px;
-      height: 150px;
-      border: 1px solid #ddd;
-      border-radius: 4px;
-      overflow: hidden;
-      background-color: #f8f9fa;
-    }
-    
-    .image-preview img {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-    }
-    
-    .image-preview .remove-image {
-      position: absolute;
-      top: 5px;
-      right: 5px;
-      background-color: rgba(255, 255, 255, 0.8);
-      border-radius: 50%;
-      width: 24px;
-      height: 24px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      cursor: pointer;
-      color: #dc3545;
-    }
-    
-    .image-description {
-      width: 150px;
-      margin-top: 5px;
-    }
-    
-    .file-upload-container {
-      position: relative;
-      overflow: hidden;
-      display: inline-block;
-    }
-    
-    .file-upload-container input[type=file] {
-      position: absolute;
-      left: 0;
-      top: 0;
-      opacity: 0;
-      width: 100%;
-      height: 100%;
-      cursor: pointer;
-    }
-    
-    /* Patient Autocomplete Styles */
+    /* Patient autocomplete */
     .patient-autocomplete-wrapper {
       position: relative;
     }
@@ -538,9 +217,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       left: 0;
       right: 0;
       background: white;
-      border: 1px solid #ced4da;
+      border: 1px solid #d1d5db;
       border-top: none;
-      border-radius: 0 0 0.375rem 0.375rem;
+      border-radius: 0 0 6px 6px;
       max-height: 300px;
       overflow-y: auto;
       z-index: 1000;
@@ -555,146 +234,97 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     .autocomplete-item {
       padding: 0.75rem 1rem;
       cursor: pointer;
-      border-bottom: 1px solid #f0f0f0;
-      transition: background-color 0.2s;
-    }
-    
-    .autocomplete-item:last-child {
-      border-bottom: none;
+      border-bottom: 1px solid #f3f4f6;
     }
     
     .autocomplete-item:hover,
     .autocomplete-item.highlighted {
-      background-color: rgba(var(--bs-primary-rgb), 0.1);
+      background: #f3f4f6;
     }
     
     .autocomplete-item .patient-name {
       font-weight: 500;
-      color: #212529;
     }
     
     .autocomplete-item .patient-details {
       font-size: 0.875rem;
-      color: #6c757d;
+      color: #6b7280;
       margin-top: 0.25rem;
     }
     
-    .autocomplete-item .patient-details span {
-      margin-right: 1rem;
-    }
-    
-    .autocomplete-loading {
-      position: absolute;
-      top: 100%;
-      left: 0;
-      right: 0;
-      background: white;
-      border: 1px solid #ced4da;
-      border-top: none;
-      border-radius: 0 0 0.375rem 0.375rem;
-      padding: 0.75rem 1rem;
-      z-index: 1001;
-      text-align: center;
-      color: #6c757d;
-    }
-    
-    .spin {
-      animation: spin 1s linear infinite;
-    }
-    
-    @keyframes spin {
-      from { transform: rotate(0deg); }
-      to { transform: rotate(360deg); }
-    }
-    
     .selected-patient-info {
-      animation: fadeIn 0.3s ease;
+      margin-top: 0.5rem;
     }
     
-    @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(-10px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
-    
+    /* Existing reports table */
     .table-card {
-      background-color: white;
-      border-radius: 10px;
-      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
       overflow: hidden;
       margin-bottom: 1.5rem;
     }
     
-    .status-badge {
+    /* Simplified badge styles */
+    .badge {
       font-size: 0.75rem;
       padding: 0.35em 0.65em;
-      border-radius: 0.25rem;
       font-weight: 600;
     }
     
-    .status-pending {
-      background-color: #ffc107;
-      color: #212529;
+    .badge-category-i {
+      background: #d1fae5;
+      color: #065f46;
     }
     
-    .status-in-progress {
-      background-color: #17a2b8;
-      color: white;
+    .badge-category-ii {
+      background: #fed7aa;
+      color: #9a3412;
     }
     
-    .status-completed {
-      background-color: #28a745;
-      color: white;
+    .badge-category-iii {
+      background: #fecaca;
+      color: #991b1b;
     }
     
-    .status-referred {
-      background-color: #6f42c1;
-      color: white;
+    .badge-status-pending {
+      background: #fef3c7;
+      color: #92400e;
     }
     
-    .status-cancelled {
-      background-color: #dc3545;
-      color: white;
+    .badge-status-inprogress {
+      background: #bfdbfe;
+      color: #1e40af;
     }
     
-    .bite-category-1 {
-      background-color: #28a745;
-      color: white;
+    .badge-status-completed {
+      background: #d1fae5;
+      color: #065f46;
     }
     
-    .bite-category-2 {
-      background-color: #fd7e14;
-      color: white;
+    .badge-status-referred {
+      background: #e9d5ff;
+      color: #6b21a8;
     }
     
-    .bite-category-3 {
-      background-color: #dc3545;
-      color: white;
-    }
-    
-    @media (max-width: 768px) {
-      .form-container {
-        padding: 1rem;
-      }
-      
-      .form-header, .form-body {
-        padding: 1rem;
-      }
+    .badge-status-cancelled {
+      background: #fecaca;
+      color: #991b1b;
     }
   </style>
-  <link rel="stylesheet" href="../css/system-theme.css">
 </head>
-<body class="theme-admin">
+<body>
   <?php include 'includes/navbar.php'; ?>
 
-  <div class="form-container app-shell">
+  <div class="form-container">
     <?php if (!empty($existingReports)): ?>
     <div class="alert alert-info">
-        <h4 class="alert-heading"><i class="bi bi-info-circle me-2"></i>Existing Reports Found</h4>
-        <p>This patient already has <?php echo count($existingReports); ?> report(s).</p>
+        <h5 class="alert-heading"><i class="bi bi-info-circle me-2"></i>Existing Reports Found</h5>
+        <p class="mb-0">This patient already has <?php echo count($existingReports); ?> report(s).</p>
     </div>
     <div class="table-card">
         <div class="table-responsive">
-            <table class="table table-hover">
+            <table class="table table-hover mb-0">
                 <thead>
                     <tr>
                         <th>Report Date</th>
@@ -769,14 +399,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         </div>
     </div>
     <?php endif; ?>
+    
     <?php if ($showForm): ?>
-    <div class="form-container">
         <?php if ($formSubmitted && $formSuccess): ?>
         <div class="success-message">
           <div class="success-icon">
             <i class="bi bi-check-circle"></i>
           </div>
-          <h3>Animal Bite Report Created Successfully!</h3>
+          <h3>Report Created Successfully!</h3>
           <p class="mb-4">The animal bite report has been added to the system.</p>
           <div class="d-flex justify-content-center gap-3">
             <a href="admin_dashboard.php" class="btn btn-outline-primary">
@@ -792,7 +422,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <?php if (!$formSubmitted || !$formSuccess): ?>
         <div class="form-card">
           <div class="form-header">
-            <h2 class="mb-0"><i class="bi bi-exclamation-triangle me-2"></i>New Animal Bite Report</h2>
+            <h2><i class="bi bi-file-earmark-plus me-2"></i>New Animal Bite Report</h2>
           </div>
           
           <div class="form-body">
@@ -807,7 +437,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
               <!-- Patient Information Section -->
               <div class="form-section">
                 <div class="section-header" data-bs-toggle="collapse" data-bs-target="#patientSection" aria-expanded="true">
-                  <h3><i class="bi bi-person"></i> Patient Information</h3>
+                  <span><i class="bi bi-person me-2"></i>Patient Information</span>
                   <i class="bi bi-chevron-down"></i>
                 </div>
                 <div class="section-content collapse show" id="patientSection">
@@ -826,24 +456,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <!-- Existing Patient Selection -->
                 <div id="existingPatientSection" class="mb-3">
                   <label for="patient_search" class="form-label required-field">Search Patient</label>
-                  <div class="patient-autocomplete-wrapper position-relative">
+                  <div class="patient-autocomplete-wrapper">
                     <input 
                       type="text" 
                       class="form-control" 
                       id="patient_search" 
                       name="patient_search" 
-                      placeholder="Type to search for a patient (name, contact number, etc.)"
+                      placeholder="Type to search for a patient"
                       autocomplete="off"
                       required
                     >
                     <input type="hidden" id="patient_id" name="patient_id" required>
                     <div id="patient_search_results" class="autocomplete-results"></div>
-                    <div id="patient_search_loading" class="autocomplete-loading" style="display: none;">
-                      <i class="bi bi-arrow-repeat spin"></i> Searching...
-                    </div>
                   </div>
-                  <div class="form-text">Start typing to search for a patient by name, contact number, or ID</div>
-                  <div id="selected_patient_info" class="selected-patient-info mt-2" style="display: none;">
+                  <div id="selected_patient_info" class="selected-patient-info" style="display: none;">
                     <div class="alert alert-info mb-0 py-2">
                       <i class="bi bi-check-circle me-2"></i>
                       <strong>Selected:</strong> <span id="selected_patient_name"></span>
@@ -901,7 +527,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
               <!-- Animal Bite Details Section -->
               <div class="form-section">
                 <div class="section-header" data-bs-toggle="collapse" data-bs-target="#biteDetailsSection" aria-expanded="true">
-                  <h3><i class="bi bi-exclamation-triangle"></i> Animal Bite Details</h3>
+                  <span><i class="bi bi-exclamation-triangle me-2"></i>Animal Bite Details</span>
                   <i class="bi bi-chevron-down"></i>
                 </div>
                 <div class="section-content collapse show" id="biteDetailsSection">
@@ -959,7 +585,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                   </div>
                   
                   <div class="col-md-6">
-                    <label for="animal_vaccinated" class="form-label required-field">Animal Vaccinated Against Rabies</label>
+                    <label for="animal_vaccinated" class="form-label required-field">Animal Vaccinated</label>
                     <select class="form-select" id="animal_vaccinated" name="animal_vaccinated" required>
                       <option value="Yes">Yes</option>
                       <option value="No">No</option>
@@ -991,15 +617,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
               <!-- Bite Location and Classification -->
               <div class="form-section">
                 <div class="section-header" data-bs-toggle="collapse" data-bs-target="#biteLocationSection" aria-expanded="true">
-                  <h3><i class="bi bi-bullseye"></i> Bite Location & Classification</h3>
+                  <span><i class="bi bi-bullseye me-2"></i>Bite Location & Classification</span>
                   <i class="bi bi-chevron-down"></i>
                 </div>
                 <div class="section-content collapse show" id="biteLocationSection">
                 <div class="row g-3">
                   <div class="col-md-12">
                     <label for="bite_location" class="form-label required-field">Bite Location (Body Part)</label>
-                    <input type="text" class="form-control" id="bite_location" name="bite_location" required>
-                    <div class="form-text">Specify the body part(s) where the bite occurred (e.g., right hand, left leg, face)</div>
+                    <input type="text" class="form-control" id="bite_location" name="bite_location" placeholder="e.g., right hand, left leg, face" required>
                   </div>
                   
                   <div class="col-md-12">
@@ -1011,7 +636,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                       <option value="Category III">Category III</option>
                     </select>
                     
-                    <div class="category-info mt-3">
+                    <div class="category-info">
                       <h5>Bite Categories:</h5>
                       <p><strong>Category I:</strong> Touching or feeding of animals, licks on intact skin</p>
                       <p><strong>Category II:</strong> Nibbling of uncovered skin, minor scratches or abrasions without bleeding</p>
@@ -1022,29 +647,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 </div>
               </div>
               
-              <!-- Bite Images Section -->
-              <div class="form-section">
-                <div class="section-header" data-bs-toggle="collapse" data-bs-target="#biteImagesSection" aria-expanded="false">
-                  <h3><i class="bi bi-camera"></i> Bite Images</h3>
-                  <i class="bi bi-chevron-down"></i>
-                </div>
-                <div class="section-content collapse" id="biteImagesSection">
-                <div class="mb-3">
-                  <label class="form-label">Upload Images of the Bite</label>
-                  <label for="bite_images" class="btn btn-outline-primary" style="cursor:pointer;">
-                    <i class="bi bi-upload me-2"></i>Select Images
-                  </label>
-                  <input type="file" id="bite_images" name="bite_images[]" accept="image/*" multiple style="display:none;" onchange="previewImages(this)">
-                  <div class="form-text">Upload clear images of the bite area. You can upload multiple images.</div>
-                  <div id="imagePreviewContainer" class="image-preview-container mt-3"></div>
-                </div>
-                </div>
-              </div>
-              
               <!-- Treatment Information -->
               <div class="form-section">
                 <div class="section-header" data-bs-toggle="collapse" data-bs-target="#treatmentSection" aria-expanded="false">
-                  <h3><i class="bi bi-bandaid"></i> Treatment Information</h3>
+                  <span><i class="bi bi-bandaid me-2"></i>Treatment Information</span>
                   <i class="bi bi-chevron-down"></i>
                 </div>
                 <div class="section-content collapse" id="treatmentSection">
@@ -1135,14 +741,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
               <!-- Additional Notes Section -->
               <div class="form-section">
                 <div class="section-header" data-bs-toggle="collapse" data-bs-target="#notesSection" aria-expanded="false">
-                  <h3><i class="bi bi-journal"></i> Additional Notes</h3>
+                  <span><i class="bi bi-journal me-2"></i>Additional Notes</span>
                   <i class="bi bi-chevron-down"></i>
                 </div>
                 <div class="section-content collapse" id="notesSection">
                 <div class="mb-3">
                   <label for="notes" class="form-label">Notes</label>
-                  <textarea class="form-control" id="notes" name="notes" rows="4"></textarea>
-                  <div class="form-text">Any additional information or observations about the case</div>
+                  <textarea class="form-control" id="notes" name="notes" rows="4" placeholder="Any additional information or observations about the case"></textarea>
                 </div>
                 </div>
               </div>
@@ -1159,41 +764,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
           </div>
         </div>
         <?php endif; ?>
-    </div>
     <?php endif; ?>
-  </div>
-
-  <!-- Footer -->
-  <footer class="footer">
-    <div class="container">
-      <div class="d-flex justify-content-between align-items-center">
-        <div>
-          <small class="text-muted">&copy; 2025 City Health Office · Barangay Health Workers Management System</small>
-        </div>
-        <div>
-          <small><a href="help.php" class="text-decoration-none">Help & Support</a></small>
-        </div>
-      </div>
-    </div>
-  </footer>
-
-  <!-- Image Preview Modal -->
-  <div class="modal fade" id="imagePreviewModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h5 class="modal-title">Image Preview</h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-        </div>
-        <div class="modal-body text-center">
-          <img id="modalImage" src="/placeholder.svg" alt="Preview" style="max-width: 100%; max-height: 70vh;">
-        </div>
-      </div>
-    </div>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
   <script>
+    
     document.addEventListener('DOMContentLoaded', function() {
       // Toggle between existing and new patient sections
       const existingPatientRadio = document.getElementById('existingPatient');
@@ -1230,21 +806,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       function toggleConditionalField(element, show) {
         if (show) {
           element.classList.add('show');
-          // Enable required fields
-          const requiredInput = element.querySelector('[required]');
-          if (requiredInput) requiredInput.required = true;
         } else {
           element.classList.remove('show');
-          // Disable required fields
-          const requiredInput = element.querySelector('[required]');
-          if (requiredInput) requiredInput.required = false;
         }
       }
       
       // Show/hide other animal type field
       const animalTypeSelect = document.getElementById('animal_type');
       const otherAnimalSection = document.getElementById('otherAnimalSection');
-      const animalOtherTypeInput = document.getElementById('animal_other_type');
       
       animalTypeSelect.addEventListener('change', function() {
         toggleConditionalField(otherAnimalSection, this.value === 'Other');
@@ -1295,7 +864,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
       // Patient Autocomplete Functionality
       const patientSearchResults = document.getElementById('patient_search_results');
-      const patientSearchLoading = document.getElementById('patient_search_loading');
       const selectedPatientInfo = document.getElementById('selected_patient_info');
       const selectedPatientName = document.getElementById('selected_patient_name');
       const clearPatientSelection = document.getElementById('clear_patient_selection');
@@ -1308,23 +876,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       function searchPatients(query) {
         if (query.length < 2) {
           patientSearchResults.classList.remove('show');
-          patientSearchLoading.style.display = 'none';
           return;
         }
-        
-        patientSearchLoading.style.display = 'block';
-        patientSearchResults.classList.remove('show');
         
         fetch(`search_patients.php?q=${encodeURIComponent(query)}&limit=20`)
           .then(response => response.json())
           .then(data => {
-            patientSearchLoading.style.display = 'none';
-            
             if (!Array.isArray(data)) {
-              const message = data && typeof data === 'object' && data.error
-                ? data.error
-                : 'Error searching patients. Please try again.';
-              throw new Error(message);
+              throw new Error('Error searching patients');
             }
             
             currentResults = data;
@@ -1332,8 +891,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
           })
           .catch(error => {
             console.error('Error searching patients:', error);
-            patientSearchLoading.style.display = 'none';
-            patientSearchResults.innerHTML = `<div class="autocomplete-item">${escapeHtml(error.message || 'Error searching patients. Please try again.')}</div>`;
+            patientSearchResults.innerHTML = '<div class="autocomplete-item">Error searching patients</div>';
             patientSearchResults.classList.add('show');
             currentResults = [];
           });
@@ -1356,7 +914,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <div class="patient-name">${escapeHtml(patient.text)}</div>
             <div class="patient-details">
               ${patient.contactNumber ? `<span><i class="bi bi-telephone"></i> ${escapeHtml(patient.contactNumber)}</span>` : ''}
-              ${patient.barangay ? `<span><i class="bi bi-geo-alt"></i> ${escapeHtml(patient.barangay)}</span>` : ''}
+              ${patient.barangay ? `<span class="ms-3"><i class="bi bi-geo-alt"></i> ${escapeHtml(patient.barangay)}</span>` : ''}
             </div>
           `;
           
@@ -1468,12 +1026,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       
       // If we're showing the form for a new report, pre-select the patient
       <?php if ($showForm && $selectedPatientId && $selectedPatientInfo): ?>
-      // Pre-populate with selected patient
       const selectedPatient = {
         id: '<?php echo $selectedPatientInfo['patientId']; ?>',
         text: '<?php echo htmlspecialchars($selectedPatientInfo['lastName'] . ', ' . $selectedPatientInfo['firstName'], ENT_QUOTES); ?>',
-        firstName: '<?php echo htmlspecialchars($selectedPatientInfo['firstName'], ENT_QUOTES); ?>',
-        lastName: '<?php echo htmlspecialchars($selectedPatientInfo['lastName'], ENT_QUOTES); ?>',
         contactNumber: '<?php echo htmlspecialchars($selectedPatientInfo['contactNumber'] ?? '', ENT_QUOTES); ?>',
         barangay: '<?php echo htmlspecialchars($selectedPatientInfo['barangay'] ?? '', ENT_QUOTES); ?>'
       };
@@ -1483,60 +1038,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       selectedPatientInfo.style.display = 'block';
       <?php endif; ?>
     });
-    
-    // Image preview functionality
-    function previewImages(input) {
-      const previewContainer = document.getElementById('imagePreviewContainer');
-      previewContainer.innerHTML = '';
-      
-      if (input.files) {
-        const filesAmount = input.files.length;
-        
-        for (let i = 0; i < filesAmount; i++) {
-          const reader = new FileReader();
-          
-          reader.onload = function(event) {
-            const previewDiv = document.createElement('div');
-            previewDiv.className = 'image-preview';
-            
-            const img = document.createElement('img');
-            img.src = event.target.result;
-            img.alt = 'Preview';
-            img.onclick = function() {
-              document.getElementById('modalImage').src = this.src;
-              new bootstrap.Modal(document.getElementById('imagePreviewModal')).show();
-            };
-            
-            const removeBtn = document.createElement('div');
-            removeBtn.className = 'remove-image';
-            removeBtn.innerHTML = '<i class="bi bi-x"></i>';
-            removeBtn.onclick = function() {
-              this.parentElement.remove();
-              // Note: This doesn't actually remove the file from the input
-              // For that, we would need a more complex solution with a custom file list
-            };
-            
-            previewDiv.appendChild(img);
-            previewDiv.appendChild(removeBtn);
-            
-            const descriptionInput = document.createElement('input');
-            descriptionInput.type = 'text';
-            descriptionInput.className = 'form-control image-description';
-            descriptionInput.name = 'image_descriptions[]';
-            descriptionInput.placeholder = 'Description';
-            
-            const wrapper = document.createElement('div');
-            wrapper.className = 'd-flex flex-column align-items-center';
-            wrapper.appendChild(previewDiv);
-            wrapper.appendChild(descriptionInput);
-            
-            previewContainer.appendChild(wrapper);
-          }
-          
-          reader.readAsDataURL(input.files[i]);
-        }
-      }
-    }
   </script>
 </body>
 </html>

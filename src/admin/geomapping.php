@@ -41,7 +41,7 @@ try {
 }
 
 // Build the WHERE clause for filters
-$where = " WHERE p.barangay IS NOT NULL";
+$where = " WHERE 1=1";
 $params = [];
 
 if (!empty($dateFrom)) {
@@ -68,14 +68,14 @@ if (!empty($status)) {
 // Main query for heatmapData (Top Affected Areas): count all reports per barangay
 $query = "
     SELECT 
-        p.barangay,
+        COALESCE(p.barangay, 'Unspecified') AS barangay,
         COUNT(*) as case_count
     FROM 
         reports r
     JOIN 
         patients p ON r.patientId = p.patientId
     $where
-    GROUP BY p.barangay
+    GROUP BY COALESCE(p.barangay, 'Unspecified')
     ORDER BY case_count DESC
 ";
 
@@ -90,6 +90,27 @@ $totalQuery = "
     $where
 ";
 
+$allCasesQuery = "
+    SELECT
+        r.reportId,
+        r.biteDate,
+        r.animalType,
+        r.biteType,
+        r.status,
+        p.barangay,
+        bc.latitude as latitude,
+        bc.longitude as longitude,
+        CONCAT(p.firstName, ' ', p.lastName) as patientName
+    FROM
+        reports r
+    JOIN
+        patients p ON r.patientId = p.patientId
+    LEFT JOIN
+        barangay_coordinates bc ON p.barangay = bc.barangay
+    $where
+    ORDER BY r.biteDate DESC
+";
+
 try {
     $stmt = $pdo->prepare($query);
     $stmt->execute($params);
@@ -98,12 +119,30 @@ try {
     $totalStmt = $pdo->prepare($totalQuery);
     $totalStmt->execute($params);
     $totalCases = $totalStmt->fetchColumn();
+
+    $allCasesStmt = $pdo->prepare($allCasesQuery);
+    $allCasesStmt->execute($params);
+    $cases = $allCasesStmt->fetchAll(PDO::FETCH_ASSOC);
+
+    // Prepare data for barangay counts and risk levels
+    $barangayCounts = [];
+    foreach ($heatmapData as $data) {
+        $barangayCounts[] = [
+            'barangay' => $data['barangay'],
+            'count' => (int)$data['case_count']
+        ];
+    }
+    usort($barangayCounts, fn($a, $b) => $b['count'] <=> $a['count']);
+
 } catch (PDOException $e) {
     $heatmapData = [];
     $totalCases = 0;
+    $cases = [];
+    $barangayCounts = [];
+    error_log("Error fetching data: " . $e->getMessage());
 }
 
-// Recent Cases: show the 5 most recent reports (regardless of patient)
+// Recent Cases
 $recentQuery = "
     SELECT 
         r.reportId,
@@ -129,19 +168,8 @@ try {
     $recentCases = [];
 }
 
-/**
- * Build a filtered URL for `geomapping.php` preserving existing query params.
- *
- * Intended to be used when toggling filters/links in this page. Keeps current
- * GET parameters, applies overrides from $newParams, and removes keys whose
- * values are explicitly set to null.
- *
- * @param array $newParams Key-value overrides for the query string. Use null to remove a key.
- * @return string A URL like `geomapping.php?key=value&...` suitable for anchors.
- */
 function buildUrl($newParams = []) {
     $params = $_GET;
-    
     foreach ($newParams as $key => $value) {
         if ($value === null) {
             unset($params[$key]);
@@ -149,11 +177,10 @@ function buildUrl($newParams = []) {
             $params[$key] = $value;
         }
     }
-    
     return 'geomapping.php?' . http_build_query($params);
 }
 
-// Fetch coordinates for each barangay dynamically halin sa database
+// Fetch coordinates for each barangay
 $barangayCoordinates = [];
 try {
     $stmt = $pdo->query("SELECT barangay, latitude, longitude FROM barangay_coordinates");
@@ -163,13 +190,28 @@ try {
             'lng' => (float)$row['longitude']
         ];
     }
-    // Debug: Log fetched coordinates
-    error_log('Fetched Barangay Coordinates: ' . print_r($barangayCoordinates, true));
 } catch (PDOException $e) {
     error_log('Error fetching barangay coordinates: ' . $e->getMessage());
 }
 
-// Center coordinates for the map (use the average if available)
+// Ensure each case has coordinates, fallback to barangay centroid if missing
+foreach ($cases as &$case) {
+    $latEmpty = empty($case['latitude']) || $case['latitude'] == 0;
+    $lngEmpty = empty($case['longitude']) || $case['longitude'] == 0;
+    if (($latEmpty || $lngEmpty) && !empty($case['barangay']) && isset($barangayCoordinates[$case['barangay']])) {
+        $case['latitude'] = $barangayCoordinates[$case['barangay']]['lat'];
+        $case['longitude'] = $barangayCoordinates[$case['barangay']]['lng'];
+    }
+    if (!empty($case['latitude'])) {
+        $case['latitude'] = (float)$case['latitude'];
+    }
+    if (!empty($case['longitude'])) {
+        $case['longitude'] = (float)$case['longitude'];
+    }
+}
+unset($case);
+
+// Center coordinates for the map
 if (count($barangayCoordinates) > 0) {
     $latSum = 0;
     $lngSum = 0;
@@ -190,9 +232,6 @@ if (count($barangayCoordinates) > 0) {
 $jsHeatmapData = [];
 foreach ($heatmapData as $data) {
     $barangay = $data['barangay'];
-    // Debug: Log each barangay being processed
-    error_log("Processing barangay: " . $barangay);
-    
     if (isset($barangayCoordinates[$barangay])) {
         $jsHeatmapData[] = [
             'lat' => $barangayCoordinates[$barangay]['lat'],
@@ -200,1022 +239,926 @@ foreach ($heatmapData as $data) {
             'count' => (int)$data['case_count'],
             'barangay' => $barangay
         ];
-        // Debug: Log successful data point
-        error_log("Added heatmap point for " . $barangay . " with count: " . $data['case_count']);
-    } else {
-        // Debug: Log missing coordinates
-        error_log("No coordinates found for barangay: " . $barangay);
     }
 }
 
-// Debug: Log final JavaScript data
-error_log("Final Heatmap Data for JavaScript: " . print_r($jsHeatmapData, true));
+$maxCount = !empty($barangayCounts) ? max(array_column($barangayCounts, 'count')) : 1;
 ?>
 
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Geomapping | Animal Bite Center</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Geomapping Analysis - Animal Bite Cases</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.css" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.Default.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet.markercluster@1.4.1/dist/leaflet.markercluster.js"></script>
+    <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
+    
     <style>
         :root {
-            --bs-primary: #0d6efd;
-            --bs-primary-rgb: 13, 110, 253;
-            --bs-secondary: #f8f9fa;
-            --bs-secondary-rgb: 248, 249, 250;
+            --primary: #2563eb;
+            --primary-dark: #1d4ed8;
+            --accent: #0891b2;
+            --danger: #dc2626;
+            --warning: #d97706;
+            --success: #059669;
+            --gray-50: #f9fafb;
+            --gray-100: #f3f4f6;
+            --gray-200: #e5e7eb;
+            --gray-300: #d1d5db;
+            --gray-500: #6b7280;
+            --gray-600: #4b5563;
+            --gray-700: #374151;
+            --gray-800: #1f2937;
+            --gray-900: #111827;
+            --sidebar-width: 250px;
+        }
+        
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        
+        html, body {
+            height: 100%;
+            /* Increased base font size from 13px to 14px */
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            font-size: 14px;
+            line-height: 1.5;
+            color: var(--gray-800);
+            background: var(--gray-100);
+            overflow: hidden;
         }
         
         body {
-            background-color: #f8f9fa;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            min-height: 100vh;
             display: flex;
             flex-direction: column;
         }
         
-        .navbar {
-            background-color: white;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
-        }
-        
-        .navbar-brand {
+        /* Added wrapper to account for navbar */
+        .page-wrapper {
+            flex: 1;
             display: flex;
-            align-items: center;
-        }
-        
-        .navbar-brand i {
-            color: var(--bs-primary);
-            margin-right: 0.5rem;
-            font-size: 1.5rem;
-        }
-        
-        .nav-link.active {
-            color: var(--bs-primary) !important;
-            font-weight: 500;
-        }
-        
-        .btn-primary {
-            background-color: var(--bs-primary);
-            border-color: var(--bs-primary);
-        }
-        
-        .btn-primary:hover {
-            background-color: #0b5ed7;
-            border-color: #0a58ca;
-        }
-        
-        .btn-outline-primary {
-            color: var(--bs-primary);
-            border-color: var(--bs-primary);
-        }
-
-        .btn-logout {
-            background-color: #dc3545;
-            color: white;
-            border: none;
-            padding: 0.5rem 1.25rem;
-            border-radius: 5px;
-            transition: all 0.2s;
-        }
-        
-        .btn-logout:hover {
-            background-color: #bb2d3b;
-            color: white;
-        }
-        
-        .btn-outline-primary:hover {
-            background-color: var(--bs-primary);
-            border-color: var(--bs-primary);
-        }
-        
-        .geomapping-container {
-            width: 100%;
-            max-width: none;
-            margin: 0 auto;
-            padding: 1.5rem 1rem;
-            flex-grow: 1;
-        }
-        
-        .content-card {
-            background-color: white;
-            border-radius: 10px;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
-            margin-bottom: 2rem;
+            flex-direction: column;
             overflow: hidden;
-            font-size: 0.88rem;
+            height: 100%;
         }
         
-        .content-card-header {
-            padding: 1rem 1.25rem;
-            border-bottom: 1px solid rgba(0, 0, 0, 0.05);
-            background-color: rgba(var(--bs-primary-rgb), 0.03);
+        /* Main content area below navbar */
+        .main-wrapper {
+            flex: 1;
             display: flex;
-            justify-content: space-between;
+            flex-direction: column;
+            height: 100%;
+            overflow: hidden;
+            margin-left: 0;
+        }
+        
+        /* Compact filters bar - single row */
+        .filters-bar {
+            display: flex;
             align-items: center;
-            transition: background-color 0.2s;
-        }
-        
-        .content-card-header:hover {
-            background-color: rgba(var(--bs-primary-rgb), 0.06);
-        }
-        
-        .content-card-header .bi-chevron-down {
-            transition: transform 0.3s ease;
-        }
-        
-        .content-card-header[aria-expanded="false"] .bi-chevron-down {
-            transform: rotate(-90deg);
-        }
-        
-        .content-card-body {
-            padding: 1.25rem;
-        }
-        
-        .compact-card {
-            border-radius: 10px;
-        }
-        
-        .compact-card .content-card-header {
-            padding: 0.65rem 0.9rem;
-        }
-        
-        .compact-card .content-card-body {
-            padding: 0.75rem 0.9rem;
-        }
-        
-        .filters-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
-            gap: 0.6rem 0.8rem;
-            align-items: end;
-        }
-        
-        .filters-grid .form-label {
-            font-weight: bolder;
-            margin-bottom: 0.2rem;
-            font-size: 0.8rem;
-        }
-        
-        .filters-grid .form-control,
-        .filters-grid .form-select {
-            border-radius: 999px;
-            padding: 0.3rem 0.75rem;
-            font-size: 0.8rem;
-        }
-        
-        .filters-actions {
-            display: flex;
-            justify-content: flex-end;
-            gap: 0.4rem;
-        }
-        
-        .filters-actions .btn {
-            border-radius: 999px;
-            padding: 0.3rem 0.9rem;
-            font-size: 0.85rem;
-        }
-        
-        .control-hub-card {
-            width: 100%;
-            margin-bottom: 1.5rem;
-        }
-        
-        .control-hub-layout {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
             gap: 1rem;
-        }
-        
-        .control-hub-divider {
-            margin: 1.25rem 0;
-            border-top: 1px dashed rgba(0, 0, 0, 0.08);
-        }
-        
-        .search-panel select,
-        .search-panel button {
-            border-radius: 999px;
-            padding: 0.3rem 0.75rem;
-            font-size: 0.85rem;
-        }
-        
-        @media (max-width: 992px) {
-            .geomapping-container {
-                padding: 1rem;
-            }
-        }
-        
-        .filter-form {
-            background-color: white;
-            border-radius: 10px;
-            padding: 1.5rem;
-            margin-bottom: 1.5rem;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
-        }
-        
-        #location_dropdown {
-            font-size: 1rem;
             padding: 0.75rem 1rem;
-            border-radius: 5px;
-            transition: all 0.2s;
+            background: white;
+            border-bottom: 1px solid var(--gray-200);
+            flex-shrink: 0;
+            flex-wrap: wrap;
+        }
+        
+        .filters-bar .page-title {
+            font-weight: 600;
+            font-size: 1rem;
+            color: var(--gray-800);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-right: auto;
+        }
+        
+        .filters-bar .page-title i {
+            color: var(--primary);
+        }
+        
+        .filter-group {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+        
+        .filter-item {
+            display: flex;
+            align-items: center;
+            gap: 0.35rem;
+        }
+        
+        .filter-item label {
+            font-size: 0.8rem;
+            font-weight: 500;
+            color: var(--gray-600);
+            white-space: nowrap;
+        }
+        
+        .filter-item input,
+        .filter-item select {
+            padding: 0.4rem 0.6rem;
+            font-size: 0.85rem;
+            border: 1px solid var(--gray-300);
+            border-radius: 6px;
+            background: white;
+            min-width: 120px;
+        }
+        
+        .filter-item input:focus,
+        .filter-item select:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+        }
+        
+        .filter-btn {
+            padding: 0.4rem 0.75rem;
+            font-size: 0.85rem;
+            font-weight: 500;
+            border: none;
+            border-radius: 6px;
             cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            transition: all 0.15s;
         }
         
-        #location_dropdown:hover {
-            border-color: rgba(var(--bs-primary-rgb), 0.5);
+        .filter-btn-primary {
+            background: var(--primary);
+            color: white;
         }
         
-        #location_dropdown:focus {
-            border-color: var(--bs-primary);
-            box-shadow: 0 0 0 0.2rem rgba(var(--bs-primary-rgb), 0.25);
-            outline: 0;
+        .filter-btn-primary:hover { background: var(--primary-dark); }
+        
+        .filter-btn-secondary {
+            background: var(--gray-100);
+            color: var(--gray-700);
+            border: 1px solid var(--gray-300);
+        }
+        
+        .filter-btn-secondary:hover { background: var(--gray-200); }
+        
+        /* Main content fills remaining space */
+        .content-area {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+        
+        /* Map takes all available space */
+        .map-container {
+            flex: 1;
+            position: relative;
+            min-width: 0;
         }
         
         #map {
-            height: 650px;
             width: 100%;
-            border-radius: 0;
+            height: 100%;
         }
         
-        .legend {
-            background-color: white;
-            padding: 10px;
-            border-radius: 5px;
-            box-shadow: 0 0 15px rgba(0, 0, 0, 0.1);
+        /* Improved floating legend - larger and more readable */
+        .map-legend {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            z-index: 1000;
+            width: 260px;
+            font-size: 0.85rem;
+            max-height: 320px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .legend-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.75rem 1rem;
+            border-bottom: 1px solid var(--gray-200);
+            background: var(--gray-50);
+        }
+        
+        .legend-title {
+            font-weight: 600;
+            font-size: 0.9rem;
+            color: var(--gray-800);
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+        }
+        
+        .legend-toggle {
+            background: none;
+            border: none;
+            cursor: pointer;
+            color: var(--gray-500);
+            padding: 0.25rem;
+            font-size: 1rem;
+            border-radius: 4px;
+        }
+        
+        .legend-toggle:hover { 
+            color: var(--primary); 
+            background: var(--gray-100);
+        }
+        
+        .legend-body {
+            padding: 0.75rem 1rem;
+            overflow-y: auto;
+        }
+        
+        .legend-body.collapsed { display: none; }
+        
+        .legend-section {
+            margin-bottom: 0.75rem;
+        }
+        
+        .legend-section:last-child { margin-bottom: 0; }
+        
+        .legend-section-title {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--gray-500);
+            margin-bottom: 0.5rem;
+            font-weight: 600;
+        }
+        
+        .legend-gradient {
+            height: 14px;
+            border-radius: 4px;
+            background: linear-gradient(to right, #22c55e, #facc15, #f97316, #ef4444, #7f1d1d);
+            margin-bottom: 0.35rem;
+        }
+        
+        .legend-labels {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.75rem;
+            color: var(--gray-500);
         }
         
         .legend-item {
             display: flex;
             align-items: center;
-            margin-bottom: 5px;
+            gap: 0.5rem;
+            padding: 0.35rem 0.5rem;
+            margin: 0 -0.5rem;
+            cursor: pointer;
+            border-radius: 4px;
+            transition: background 0.15s;
         }
         
-        .legend-color {
-            width: 20px;
-            height: 20px;
-            margin-right: 8px;
-            border-radius: 3px;
-        }
+        .legend-item:hover { background: var(--gray-100); }
         
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-            gap: 0.85rem;
-        }
-        
-        .stats-card {
-            background-color: white;
-            border-radius: 8px;
-            padding: 0.85rem 0.95rem;
-            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
-            transition: transform 0.15s ease, box-shadow 0.15s ease;
-        }
-        
-        .stats-card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.07);
-        }
-        
-        .stats-card h6 {
-            font-size: 0.75rem;
-            letter-spacing: 0.04em;
-        }
-        
-        .stats-number {
-            font-size: 1.65rem;
-            font-weight: 600;
-            margin: 0.25rem 0;
-            color: var(--bs-primary);
-        }
-        
-        .stats-card p {
-            font-size: 0.78rem;
-        }
-        
-        .card-icon {
-            font-size: 1.6rem;
-            color: rgba(var(--bs-primary-rgb), 0.25);
-        }
-        
-        .table-responsive {
-            overflow-x: auto;
-            -webkit-overflow-scrolling: touch;
-        }
-        
-        .table th {
-            background-color: rgba(var(--bs-primary-rgb), 0.03);
-            font-weight: 600;
-            border-top: none;
-        }
-        
-        .table td, .table th {
-            padding: 1rem;
-            vertical-align: middle;
-        }
-        
-        .table tbody tr {
-            transition: all 0.2s;
-        }
-        
-        .table tbody tr:hover {
-            background-color: rgba(var(--bs-primary-rgb), 0.03);
-        }
-        
-        .badge-category-i {
-            background-color: #28a745;
-            color: white;
-            padding: 0.35em 0.65em;
-            font-size: 0.75em;
-            font-weight: 700;
-            border-radius: 0.25rem;
-        }
-        
-        .badge-category-ii {
-            background-color: #ffc107;
-            color: #212529;
-            padding: 0.35em 0.65em;
-            font-size: 0.75em;
-            font-weight: 700;
-            border-radius: 0.25rem;
-        }
-        
-        .badge-category-iii {
-            background-color: #dc3545;
-            color: white;
-            padding: 0.35em 0.65em;
-            font-size: 0.75em;
-            font-weight: 700;
-            border-radius: 0.25rem;
-        }
-        
-        .footer {
-            background-color: white;
-            padding: 1rem 0;
-            margin-top: auto;
-            border-top: 1px solid rgba(0, 0, 0, 0.05);
-        }
-        
-        /* Notification Dropdown Styles */
-        .notification-dropdown {
-            min-width: 320px;
-            max-width: 320px;
-            max-height: 400px;
-            overflow-y: auto;
-            padding: 0;
-        }
-        
-        .dropdown-header {
-            background-color: #f8f9fa;
-            padding: 0.75rem 1rem;
-            font-weight: 600;
-            border-bottom: 1px solid rgba(0, 0, 0, 0.05);
-        }
-        
-        .dropdown-footer {
-            background-color: #f8f9fa;
-            padding: 0.75rem 1rem;
-            text-align: center;
-            font-weight: 500;
-            border-top: 1px solid rgba(0, 0, 0, 0.05);
-        }
-        
-        .notification-item {
-            padding: 0.75rem 1rem;
-            border-bottom: 1px solid rgba(0, 0, 0, 0.05);
-            transition: background-color 0.2s;
-        }
-        
-        .notification-item:hover {
-            background-color: rgba(var(--bs-primary-rgb), 0.03);
-        }
-        
-        .notification-item.unread {
-            background-color: rgba(var(--bs-primary-rgb), 0.05);
-        }
-        
-        .notification-icon {
-            width: 36px;
-            height: 36px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
+        .legend-dot {
+            width: 10px;
+            height: 10px;
             border-radius: 50%;
             flex-shrink: 0;
         }
         
-        .notification-icon.info { background-color: rgba(13, 202, 240, 0.2); color: #0dcaf0; }
-        .notification-icon.warning { background-color: rgba(255, 193, 7, 0.2); color: #ffc107; }
-        .notification-icon.danger { background-color: rgba(220, 53, 69, 0.2); color: #dc3545; }
-        .notification-icon.success { background-color: rgba(25, 135, 84, 0.2); color: #198754; }
-        
-        .notification-content {
-            margin-left: 0.75rem;
+        .legend-item-label {
+            flex: 1;
+            color: var(--gray-700);
+            white-space: nowrap;
             overflow: hidden;
+            text-overflow: ellipsis;
         }
         
-        .notification-title {
+        .legend-item-value {
             font-weight: 600;
-            margin-bottom: 0.25rem;
-            white-space: nowrap;
+            color: var(--gray-800);
+            background: var(--gray-100);
+            padding: 0.1rem 0.4rem;
+            border-radius: 4px;
+            font-size: 0.8rem;
+        }
+        
+        /* Right sidebar - properly sized */
+        .data-sidebar {
+            width: 340px;
+            background: white;
+            border-left: 1px solid var(--gray-200);
+            display: flex;
+            flex-direction: column;
             overflow: hidden;
-            text-overflow: ellipsis;
+            flex-shrink: 0;
+            transition: width 0.2s, opacity 0.2s;
         }
         
-        .notification-message {
-            font-size: 0.875rem;
-            color: #6c757d;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
+        .data-sidebar.collapsed {
+            width: 0;
+            opacity: 0;
+            border-left: none;
         }
         
-        .notification-time {
-            font-size: 0.75rem;
-            color: #6c757d;
-        }
-        
-        .badge-counter {
+        .sidebar-toggle {
             position: absolute;
-            top: 0px;
-            right: 0px;
-            transform: translate(25%, -25%);
+            right: 340px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 24px;
+            height: 48px;
+            background: white;
+            border: 1px solid var(--gray-200);
+            border-right: none;
+            border-radius: 6px 0 0 6px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--gray-500);
+            z-index: 100;
+            transition: right 0.2s;
+        }
+        
+        .sidebar-toggle:hover { 
+            color: var(--primary); 
+            background: var(--gray-50); 
+        }
+        
+        .sidebar-toggle.collapsed {
+            right: 0;
+        }
+        
+        .data-section {
+            border-bottom: 1px solid var(--gray-200);
+        }
+        
+        .data-section:last-child { border-bottom: none; }
+        
+        .data-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.75rem 1rem;
+            background: var(--gray-50);
+            cursor: pointer;
+            user-select: none;
+        }
+        
+        .data-header:hover { background: var(--gray-100); }
+        
+        .data-header h6 {
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--gray-700);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin: 0;
+        }
+        
+        .data-header i.toggle-icon {
+            font-size: 0.85rem;
+            color: var(--gray-400);
+            transition: transform 0.2s;
+        }
+        
+        .data-body {
+            padding: 0.75rem 1rem;
+            overflow-y: auto;
+        }
+        
+        .data-body.collapsed { display: none; }
+        
+        /* Larger stat cards */
+        .stat-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.75rem;
+        }
+        
+        .stat-card {
+            background: var(--gray-50);
+            border-radius: 8px;
+            padding: 0.75rem;
+            text-align: center;
+        }
+        
+        .stat-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--gray-800);
+        }
+        
+        .stat-label {
+            font-size: 0.75rem;
+            color: var(--gray-500);
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+            margin-top: 0.25rem;
+        }
+        
+        .stat-card.primary .stat-value { color: var(--primary); }
+        .stat-card.danger .stat-value { color: var(--danger); }
+        .stat-card.warning .stat-value { color: var(--warning); }
+        .stat-card.success .stat-value { color: var(--success); }
+        
+        /* Better table styling */
+        .data-table {
+            width: 100%;
+            font-size: 0.85rem;
+        }
+        
+        .data-table th {
+            text-align: left;
+            font-weight: 600;
+            color: var(--gray-500);
+            padding: 0.5rem 0.5rem;
+            border-bottom: 2px solid var(--gray-200);
+            text-transform: uppercase;
+            font-size: 0.7rem;
+            letter-spacing: 0.5px;
+        }
+        
+        .data-table td {
+            padding: 0.5rem 0.5rem;
+            border-bottom: 1px solid var(--gray-100);
+            color: var(--gray-700);
+        }
+        
+        .data-table tbody tr {
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+        
+        .data-table tbody tr:hover td { background: var(--gray-50); }
+        
+        .badge {
+            padding: 0.2rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.7rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        
+        .badge-critical { background: #fef2f2; color: #991b1b; }
+        .badge-high { background: #fff7ed; color: #9a3412; }
+        .badge-medium { background: #fefce8; color: #854d0e; }
+        .badge-low { background: #f0fdf4; color: #166534; }
+        
+        /* Map controls */
+        .map-controls {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            display: flex;
+            gap: 0.5rem;
+            z-index: 1000;
+        }
+        
+        .map-control-btn {
+            padding: 0.5rem 0.85rem;
+            font-size: 0.85rem;
+            font-weight: 500;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            background: white;
+            color: var(--gray-700);
+            box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+            display: flex;
+            align-items: center;
+            gap: 0.35rem;
+            transition: all 0.15s;
+        }
+        
+        .map-control-btn:hover { background: var(--gray-50); }
+        .map-control-btn.active { background: var(--primary); color: white; }
+        .map-control-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            pointer-events: none;
+        }
+        
+        /* Case count badge */
+        .case-count-badge {
+            background: var(--gray-100);
+            color: var(--gray-600);
+            padding: 0.25rem 0.6rem;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 500;
+        }
+        
+        /* Responsive */
+        @media (max-width: 1024px) {
+            .main-wrapper {
+                margin-left: 0;
+            }
+            .data-sidebar {
+                position: absolute;
+                right: 0;
+                top: 0;
+                bottom: 0;
+                z-index: 200;
+                box-shadow: -4px 0 12px rgba(0,0,0,0.1);
+            }
+            .sidebar-toggle {
+                right: 0;
+            }
+            .sidebar-toggle:not(.collapsed) {
+                right: 340px;
+            }
         }
         
         @media (max-width: 768px) {
-            .geomapping-container {
-                padding: 1rem;
+            .filters-bar {
+                padding: 0.5rem;
+                gap: 0.5rem;
             }
-            
-            .content-card-header, .content-card-body {
-                padding: 1rem;
-            }
-            
-            .filter-form {
-                padding: 1rem;
-            }
-            
-            #map {
-                height: 400px;
-            }
+            .filter-item label { display: none; }
+            .data-sidebar { width: 100%; }
         }
     </style>
 </head>
 <body>
+    <!-- Navbar sits above the geomapping workspace -->
     <?php include 'includes/navbar.php'; ?>
-    <div class="geomapping-container">
-        <div class="d-flex justify-content-between align-items-center mb-3">
-            <div>
-                <h2 class="mb-1">Geomapping Analysis</h2>
-                <p class="text-muted mb-0">Visualize animal bite cases by location for better decision making</p>
+    
+    <div class="page-wrapper">
+        <div class="main-wrapper">
+        <!-- Filters bar with title -->
+        <form method="GET" action="geomapping.php" class="filters-bar">
+            <div class="page-title">
+                <i class="bi bi-geo-alt-fill"></i>
+                Geomapping
+                <span class="case-count-badge"><?= number_format(count($cases)) ?> cases</span>
             </div>
-            <div>
-                <a href="#" class="btn btn-primary" onclick="printMap()">
-                    <i class="bi bi-printer me-2"></i>Print Map
+            
+            <div class="filter-group">
+                <div class="filter-item">
+                    <label>From</label>
+                    <input type="date" name="date_from" value="<?= htmlspecialchars($dateFrom) ?>">
+                </div>
+                <div class="filter-item">
+                    <label>To</label>
+                    <input type="date" name="date_to" value="<?= htmlspecialchars($dateTo) ?>">
+                </div>
+                <div class="filter-item">
+                    <label>Animal</label>
+                    <select name="animal_type">
+                        <option value="">All Animals</option>
+                        <?php foreach ($animalTypes as $type): ?>
+                            <option value="<?= htmlspecialchars($type) ?>" <?= $animalType === $type ? 'selected' : '' ?>>
+                                <?= htmlspecialchars($type) ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="filter-item">
+                    <label>Category</label>
+                    <select name="bite_category">
+                        <option value="">All Categories</option>
+                        <option value="Category I" <?= $biteCategory === 'Category I' ? 'selected' : '' ?>>Category I</option>
+                        <option value="Category II" <?= $biteCategory === 'Category II' ? 'selected' : '' ?>>Category II</option>
+                        <option value="Category III" <?= $biteCategory === 'Category III' ? 'selected' : '' ?>>Category III</option>
+                    </select>
+                </div>
+                <div class="filter-item">
+                    <label>Status</label>
+                    <select name="status">
+                        <option value="">All Status</option>
+                        <option value="Active" <?= $status === 'Active' ? 'selected' : '' ?>>Active</option>
+                        <option value="Completed" <?= $status === 'Completed' ? 'selected' : '' ?>>Completed</option>
+                        <option value="Pending" <?= $status === 'Pending' ? 'selected' : '' ?>>Pending</option>
+                    </select>
+                </div>
+                <button type="submit" class="filter-btn filter-btn-primary">
+                    <i class="bi bi-search"></i> Apply
+                </button>
+                <a href="geomapping.php" class="filter-btn filter-btn-secondary">
+                    <i class="bi bi-x-lg"></i> Clear
                 </a>
             </div>
-        </div>
+        </form>
         
-        <div class="content-card compact-card control-hub-card">
-            <div class="content-card-header" data-bs-toggle="collapse" data-bs-target="#controlHubCollapse" aria-expanded="true" style="cursor: pointer;">
-                <h5 class="mb-0"><i class="bi bi-sliders me-2"></i>Filters & Search</h5>
-                <i class="bi bi-chevron-down"></i>
-            </div>
-            <div class="content-card-body collapse show" id="controlHubCollapse">
-                <div class="control-hub-layout">
-                    <form method="GET" action="geomapping.php">
-                        <h6 class="text-muted text-uppercase mb-3 small">Filters</h6>
-                        <div class="filters-grid">
-                            <div>
-                                <label for="date_from" class="form-label">Date From</label>
-                                <input type="date" class="form-control" id="date_from" name="date_from" value="<?php echo htmlspecialchars($dateFrom); ?>">
-                            </div>
-                            
-                            <div>
-                                <label for="date_to" class="form-label">Date To</label>
-                                <input type="date" class="form-control" id="date_to" name="date_to" value="<?php echo htmlspecialchars($dateTo); ?>">
-                            </div>
-                            
-                            <div>
-                                <label for="animal_type" class="form-label">Animal Type</label>
-                                <select class="form-select" id="animal_type" name="animal_type">
-                                    <option value="">All Types</option>
-                                    <?php foreach ($animalTypes as $type): ?>
-                                    <option value="<?php echo htmlspecialchars($type); ?>" <?php echo $animalType === $type ? 'selected' : ''; ?>>
-                                        <?php echo htmlspecialchars($type); ?>
-                                    </option>
-                                    <?php endforeach; ?>
-                                </select>
-                            </div>
-                            
-                            <div>
-                                <label for="bite_category" class="form-label">Bite Category</label>
-                                <select class="form-select" id="bite_category" name="bite_category">
-                                    <option value="">All Categories</option>
-                                    <option value="Category I" <?php echo $biteCategory === 'Category I' ? 'selected' : ''; ?>>Category I</option>
-                                    <option value="Category II" <?php echo $biteCategory === 'Category II' ? 'selected' : ''; ?>>Category II</option>
-                                    <option value="Category III" <?php echo $biteCategory === 'Category III' ? 'selected' : ''; ?>>Category III</option>
-                                </select>
-                            </div>
-                            
-                            <div>
-                                <label for="status" class="form-label">Status</label>
-                                <select class="form-select" id="status" name="status">
-                                    <option value="">All Statuses</option>
-                                    <option value="pending" <?php echo $status === 'pending' ? 'selected' : ''; ?>>Pending</option>
-                                    <option value="in_progress" <?php echo $status === 'in_progress' ? 'selected' : ''; ?>>In Progress</option>
-                                    <option value="completed" <?php echo $status === 'completed' ? 'selected' : ''; ?>>Completed</option>
-                                    <option value="cancelled" <?php echo $status === 'cancelled' ? 'selected' : ''; ?>>Cancelled</option>
-                                </select>
-                            </div>
+        <!-- Main content area -->
+        <div class="content-area">
+            <!-- Map container -->
+            <div class="map-container">
+                <div id="map"></div>
+                
+                <!-- Map controls -->
+                <div class="map-controls">
+                    <button type="button" class="map-control-btn active" id="heatmapBtn" onclick="showHeatmap()">
+                        <i class="bi bi-fire"></i> Heatmap
+                    </button>
+                    <button type="button" class="map-control-btn" id="markersBtn" onclick="showMarkers()">
+                        <i class="bi bi-geo-alt"></i> Markers
+                    </button>
+                </div>
+                
+                <!-- Legend -->
+                <div class="map-legend" id="mapLegend">
+                    <div class="legend-header">
+                        <div class="legend-title">
+                            <i class="bi bi-layers-fill"></i> Heat Legend
                         </div>
-                        <div class="filters-actions mt-3">
-                            <a href="geomapping.php" class="btn btn-outline-secondary">Reset Filters</a>
-                            <button type="submit" class="btn btn-primary">Apply Filters</button>
-                        </div>
-                    </form>
-                    
-                    <div class="search-panel">
-                        <h6 class="text-muted text-uppercase mb-3 small">Search Location</h6>
-                        <label for="location_dropdown" class="form-label">Select a barangay in Talisay City</label>
-                        <select class="form-select mb-3" id="location_dropdown">
-                            <option value="">Choose a location...</option>
-                            <?php foreach ($barangays as $barangay): ?>
-                            <option value="<?php echo htmlspecialchars($barangay); ?>">
-                                <?php echo htmlspecialchars($barangay); ?>
-                            </option>
-                            <?php endforeach; ?>
-                        </select>
-                        <div class="form-text mb-3">
-                            <i class="bi bi-info-circle me-1"></i>Select a location to zoom and highlight it on the map.
-                        </div>
-                        <button class="btn btn-outline-secondary w-100" type="button" id="show_all_locations">
-                            <i class="bi bi-globe"></i> Show All Locations
+                        <button type="button" class="legend-toggle" onclick="toggleLegend()">
+                            <i class="bi bi-chevron-down" id="legendToggleIcon"></i>
                         </button>
                     </div>
-                </div>
-            </div>
-        </div>
-        
-        <!-- Statistics Cards Row -->
-        <div class="content-card mb-4">
-            <div class="content-card-header" data-bs-toggle="collapse" data-bs-target="#statsCollapse" aria-expanded="true" style="cursor: pointer;">
-                <h5 class="mb-0"><i class="bi bi-bar-chart-line me-2"></i>Statistics Overview</h5>
-                <i class="bi bi-chevron-down"></i>
-            </div>
-            <div class="content-card-body collapse show" id="statsCollapse">
-                <div class="stats-grid">
-                    <div class="stats-card">
-                        <div class="d-flex justify-content-between align-items-center">
-                            <div>
-                                <h6 class="text-uppercase text-muted mb-1">Total Cases</h6>
-                                <div class="stats-number"><?php echo $totalCases; ?></div>
-                                <p class="text-muted mb-0 small">In selected period</p>
-                            </div>
-                            <div class="card-icon">
-                                <i class="bi bi-file-earmark-text"></i>
+                    <div class="legend-body" id="legendBody">
+                        <div class="legend-section">
+                            <div class="legend-section-title">Intensity Scale</div>
+                            <div class="legend-gradient"></div>
+                            <div class="legend-labels">
+                                <span>Low (1-<?= ceil($maxCount * 0.25) ?>)</span>
+                                <span>High (<?= ceil($maxCount * 0.75) ?>+)</span>
                             </div>
                         </div>
-                    </div>
-                    
-                    <div class="stats-card">
-                        <div class="d-flex justify-content-between align-items-center">
-                            <div>
-                                <h6 class="text-uppercase text-muted mb-1">Hotspot Areas</h6>
-                                <div class="stats-number"><?php echo count($heatmapData) > 0 ? count($heatmapData) : 0; ?></div>
-                                <p class="text-muted mb-0 small">Affected barangays</p>
-                            </div>
-                            <div class="card-icon">
-                                <i class="bi bi-geo-alt"></i>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="stats-card">
-                        <div class="d-flex justify-content-between align-items-center">
-                            <div>
-                                <h6 class="text-uppercase text-muted mb-1">Highest Concentration</h6>
-                                <div class="stats-number">
-                                    <?php 
-                                        echo count($heatmapData) > 0 ? $heatmapData[0]['case_count'] : 0; 
-                                    ?>
-                                </div>
-                                <p class="text-muted mb-0 small">
-                                    <?php 
-                                        echo count($heatmapData) > 0 ? htmlspecialchars($heatmapData[0]['barangay']) : 'N/A'; 
-                                    ?>
-                                </p>
-                            </div>
-                            <div class="card-icon">
-                                <i class="bi bi-exclamation-triangle"></i>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-        
-        <!-- Map Section -->
-        <div class="content-card mb-4">
-            <div class="content-card-header">
-                <h5 class="mb-0"><i class="bi bi-geo-alt me-2"></i>Animal Bite Cases Heatmap</h5>
-                <div class="btn-group">
-                    <button type="button" class="btn btn-sm btn-outline-primary" id="heatmapView">Heatmap</button>
-                    <button type="button" class="btn btn-sm btn-outline-primary" id="markerView">Markers</button>
-                </div>
-            </div>
-            <div class="content-card-body p-0">
-                <div id="map"></div>
-            </div>
-        </div>
-        
-        <!-- Top Affected Areas -->
-        <div class="content-card">
-            <div class="content-card-header" data-bs-toggle="collapse" data-bs-target="#topAffectedCollapse" aria-expanded="true" style="cursor: pointer;">
-                <h5 class="mb-0"><i class="bi bi-bar-chart me-2"></i>Top Affected Areas</h5>
-                <i class="bi bi-chevron-down"></i>
-            </div>
-            <div class="content-card-body collapse show" id="topAffectedCollapse">
-                <?php if (count($heatmapData) > 0): ?>
-                <div class="table-responsive">
-                    <table class="table table-hover">
-                        <thead>
-                            <tr>
-                                <th>Rank</th>
-                                <th>Barangay</th>
-                                <th>Number of Cases</th>
-                                <th>Percentage</th>
-                                <th>Action</th>
-                            </tr>
-                        </thead>
-                        <tbody>
+                        <div class="legend-section">
+                            <div class="legend-section-title">Top Affected Areas</div>
                             <?php 
-                            $rank = 1;
-                            foreach ($heatmapData as $data): 
-                                $percentage = $totalCases > 0 ? round(($data['case_count'] / $totalCases) * 100, 1) : 0;
+                            $topAreas = array_slice($barangayCounts, 0, 5);
+                            foreach ($topAreas as $area): 
+                                $ratio = $maxCount > 0 ? $area['count'] / $maxCount : 0;
+                                if ($ratio >= 0.75) { $color = '#dc2626'; }
+                                elseif ($ratio >= 0.5) { $color = '#f97316'; }
+                                elseif ($ratio >= 0.25) { $color = '#facc15'; }
+                                else { $color = '#22c55e'; }
                             ?>
-                            <tr>
-                                <td><?php echo $rank++; ?></td>
-                                <td><?php echo htmlspecialchars($data['barangay']); ?></td>
-                                <td><?php echo $data['case_count']; ?></td>
-                                <td><?php echo $percentage; ?>%</td>
-                                <td>
-                                    <a href="view_reports.php?barangay=<?php echo urlencode($data['barangay']); ?>" class="btn btn-sm btn-outline-primary">
-                                        View Reports
-                                    </a>
-                                </td>
-                            </tr>
+                            <div class="legend-item" onclick="focusLocation('<?= htmlspecialchars($area['barangay']) ?>')">
+                                <div class="legend-dot" style="background: <?= $color ?>"></div>
+                                <span class="legend-item-label"><?= htmlspecialchars($area['barangay']) ?></span>
+                                <span class="legend-item-value"><?= $area['count'] ?></span>
+                            </div>
                             <?php endforeach; ?>
-                        </tbody>
-                    </table>
+                            <?php if (empty($topAreas)): ?>
+                            <div style="color: var(--gray-500); font-size: 0.8rem; padding: 0.5rem 0;">No data available</div>
+                            <?php endif; ?>
+                        </div>
+                    </div>
                 </div>
-                <?php else: ?>
-                <div class="alert alert-info">
-                    No data available for the selected filters.
+                
+                <!-- Sidebar toggle button -->
+                <button type="button" class="sidebar-toggle" id="sidebarToggle" onclick="toggleSidebar()">
+                    <i class="bi bi-chevron-right" id="sidebarToggleIcon"></i>
+                </button>
+            </div>
+            
+            <!-- Data sidebar -->
+            <div class="data-sidebar" id="dataSidebar">
+                <!-- Stats Section -->
+                <div class="data-section">
+                    <div class="data-header" onclick="toggleSection(this)">
+                        <h6><i class="bi bi-bar-chart-fill"></i> Statistics</h6>
+                        <i class="bi bi-chevron-down toggle-icon"></i>
+                    </div>
+                    <div class="data-body">
+                        <div class="stat-grid">
+                            <div class="stat-card primary">
+                                <div class="stat-value"><?= number_format(count($cases)) ?></div>
+                                <div class="stat-label">Total Cases</div>
+                            </div>
+                            <div class="stat-card danger">
+                                <div class="stat-value"><?= count($barangayCounts) ?></div>
+                                <div class="stat-label">Hotspots</div>
+                            </div>
+                            <div class="stat-card warning">
+                                <div class="stat-value"><?= $maxCount ?></div>
+                                <div class="stat-label">Highest Count</div>
+                            </div>
+                            <div class="stat-card success">
+                                <div class="stat-value"><?= count($animalTypes) ?></div>
+                                <div class="stat-label">Animal Types</div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
-                <?php endif; ?>
-            </div>
-        </div>
-        
-        <!-- Recent Cases -->
-        <div class="content-card">
-            <div class="content-card-header" data-bs-toggle="collapse" data-bs-target="#recentCasesCollapse" aria-expanded="false" style="cursor: pointer;">
-                <h5 class="mb-0"><i class="bi bi-clock-history me-2"></i>Recent Cases</h5>
-                <i class="bi bi-chevron-down"></i>
-            </div>
-            <div class="content-card-body collapse" id="recentCasesCollapse">
-                <?php if (count($recentCases) > 0): ?>
-                <div class="table-responsive">
-                    <table class="table table-hover">
-                        <thead>
-                            <tr>
-                                <th>ID</th>
-                                <th>Patient</th>
-                                <th>Barangay</th>
-                                <th>Animal</th>
-                                <th>Category</th>
-                                <th>Report Date</th>
-                                <th>Action</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <?php foreach ($recentCases as $case): ?>
-                            <tr>
-                                <td><?php echo $case['reportId']; ?></td>
-                                <td><?php echo htmlspecialchars($case['patientName']); ?></td>
-                                <td><?php echo htmlspecialchars($case['barangay']); ?></td>
-                                <td><?php echo htmlspecialchars($case['animalType']); ?></td>
-                                <td>
-                                    <?php 
-                                        $biteType = $case['biteType'];
-                                        $biteTypeClass = 'badge-' . strtolower(str_replace(' ', '-', $biteType));
-                                        echo '<span class="badge ' . $biteTypeClass . '">' . $biteType . '</span>';
-                                    ?>
-                                </td>
-                                <td><?php echo date('M d, Y', strtotime($case['biteDate'])); ?></td>
-                                <td>
-                                    <a href="view_report.php?id=<?php echo $case['reportId']; ?>" class="btn btn-sm btn-outline-primary">
-                                        View
-                                    </a>
-                                </td>
-                            </tr>
-                            <?php endforeach; ?>
-                        </tbody>
-                    </table>
+                
+                <!-- Affected Areas -->
+                <div class="data-section" style="flex: 1; overflow: hidden; display: flex; flex-direction: column;">
+                    <div class="data-header" onclick="toggleSection(this)">
+                        <h6><i class="bi bi-geo-fill"></i> Affected Areas</h6>
+                        <i class="bi bi-chevron-down toggle-icon"></i>
+                    </div>
+                    <div class="data-body" style="flex: 1; overflow-y: auto;">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Barangay</th>
+                                    <th>Cases</th>
+                                    <th>Risk</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php foreach ($barangayCounts as $area): 
+                                    $ratio = $maxCount > 0 ? $area['count'] / $maxCount : 0;
+                                    if ($ratio >= 0.75) { $risk = 'critical'; $riskLabel = 'Critical'; }
+                                    elseif ($ratio >= 0.5) { $risk = 'high'; $riskLabel = 'High'; }
+                                    elseif ($ratio >= 0.25) { $risk = 'medium'; $riskLabel = 'Medium'; }
+                                    else { $risk = 'low'; $riskLabel = 'Low'; }
+                                ?>
+                                <tr onclick="focusLocation('<?= htmlspecialchars($area['barangay']) ?>')">
+                                    <td><?= htmlspecialchars($area['barangay']) ?></td>
+                                    <td><strong><?= $area['count'] ?></strong></td>
+                                    <td><span class="badge badge-<?= $risk ?>"><?= $riskLabel ?></span></td>
+                                </tr>
+                                <?php endforeach; ?>
+                                <?php if (empty($barangayCounts)): ?>
+                                <tr><td colspan="3" style="text-align: center; color: var(--gray-500);">No data</td></tr>
+                                <?php endif; ?>
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
-                <?php else: ?>
-                <div class="alert alert-info">
-                    No recent cases available for the selected filters.
-                </div>
-                <?php endif; ?>
-            </div>
-        </div>
-        
-        <div class="content-card">
-            <div class="content-card-header" data-bs-toggle="collapse" data-bs-target="#recommendationsCollapse" aria-expanded="false" style="cursor: pointer;">
-                <h5 class="mb-0"><i class="bi bi-lightbulb me-2"></i>Recommendations</h5>
-                <i class="bi bi-chevron-down"></i>
-            </div>
-            <div class="content-card-body collapse" id="recommendationsCollapse">
-                <div class="alert alert-primary">
-                    <h5><i class="bi bi-info-circle me-2"></i>Decision Support Recommendations</h5>
-                    <p>Based on the current data analysis, here are some recommendations:</p>
-                    <ul>
-                        <?php if (count($heatmapData) > 0): ?>
-                        <li><strong>Focus Areas:</strong> Prioritize resources in <?php echo htmlspecialchars($heatmapData[0]['barangay']); ?> where the highest concentration of cases is reported.</li>
-                        <?php endif; ?>
-                        <li><strong>Public Awareness:</strong> Conduct educational campaigns in high-risk areas about animal bite prevention.</li>
-                        <li><strong>Vaccination Drives:</strong> Organize pet vaccination drives in areas with high incidence rates.</li>
-                        <li><strong>Mobile Clinics:</strong> Deploy mobile treatment units to areas with limited access to healthcare facilities.</li>
-                        <li><strong>Follow-up:</strong> Ensure proper follow-up for all Category III cases to prevent complications.</li>
-                    </ul>
+                
+                <!-- Recent Cases -->
+                <div class="data-section" style="max-height: 220px; display: flex; flex-direction: column;">
+                    <div class="data-header" onclick="toggleSection(this)">
+                        <h6><i class="bi bi-clock-history"></i> Recent Cases</h6>
+                        <i class="bi bi-chevron-down toggle-icon"></i>
+                    </div>
+                    <div class="data-body" style="flex: 1; overflow-y: auto;">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Location</th>
+                                    <th>Animal</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php foreach ($recentCases as $case): ?>
+                                <tr>
+                                    <td><?= date('M j', strtotime($case['biteDate'])) ?></td>
+                                    <td><?= htmlspecialchars($case['barangay'] ?? 'N/A') ?></td>
+                                    <td><?= htmlspecialchars($case['animalType'] ?? 'N/A') ?></td>
+                                </tr>
+                                <?php endforeach; ?>
+                                <?php if (empty($recentCases)): ?>
+                                <tr><td colspan="3" style="text-align: center; color: var(--gray-500);">No recent cases</td></tr>
+                                <?php endif; ?>
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
+</div>
 
-    <footer class="footer">
-        <div class="container">
-            <div class="d-flex justify-content-between align-items-center">
-                <div>
-                    <small class="text-muted">&copy; <?php echo date('Y'); ?> Barangay Health Workers Management System</small>
-                </div>
-                <div>
-                    <small><a href="help.php" class="text-decoration-none">Help & Support</a></small>
-                </div>
-            </div>
-        </div>
-    </footer>
-
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-    <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
-    <script src="https://unpkg.com/leaflet.markercluster@1.4.1/dist/leaflet.markercluster.js"></script>
-    
-    <script>
-        // Talisay City boundaries (adjusted to include all barangays)
-        var talisayBounds = L.latLngBounds(
-            [10.6500, 122.9000], // Southwest corner
-            [10.8500, 123.2000]  // Northeast corner (expanded to include Katilingban)
-        );
-        
-        var map = L.map('map', {
-            maxBounds: talisayBounds,
-            maxBoundsViscosity: 1.0, // Prevent panning outside bounds
-            minZoom: 12, // Minimum zoom level to keep city in view
-            maxZoom: 18  // Maximum zoom level for detail
-        }).setView([<?php echo $centerLat; ?>, <?php echo $centerLng; ?>], 14);
+<script>
+        // Initialize map with center coordinates from PHP
+        const centerLat = <?= $centerLat ?>;
+        const centerLng = <?= $centerLng ?>;
+        const map = L.map('map').setView([centerLat, centerLng], 13);
+        const heatmapBtnEl = document.getElementById('heatmapBtn');
+        const markersBtnEl = document.getElementById('markersBtn');
         
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+            attribution: '&copy; OpenStreetMap contributors'
         }).addTo(map);
         
-        var heatData = <?php echo json_encode($jsHeatmapData); ?>;
-        console.log('Heatmap Data:', heatData); 
+        // Data from PHP
+        const cases = <?= json_encode($cases) ?>;
+        const heatmapData = <?= json_encode($jsHeatmapData) ?>;
+        const barangayCoords = <?= json_encode($barangayCoordinates) ?>;
+        const maxCount = <?= (int)$maxCount ?> || 1;
         
-        var heatPoints = [];
-        var markers = L.markerClusterGroup();
-        var searchMarker = null; // Marker for selected location
-
-        heatData.forEach(function(point) {
-            var intensity = Math.min(point.count / 2, 1); 
-            heatPoints.push([point.lat, point.lng, intensity]);
-            console.log('Adding point:', point.barangay, 'with intensity:', intensity); 
-
-            var marker = L.marker([point.lat, point.lng])
-                .bindPopup('<strong>' + point.barangay + '</strong><br>Cases: ' + point.count);
+        // Layers
+        let heatLayer = null;
+        let markersLayer = L.layerGroup();
+        const markerPoints = [];
+        
+        // Create heatmap from case coordinates
+        const heatPoints = heatmapData
+            .filter(point => point.lat && point.lng)
+            .map(point => [
+                parseFloat(point.lat),
+                parseFloat(point.lng),
+                Math.max(point.count / maxCount, 0.2)
+            ]);
+        
+        let dataBounds = null;
+        
+        if (heatPoints.length > 0) {
+            heatLayer = L.heatLayer(heatPoints, {
+                radius: 30,
+                blur: 20,
+                maxZoom: 17,
+                gradient: {0.2: '#22c55e', 0.4: '#facc15', 0.6: '#f97316', 0.8: '#ef4444', 1: '#7f1d1d'}
+            }).addTo(map);
             
-            markers.addLayer(marker);
-        });
-        
-        var heat = L.heatLayer(heatPoints, {
-            radius: 50, 
-            blur: 25,   
-            maxZoom: 18,
-            minOpacity: 0.6,
-            gradient: {
-                0.4: 'blue',
-                0.6: 'lime',
-                0.8: 'yellow',
-                1.0: 'red'
-            }
-        }).addTo(map);
-        
-        map.addLayer(heat);
-        map.addLayer(markers);
-        
-        document.getElementById('heatmapView').addEventListener('click', function() {
-            map.removeLayer(markers);
-            map.addLayer(heat);
-            this.classList.remove('btn-outline-primary');
-            this.classList.add('btn-primary');
-            document.getElementById('markerView').classList.remove('btn-primary');
-            document.getElementById('markerView').classList.add('btn-outline-primary');
-        });
-        
-        document.getElementById('markerView').addEventListener('click', function() {
-            map.removeLayer(heat);
-            map.addLayer(markers);
-            this.classList.remove('btn-outline-primary');
-            this.classList.add('btn-primary');
-            document.getElementById('heatmapView').classList.remove('btn-primary');
-            document.getElementById('heatmapView').classList.add('btn-outline-primary');
-        });
-        
-        // Initialize button states - hide markers by default
-        document.getElementById('heatmapView').classList.remove('btn-outline-primary');
-        document.getElementById('heatmapView').classList.add('btn-primary');
-        document.getElementById('markerView').classList.remove('btn-primary');
-        document.getElementById('markerView').classList.add('btn-outline-primary');
-        map.removeLayer(markers);
-        
-        var legend = L.control({position: 'bottomright'});
-        
-        legend.onAdd = function (map) {
-            var div = L.DomUtil.create('div', 'legend');
-            div.innerHTML = '<h6>Case Density</h6>';
-            
-            var grades = [1, 5, 10, 20, 50];
-            var colors = ['blue', 'lime', 'yellow', 'orange', 'red'];
-            
-            for (var i = 0; i < grades.length; i++) {
-                div.innerHTML +=
-                    '<div class="legend-item">' +
-                    '<div class="legend-color" style="background:' + colors[i] + '"></div>' +
-                    (grades[i + 1] ? grades[i] + '&ndash;' + grades[i + 1] + ' cases' : grades[i] + '+ cases') +
-                    '</div>';
-            }
-            
-            return div;
-        };
-        
-        legend.addTo(map);
-        
-        // Add a subtle border to show Talisay City boundaries
-        var cityBorder = L.rectangle(talisayBounds, {
-            color: '#ff6b6b',
-            weight: 2,
-            opacity: 0.8,
-            fillColor: 'transparent',
-            fillOpacity: 0,
-            dashArray: '5, 5'
-        }).addTo(map);
-        
-        // Add a label for Talisay City
-        var cityLabel = L.marker([10.7500, 122.9500], {
-            icon: L.divIcon({
-                className: 'city-label',
-                html: '<div style="background-color: rgba(255, 107, 107, 0.9); color: white; padding: 5px 10px; border-radius: 15px; font-weight: bold; font-size: 12px; white-space: nowrap; box-shadow: 0 2px 5px rgba(0,0,0,0.3);">Talisay City</div>',
-                iconSize: [100, 30],
-                iconAnchor: [50, 15]
-            })
-        }).addTo(map);
-        
-        /**
-         * Print the current map view using the browser's print dialog.
-         * Minimal wrapper to allow future enhancements (e.g., hiding UI chrome).
-         */
-        function printMap() {
-            try {
-                window.print();
-            } catch (err) {
-                console.error('printMap error:', err);
-            }
+            dataBounds = L.latLngBounds(heatPoints.map(p => [p[0], p[1]]));
         }
         
-        // Location dropdown functionality
-        /**
-         * Highlight a specific barangay on the map with a distinct marker and popup.
-         * Returns true if the barangay was found in heat data; otherwise false.
-         *
-         * @param {string} barangay
-         * @returns {boolean}
-         */
-        function highlightLocation(barangay) {
-            try {
-                // Remove previous search marker
-                if (searchMarker) {
-                    map.removeLayer(searchMarker);
-                }
-                
-                if (!barangay) {
-                    return false;
-                }
-                
-                // Find the location in heatmap data
-                var foundLocation = heatData.find(function(point) {
-                    return point && typeof point.barangay === 'string' && point.barangay.toLowerCase() === String(barangay || '').toLowerCase();
+        // Create markers
+        cases.forEach(c => {
+            if (c.latitude && c.longitude) {
+                const lat = parseFloat(c.latitude);
+                const lng = parseFloat(c.longitude);
+                const marker = L.circleMarker([lat, lng], {
+                    radius: 7,
+                    fillColor: '#2563eb',
+                    color: '#1d4ed8',
+                    weight: 2,
+                    opacity: 1,
+                    fillOpacity: 0.7
                 });
-                
-                if (foundLocation) {
-                    // Create a special marker for the selected location
-                    var searchIcon = L.divIcon({
-                        className: 'search-marker',
-                        html: '<div style="background-color: #ff6b6b; color: white; border-radius: 50%; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; font-weight: bold; border: 3px solid white; box-shadow: 0 2px 10px rgba(0,0,0,0.3);">📍</div>',
-                        iconSize: [30, 30],
-                        iconAnchor: [15, 15]
-                    });
-                    
-                    searchMarker = L.marker([foundLocation.lat, foundLocation.lng], {icon: searchIcon})
-                        .bindPopup('<strong>📍 ' + foundLocation.barangay + '</strong><br>Cases: ' + foundLocation.count + '<br><small>Selected Location</small>')
-                        .addTo(map);
-                    
-                    // Zoom to the location (respecting min zoom level)
-                    var zoomLevel = Math.max(16, map.getMinZoom());
-                    map.setView([foundLocation.lat, foundLocation.lng], zoomLevel);
-                    
-                    // Open popup
-                    searchMarker.openPopup();
-                    
-                    return true;
-                }
-                return false;
-            } catch (err) {
-                console.error('highlightLocation error:', err);
-                return false;
-            }
-        }
-        
-        /**
-         * Clear any highlighted marker and reset the map to the city bounds.
-         * Also clears the dropdown selection.
-         */
-        function showAllLocations() {
-            try {
-                // Remove search marker
-                if (searchMarker) {
-                    map.removeLayer(searchMarker);
-                }
-                
-                // Reset view to show all locations (fit to Talisay City bounds)
-                map.fitBounds(talisayBounds, {padding: [20, 20]});
-                
-                // Clear dropdown
-                document.getElementById('location_dropdown').value = '';
-            } catch (err) {
-                console.error('showAllLocations error:', err);
-            }
-        }
-        
-        // Event listeners
-        document.getElementById('location_dropdown').addEventListener('change', function() {
-            try {
-                var selectedBarangay = this.value;
-                if (selectedBarangay) {
-                    highlightLocation(selectedBarangay);
-                } else {
-                    showAllLocations();
-                }
-            } catch (err) {
-                console.error('location_dropdown change error:', err);
+                markerPoints.push([lat, lng]);
+                marker.bindPopup(`
+                    <div style="font-size: 13px;">
+                        <strong style="font-size: 14px;">${c.barangay || 'Unknown Location'}</strong><br>
+                        <span style="color: #6b7280;">Animal:</span> ${c.animalType || 'N/A'}<br>
+                        <span style="color: #6b7280;">Category:</span> ${c.biteType || 'N/A'}<br>
+                        <span style="color: #6b7280;">Date:</span> ${c.biteDate || 'N/A'}
+                    </div>
+                `);
+                markersLayer.addLayer(marker);
             }
         });
         
-        document.getElementById('show_all_locations').addEventListener('click', function() {
-            try { 
-                showAllLocations(); 
-            } catch (err) { 
-                console.error('show_all_locations click error:', err); 
-            }
-        });
+        if (!dataBounds && markerPoints.length > 0) {
+            dataBounds = L.latLngBounds(markerPoints.map(p => [p[0], p[1]]));
+        }
         
-        // Add some CSS for the search marker and city label
-        var style = document.createElement('style');
-        style.textContent = `
-            .search-marker {
-                background: transparent !important;
-                border: none !important;
+        if (dataBounds) {
+            map.fitBounds(dataBounds, { padding: [50, 50] });
+        }
+        
+        if (!heatLayer && markerPoints.length > 0) {
+            showMarkers();
+            heatmapBtnEl.disabled = true;
+            heatmapBtnEl.title = 'No heatmap data available for current filters';
+        } else {
+            heatmapBtnEl.disabled = false;
+            heatmapBtnEl.title = '';
+        }
+        
+        // View toggle functions
+        function showHeatmap() {
+            if (!heatLayer) {
+                return;
             }
-            .city-label {
-                background: transparent !important;
-                border: none !important;
+            heatLayer.addTo(map);
+            map.removeLayer(markersLayer);
+            heatmapBtnEl.classList.add('active');
+            markersBtnEl.classList.remove('active');
+        }
+        
+        function showMarkers() {
+            if (heatLayer) map.removeLayer(heatLayer);
+            markersLayer.addTo(map);
+            markersBtnEl.classList.add('active');
+            heatmapBtnEl.classList.remove('active');
+        }
+        
+        // UI toggle functions
+        function toggleLegend() {
+            const body = document.getElementById('legendBody');
+            const icon = document.getElementById('legendToggleIcon');
+            body.classList.toggle('collapsed');
+            icon.className = body.classList.contains('collapsed') ? 'bi bi-chevron-up' : 'bi bi-chevron-down';
+        }
+        
+        function toggleSidebar() {
+            const sidebar = document.getElementById('dataSidebar');
+            const toggle = document.getElementById('sidebarToggle');
+            const icon = document.getElementById('sidebarToggleIcon');
+            sidebar.classList.toggle('collapsed');
+            toggle.classList.toggle('collapsed');
+            icon.className = sidebar.classList.contains('collapsed') ? 'bi bi-chevron-left' : 'bi bi-chevron-right';
+            setTimeout(() => map.invalidateSize(), 250);
+        }
+        
+        function toggleSection(header) {
+            const body = header.nextElementSibling;
+            const icon = header.querySelector('.toggle-icon');
+            body.classList.toggle('collapsed');
+            icon.style.transform = body.classList.contains('collapsed') ? 'rotate(-90deg)' : '';
+        }
+        
+        function focusLocation(barangay) {
+            // First try barangay coordinates
+            if (barangayCoords[barangay]) {
+                map.setView([barangayCoords[barangay].lat, barangayCoords[barangay].lng], 15);
+                return;
             }
-        `;
-        document.head.appendChild(style);
+            // Fallback to first case in that barangay
+            const location = cases.find(c => c.barangay === barangay && c.latitude && c.longitude);
+            if (location) {
+                map.setView([parseFloat(location.latitude), parseFloat(location.longitude)], 15);
+            }
+        }
     </script>
 </body>
 </html>

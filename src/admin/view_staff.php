@@ -75,324 +75,766 @@ $staffMembers = $stmt->fetchAll(PDO::FETCH_ASSOC);
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
     <style>
         :root {
-            --bs-primary: #0d6efd;
-            --bs-primary-rgb: 13, 110, 253;
-            --bs-secondary: #f8f9fa;
-            --bs-secondary-rgb: 248, 249, 250;
+            --primary: #2563eb;
+            --primary-dark: #1d4ed8;
+            --primary-light: #eff6ff;
+            --secondary: #64748b;
+            --success: #10b981;
+            --danger: #ef4444;
+            --warning: #f59e0b;
+            --bg: #f1f5f9;
+            --card-bg: #ffffff;
+            --text: #1e293b;
+            --text-muted: #64748b;
+            --border: #e2e8f0;
+            --shadow: 0 1px 3px rgba(0,0,0,0.08);
+            --shadow-md: 0 4px 12px rgba(0,0,0,0.1);
+            --radius: 8px;
+            --sidebar-width: 250px;
         }
+        
+        * { box-sizing: border-box; }
         
         body {
-            background-color: #f8f9fa;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            font-size: 14px;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.5;
         }
         
-        .navbar {
-            background-color: white;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+        .main-content {
+            margin-left: var(--sidebar-width);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
         }
         
-        .nav-link.active {
-            color: var(--bs-primary) !important;
-            font-weight: 500;
-        }
-        
-        .btn-primary {
-            background-color: var(--bs-primary);
-            border-color: var(--bs-primary);
-        }
-        
-        .btn-primary:hover {
-            background-color: #0b5ed7;
-            border-color: #0a58ca;
-        }
-        
-        .staff-container {
-            max-width: 1200px;
+        .page-container {
+            flex: 1;
+            padding: 24px;
+            max-width: 1400px;
+            width: 100%;
             margin: 0 auto;
-            padding: 2rem 1rem;
         }
         
+        /* Page Header */
         .page-header {
-            background-color: white;
-            border-radius: 10px;
-            padding: 1.5rem;
-            margin-bottom: 2rem;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            gap: 16px;
         }
         
-        .filter-card {
-            background-color: white;
-            border-radius: 10px;
-            padding: 1.5rem;
-            margin-bottom: 2rem;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
-        }
-        
-        .staff-table {
-            background-color: white;
-            border-radius: 10px;
-            overflow: hidden;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
-        }
-        
-        .table {
-            margin-bottom: 0;
-        }
-        
-        .table th {
-            background-color: rgba(var(--bs-primary-rgb), 0.05);
+        .page-header h1 {
+            font-size: 1.5rem;
             font-weight: 600;
-            border-top: none;
+            margin: 0;
+            color: var(--text);
         }
         
-        .table td {
-            vertical-align: middle;
+        .page-header p {
+            margin: 4px 0 0;
+            color: var(--text-muted);
+            font-size: 0.875rem;
         }
         
-        .btn-logout {
-            background-color: #dc3545;
-            color: white;
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 16px;
+            font-size: 0.875rem;
+            font-weight: 500;
+            border-radius: var(--radius);
             border: none;
-            padding: 0.5rem 1.25rem;
-            border-radius: 5px;
+            cursor: pointer;
+            text-decoration: none;
             transition: all 0.2s;
         }
         
-        .btn-logout:hover {
-            background-color: #bb2d3b;
+        .btn-primary {
+            background: var(--primary);
             color: white;
         }
         
-        .pagination {
-            margin-top: 1.5rem;
-            justify-content: center;
+        .btn-primary:hover {
+            background: var(--primary-dark);
+            color: white;
         }
         
-        .page-link {
-            color: var(--bs-primary);
-            border-radius: 0.25rem;
-            margin: 0 0.25rem;
+        .btn-outline {
+            background: white;
+            color: var(--text);
+            border: 1px solid var(--border);
         }
         
-        .page-item.active .page-link {
-            background-color: var(--bs-primary);
-            border-color: var(--bs-primary);
+        .btn-outline:hover {
+            background: var(--bg);
+            border-color: var(--secondary);
         }
         
-        .footer {
-            background-color: white;
-            padding: 1rem 0;
-            margin-top: 3rem;
-            border-top: 1px solid rgba(0, 0, 0, 0.05);
+        .btn-sm {
+            padding: 6px 10px;
+            font-size: 0.75rem;
         }
         
-        /* Notification Styles */
-        .notification-dropdown {
-            min-width: 320px;
-            max-width: 320px;
-            max-height: 400px;
-            overflow-y: auto;
+        .btn-danger {
+            background: var(--danger);
+            color: white;
+        }
+        
+        .btn-danger:hover {
+            background: #dc2626;
+            color: white;
+        }
+        
+        /* Alerts */
+        .alert {
+            padding: 12px 16px;
+            border-radius: var(--radius);
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 0.875rem;
+        }
+        
+        .alert-success {
+            background: #ecfdf5;
+            color: #065f46;
+            border: 1px solid #a7f3d0;
+        }
+        
+        .alert-danger {
+            background: #fef2f2;
+            color: #991b1b;
+            border: 1px solid #fecaca;
+        }
+        
+        .alert .btn-close {
+            margin-left: auto;
+            background: none;
+            border: none;
+            font-size: 1.25rem;
+            cursor: pointer;
+            opacity: 0.5;
             padding: 0;
         }
         
-        .notification-item {
-            border-left: 4px solid transparent;
-            transition: all 0.2s ease;
+        .alert .btn-close:hover {
+            opacity: 1;
         }
         
-        .notification-item.unread {
-            background-color: rgba(var(--bs-primary-rgb), 0.05);
+        /* Filter/Search Card */
+        .filter-card {
+            background: var(--card-bg);
+            border-radius: var(--radius);
+            padding: 16px 20px;
+            margin-bottom: 20px;
+            box-shadow: var(--shadow);
+            border: 1px solid var(--border);
         }
         
-        .notification-item:hover {
-            background-color: rgba(var(--bs-primary-rgb), 0.03);
+        .filter-form {
+            display: flex;
+            gap: 12px;
+            align-items: flex-end;
+            flex-wrap: wrap;
         }
         
-        .notification-icon {
-            width: 40px;
-            height: 40px;
+        .filter-form .form-group {
+            flex: 1;
+            min-width: 200px;
+        }
+        
+        .filter-form label {
+            display: block;
+            font-size: 0.75rem;
+            font-weight: 500;
+            color: var(--text-muted);
+            margin-bottom: 6px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .filter-form input {
+            width: 100%;
+            padding: 8px 12px;
+            font-size: 0.875rem;
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            background: white;
+            color: var(--text);
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+        
+        .filter-form input:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+        }
+        
+        .filter-actions {
+            display: flex;
+            gap: 8px;
+        }
+        
+        /* Stats Row */
+        .stats-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 16px;
+            margin-bottom: 20px;
+        }
+        
+        .stat-card {
+            background: var(--card-bg);
+            border-radius: var(--radius);
+            padding: 16px 20px;
+            box-shadow: var(--shadow);
+            border: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            gap: 14px;
+        }
+        
+        .stat-icon {
+            width: 44px;
+            height: 44px;
+            border-radius: var(--radius);
             display: flex;
             align-items: center;
             justify-content: center;
+            font-size: 1.25rem;
+        }
+        
+        .stat-icon.blue { background: var(--primary-light); color: var(--primary); }
+        .stat-icon.green { background: #ecfdf5; color: var(--success); }
+        .stat-icon.orange { background: #fffbeb; color: var(--warning); }
+        
+        .stat-info h3 {
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin: 0;
+            color: var(--text);
+        }
+        
+        .stat-info p {
+            margin: 0;
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        /* Table Card */
+        .table-card {
+            background: var(--card-bg);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+            border: 1px solid var(--border);
+            overflow: hidden;
+        }
+        
+        .table-wrapper {
+            overflow-x: auto;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        table th {
+            background: var(--bg);
+            padding: 12px 16px;
+            text-align: left;
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            border-bottom: 1px solid var(--border);
+            white-space: nowrap;
+        }
+        
+        table td {
+            padding: 14px 16px;
+            border-bottom: 1px solid var(--border);
+            font-size: 0.875rem;
+            color: var(--text);
+        }
+        
+        table tbody tr:last-child td {
+            border-bottom: none;
+        }
+        
+        table tbody tr:hover {
+            background: var(--primary-light);
+        }
+        
+        .staff-name {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .staff-avatar {
+            width: 36px;
+            height: 36px;
             border-radius: 50%;
+            background: var(--primary);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.875rem;
+            font-weight: 600;
+        }
+        
+        .staff-details {
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .staff-details span {
+            font-weight: 500;
+        }
+        
+        .staff-details small {
+            color: var(--text-muted);
+            font-size: 0.75rem;
+        }
+        
+        .actions-cell {
+            display: flex;
+            gap: 6px;
+        }
+        
+        .empty-state {
+            text-align: center;
+            padding: 48px 20px;
+            color: var(--text-muted);
+        }
+        
+        .empty-state i {
+            font-size: 3rem;
+            opacity: 0.3;
+            margin-bottom: 12px;
+        }
+        
+        .empty-state p {
+            margin: 0;
+        }
+        
+        /* Pagination */
+        .pagination-wrapper {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px 20px;
+            border-top: 1px solid var(--border);
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+        
+        .pagination-info {
+            font-size: 0.875rem;
+            color: var(--text-muted);
+        }
+        
+        .pagination {
+            display: flex;
+            gap: 4px;
+            list-style: none;
+            margin: 0;
+            padding: 0;
+        }
+        
+        .pagination a, .pagination span {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 32px;
+            height: 32px;
+            padding: 0 8px;
+            font-size: 0.875rem;
+            border-radius: var(--radius);
+            text-decoration: none;
+            color: var(--text);
+            background: white;
+            border: 1px solid var(--border);
+            transition: all 0.2s;
+        }
+        
+        .pagination a:hover {
+            background: var(--bg);
+            border-color: var(--secondary);
+        }
+        
+        .pagination .active span {
+            background: var(--primary);
+            color: white;
+            border-color: var(--primary);
+        }
+        
+        /* Footer */
+        .page-footer {
+            background: var(--card-bg);
+            padding: 16px 24px;
+            border-top: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.8rem;
+            color: var(--text-muted);
+        }
+        
+        .page-footer a {
+            color: var(--primary);
+            text-decoration: none;
+        }
+        
+        .page-footer a:hover {
+            text-decoration: underline;
+        }
+        
+        /* Mobile Responsive */
+        @media (max-width: 992px) {
+            .main-content {
+                margin-left: 0;
+            }
         }
         
         @media (max-width: 768px) {
-            .staff-container {
-                padding: 1rem;
+            .page-container {
+                padding: 16px;
             }
             
-            .page-header, .filter-card {
-                padding: 1rem;
+            .page-header {
+                flex-direction: column;
+                align-items: flex-start;
             }
             
-            .table-responsive {
-                border-radius: 10px;
+            .page-header h1 {
+                font-size: 1.25rem;
+            }
+            
+            .filter-form {
+                flex-direction: column;
+            }
+            
+            .filter-form .form-group {
+                width: 100%;
+                min-width: unset;
+            }
+            
+            .filter-actions {
+                width: 100%;
+            }
+            
+            .filter-actions .btn {
+                flex: 1;
+                justify-content: center;
+            }
+            
+            .stats-row {
+                grid-template-columns: 1fr 1fr;
+            }
+            
+            /* Mobile card view for table */
+            .table-wrapper table,
+            .table-wrapper thead,
+            .table-wrapper tbody,
+            .table-wrapper th,
+            .table-wrapper td,
+            .table-wrapper tr {
+                display: block;
+            }
+            
+            .table-wrapper thead {
+                display: none;
+            }
+            
+            .table-wrapper tr {
+                padding: 16px;
+                border-bottom: 1px solid var(--border);
+            }
+            
+            .table-wrapper tr:hover {
+                background: var(--primary-light);
+            }
+            
+            .table-wrapper td {
+                padding: 6px 0;
+                border: none;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+            }
+            
+            .table-wrapper td::before {
+                content: attr(data-label);
+                font-weight: 600;
+                font-size: 0.75rem;
+                color: var(--text-muted);
+                text-transform: uppercase;
+            }
+            
+            .table-wrapper td:first-child {
+                padding-bottom: 12px;
+                margin-bottom: 8px;
+                border-bottom: 1px solid var(--border);
+            }
+            
+            .table-wrapper td:first-child::before {
+                display: none;
+            }
+            
+            .staff-name {
+                width: 100%;
+            }
+            
+            .actions-cell {
+                justify-content: flex-end;
+                width: 100%;
+                padding-top: 12px;
+                margin-top: 8px;
+                border-top: 1px solid var(--border);
+            }
+            
+            .pagination-wrapper {
+                flex-direction: column;
+                text-align: center;
+            }
+        }
+        
+        @media (max-width: 480px) {
+            .stats-row {
+                grid-template-columns: 1fr;
+            }
+            
+            .stat-card {
+                padding: 14px 16px;
+            }
+            
+            .stat-info h3 {
+                font-size: 1.25rem;
             }
         }
     </style>
 </head>
 <body>
-    <!-- Include the navbar with notifications -->
     <?php include 'includes/navbar.php'; ?>
     
-    <div class="staff-container">
-        <div class="page-header">
-            <div class="d-flex justify-content-between align-items-center">
+    <div class="main-content">
+        <div class="page-container">
+            <!-- Page Header -->
+            <div class="page-header">
                 <div>
-                    <h2 class="mb-0">Staff Management</h2>
-                    <p class="text-muted mb-0">View and manage barangay health workers</p>
+                    <h1>Staff Management</h1>
+                    <p>View and manage barangay health workers</p>
                 </div>
-                <div>
-                    <a href="add_staff.php" class="btn btn-primary">
-                        <i class="bi bi-plus-lg me-2"></i>Add New Staff
-                    </a>
+                <a href="add_staff.php" class="btn btn-primary">
+                    <i class="bi bi-plus-lg"></i> Add New Staff
+                </a>
+            </div>
+            
+            <!-- Alerts -->
+            <?php if (isset($_SESSION['message'])): ?>
+            <div class="alert alert-success">
+                <i class="bi bi-check-circle"></i>
+                <?php echo $_SESSION['message']; ?>
+                <button type="button" class="btn-close" onclick="this.parentElement.remove()">&times;</button>
+            </div>
+            <?php unset($_SESSION['message']); ?>
+            <?php endif; ?>
+            
+            <?php if (isset($_SESSION['error'])): ?>
+            <div class="alert alert-danger">
+                <i class="bi bi-exclamation-triangle"></i>
+                <?php echo $_SESSION['error']; ?>
+                <button type="button" class="btn-close" onclick="this.parentElement.remove()">&times;</button>
+            </div>
+            <?php unset($_SESSION['error']); ?>
+            <?php endif; ?>
+            
+            <!-- Stats Row -->
+            <div class="stats-row">
+                <div class="stat-card">
+                    <div class="stat-icon blue">
+                        <i class="bi bi-people"></i>
+                    </div>
+                    <div class="stat-info">
+                        <h3><?php echo $totalRecords; ?></h3>
+                        <p>Total Staff</p>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon green">
+                        <i class="bi bi-person-check"></i>
+                    </div>
+                    <div class="stat-info">
+                        <h3><?php echo $totalRecords; ?></h3>
+                        <p>Active Members</p>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon orange">
+                        <i class="bi bi-list-ul"></i>
+                    </div>
+                    <div class="stat-info">
+                        <h3><?php echo $totalPages; ?></h3>
+                        <p>Total Pages</p>
+                    </div>
                 </div>
             </div>
-        </div>
-        
-        <?php if (isset($_SESSION['message'])): ?>
-        <div class="alert alert-success alert-dismissible fade show mb-4" role="alert">
-            <i class="bi bi-check-circle me-2"></i> <?php echo $_SESSION['message']; ?>
-            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-        </div>
-        <?php unset($_SESSION['message']); ?>
-        <?php endif; ?>
-        
-        <?php if (isset($_SESSION['error'])): ?>
-        <div class="alert alert-danger alert-dismissible fade show mb-4" role="alert">
-            <i class="bi bi-exclamation-triangle me-2"></i> <?php echo $_SESSION['error']; ?>
-            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-        </div>
-        <?php unset($_SESSION['error']); ?>
-        <?php endif; ?>
-        
-        <div class="filter-card">
-            <form method="GET" action="view_staff.php" class="row g-3">
-                <div class="col-md-8">
-                    <label for="search" class="form-label">Search Staff</label>
-                    <input type="text" class="form-control" id="search" name="search" placeholder="Search by name, email, or contact number" value="<?php echo htmlspecialchars($search); ?>">
-                </div>
-                <div class="col-md-4 d-flex align-items-end">
-                    <button type="submit" class="btn btn-primary me-2">
-                        <i class="bi bi-search me-2"></i>Search
-                    </button>
-                    <a href="view_staff.php" class="btn btn-outline-secondary">
-                        <i class="bi bi-x-circle me-2"></i>Clear
-                    </a>
-                </div>
-            </form>
-        </div>
-        
-        <div class="staff-table">
-            <div class="table-responsive">
-                <table class="table table-hover">
-                    <thead>
-                        <tr>
-                            <th>Name</th>
-                            <th>Contact Number</th>
-                            <th>Email</th>
-                            <th>Birth Date</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php if (empty($staffMembers)): ?>
-                        <tr>
-                            <td colspan="5" class="text-center py-4">
-                                <i class="bi bi-people text-muted" style="font-size: 2rem;"></i>
-                                <p class="mt-2 mb-0 text-muted">No staff members found.</p>
-                            </td>
-                        </tr>
-                        <?php else: ?>
-                            <?php foreach ($staffMembers as $staff): ?>
+            
+            <!-- Search Filter -->
+            <div class="filter-card">
+                <form method="GET" action="view_staff.php" class="filter-form">
+                    <div class="form-group">
+                        <label for="search">Search Staff</label>
+                        <input type="text" id="search" name="search" placeholder="Search by name, email, or contact number" value="<?php echo htmlspecialchars($search); ?>">
+                    </div>
+                    <div class="filter-actions">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-search"></i> Search
+                        </button>
+                        <a href="view_staff.php" class="btn btn-outline">
+                            <i class="bi bi-x-circle"></i> Clear
+                        </a>
+                    </div>
+                </form>
+            </div>
+            
+            <!-- Staff Table -->
+            <div class="table-card">
+                <div class="table-wrapper">
+                    <table>
+                        <thead>
                             <tr>
-                                <td><?php echo htmlspecialchars($staff['firstName'] . ' ' . $staff['lastName']); ?></td>
-                                <td><?php echo htmlspecialchars($staff['contactNumber']); ?></td>
-                                <td><?php echo htmlspecialchars($staff['email']); ?></td>
-                                <td><?php echo date('M d, Y', strtotime($staff['birthDate'])); ?></td>
-                                <td>
-                                    <a href="edit_staff.php?id=<?php echo $staff['staffId']; ?>" class="btn btn-sm btn-primary me-1">
-                                        <i class="bi bi-pencil"></i> Edit
-                                    </a>
-                                    <a href="view_staff.php?delete=<?php echo $staff['staffId']; ?>" class="btn btn-sm btn-danger" onclick="return confirm('Are you sure you want to delete this staff member?');">
-                                        <i class="bi bi-trash"></i> Delete
-                                    </a>
+                                <th>Staff Member</th>
+                                <th>Contact Number</th>
+                                <th>Email</th>
+                                <th>Birth Date</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php if (empty($staffMembers)): ?>
+                            <tr>
+                                <td colspan="5">
+                                    <div class="empty-state">
+                                        <i class="bi bi-people"></i>
+                                        <p>No staff members found.</p>
+                                    </div>
                                 </td>
                             </tr>
-                            <?php endforeach; ?>
+                            <?php else: ?>
+                                <?php foreach ($staffMembers as $staff): ?>
+                                <tr>
+                                    <td data-label="">
+                                        <div class="staff-name">
+                                            <div class="staff-avatar">
+                                                <?php echo strtoupper(substr($staff['firstName'], 0, 1) . substr($staff['lastName'], 0, 1)); ?>
+                                            </div>
+                                            <div class="staff-details">
+                                                <span><?php echo htmlspecialchars($staff['firstName'] . ' ' . $staff['lastName']); ?></span>
+                                                <small>ID: <?php echo $staff['staffId']; ?></small>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td data-label="Contact"><?php echo htmlspecialchars($staff['contactNumber']); ?></td>
+                                    <td data-label="Email"><?php echo htmlspecialchars($staff['email']); ?></td>
+                                    <td data-label="Birth Date"><?php echo date('M d, Y', strtotime($staff['birthDate'])); ?></td>
+                                    <td data-label="">
+                                        <div class="actions-cell">
+                                            <a href="edit_staff.php?id=<?php echo $staff['staffId']; ?>" class="btn btn-primary btn-sm">
+                                                <i class="bi bi-pencil"></i> Edit
+                                            </a>
+                                            <a href="view_staff.php?delete=<?php echo $staff['staffId']; ?>" class="btn btn-danger btn-sm" onclick="return confirm('Are you sure you want to delete this staff member?');">
+                                                <i class="bi bi-trash"></i> Delete
+                                            </a>
+                                        </div>
+                                    </td>
+                                </tr>
+                                <?php endforeach; ?>
+                            <?php endif; ?>
+                        </tbody>
+                    </table>
+                </div>
+                
+                <?php if ($totalPages > 0): ?>
+                <div class="pagination-wrapper">
+                    <div class="pagination-info">
+                        Showing <?php echo min(($page - 1) * $recordsPerPage + 1, $totalRecords); ?> to 
+                        <?php echo min($page * $recordsPerPage, $totalRecords); ?> of 
+                        <?php echo $totalRecords; ?> staff members
+                    </div>
+                    
+                    <?php if ($totalPages > 1): ?>
+                    <ul class="pagination">
+                        <?php if ($page > 1): ?>
+                        <li>
+                            <a href="?page=1<?php echo !empty($search) ? '&search=' . urlencode($search) : ''; ?>">
+                                <i class="bi bi-chevron-double-left"></i>
+                            </a>
+                        </li>
+                        <li>
+                            <a href="?page=<?php echo $page - 1; ?><?php echo !empty($search) ? '&search=' . urlencode($search) : ''; ?>">
+                                <i class="bi bi-chevron-left"></i>
+                            </a>
+                        </li>
                         <?php endif; ?>
-                    </tbody>
-                </table>
+                        
+                        <?php
+                        $startPage = max(1, $page - 2);
+                        $endPage = min($totalPages, $page + 2);
+                        
+                        for ($i = $startPage; $i <= $endPage; $i++):
+                        ?>
+                        <li class="<?php echo $i === (int)$page ? 'active' : ''; ?>">
+                            <?php if ($i === (int)$page): ?>
+                            <span><?php echo $i; ?></span>
+                            <?php else: ?>
+                            <a href="?page=<?php echo $i; ?><?php echo !empty($search) ? '&search=' . urlencode($search) : ''; ?>">
+                                <?php echo $i; ?>
+                            </a>
+                            <?php endif; ?>
+                        </li>
+                        <?php endfor; ?>
+                        
+                        <?php if ($page < $totalPages): ?>
+                        <li>
+                            <a href="?page=<?php echo $page + 1; ?><?php echo !empty($search) ? '&search=' . urlencode($search) : ''; ?>">
+                                <i class="bi bi-chevron-right"></i>
+                            </a>
+                        </li>
+                        <li>
+                            <a href="?page=<?php echo $totalPages; ?><?php echo !empty($search) ? '&search=' . urlencode($search) : ''; ?>">
+                                <i class="bi bi-chevron-double-right"></i>
+                            </a>
+                        </li>
+                        <?php endif; ?>
+                    </ul>
+                    <?php endif; ?>
+                </div>
+                <?php endif; ?>
             </div>
         </div>
         
-        <?php if ($totalPages > 1): ?>
-        <nav aria-label="Page navigation">
-            <ul class="pagination">
-                <?php if ($page > 1): ?>
-                <li class="page-item">
-                    <a class="page-link" href="?page=1<?php echo !empty($search) ? '&search=' . urlencode($search) : ''; ?>" aria-label="First">
-                        <span aria-hidden="true">&laquo;&laquo;</span>
-                    </a>
-                </li>
-                <li class="page-item">
-                    <a class="page-link" href="?page=<?php echo $page - 1; ?><?php echo !empty($search) ? '&search=' . urlencode($search) : ''; ?>" aria-label="Previous">
-                        <span aria-hidden="true">&laquo;</span>
-                    </a>
-                </li>
-                <?php endif; ?>
-                
-                <?php
-                $startPage = max(1, $page - 2);
-                $endPage = min($totalPages, $page + 2);
-                
-                for ($i = $startPage; $i <= $endPage; $i++):
-                ?>
-                <li class="page-item <?php echo $i === $page ? 'active' : ''; ?>">
-                    <a class="page-link" href="?page=<?php echo $i; ?><?php echo !empty($search) ? '&search=' . urlencode($search) : ''; ?>">
-                        <?php echo $i; ?>
-                    </a>
-                </li>
-                <?php endfor; ?>
-                
-                <?php if ($page < $totalPages): ?>
-                <li class="page-item">
-                    <a class="page-link" href="?page=<?php echo $page + 1; ?><?php echo !empty($search) ? '&search=' . urlencode($search) : ''; ?>" aria-label="Next">
-                        <span aria-hidden="true">&raquo;</span>
-                    </a>
-                </li>
-                <li class="page-item">
-                    <a class="page-link" href="?page=<?php echo $totalPages; ?><?php echo !empty($search) ? '&search=' . urlencode($search) : ''; ?>" aria-label="Last">
-                        <span aria-hidden="true">&raquo;&raquo;</span>
-                    </a>
-                </li>
-                <?php endif; ?>
-            </ul>
-        </nav>
-        <?php endif; ?>
-        
-        <div class="text-center mt-3">
-            <p class="text-muted">
-                Showing <?php echo min(($page - 1) * $recordsPerPage + 1, $totalRecords); ?> to 
-                <?php echo min($page * $recordsPerPage, $totalRecords); ?> of 
-                <?php echo $totalRecords; ?> staff members
-            </p>
-        </div>
+        <!-- Footer -->
+        <footer class="page-footer">
+            <span>&copy; <?php echo date('Y'); ?> Barangay Health Workers Management System</span>
+            <a href="help.php">Help & Support</a>
+        </footer>
     </div>
-    
-    <footer class="footer">
-        <div class="container">
-            <div class="d-flex justify-content-between align-items-center">
-                <div>
-                    <small class="text-muted">&copy; <?php echo date('Y'); ?> Barangay Health Workers Management System</small>
-                </div>
-                <div>
-                    <small><a href="help.php" class="text-decoration-none">Help & Support</a></small>
-                </div>
-            </div>
-        </div>
-    </footer>
     
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>

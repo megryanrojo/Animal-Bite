@@ -112,7 +112,7 @@ $is_records_active = in_array($current_page, $records_pages);
                 
                 <!-- Combined Patients & Reports into single "Records" dropdown, removed Add Patient -->
                 <li class="nav-item dropdown">
-                    <a class="nav-link dropdown-toggle <?php echo $is_records_active ? 'active' : ''; ?>" href="#" data-bs-toggle="dropdown">
+                    <a class="nav-link dropdown-toggle <?php echo $is_records_active ? 'active' : ''; ?>" href="javascript:void(0);" role="button" data-bs-toggle="dropdown" aria-expanded="false">
                         <i class="bi bi-folder me-1"></i>Records
                     </a>
                     <ul class="dropdown-menu">

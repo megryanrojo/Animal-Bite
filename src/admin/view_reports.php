@@ -255,6 +255,19 @@ function getCategoryClass($category) {
             gap: 6px;
         }
         .btn-new:hover { background: #059669; color: #fff; }
+        .btn-print {
+            background: #f97316;
+            color: #fff;
+            border: none;
+            padding: 10px 16px;
+            border-radius: 6px;
+            text-decoration: none;
+            font-weight: 500;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .btn-print:hover { background: #ea580c; color: #fff; }
         .table-card {
             background: #fff;
             border-radius: 10px;
@@ -358,7 +371,14 @@ function getCategoryClass($category) {
             <h1>Reports</h1>
             <span class="record-count"><?php echo $totalRecords; ?> total records</span>
         </div>
-        <a href="new_report.php" class="btn-new"><i class="bi bi-plus-lg"></i> New Report</a>
+        <div class="d-flex gap-2">
+            <a href="new_report.php" class="btn-new">
+                <i class="bi bi-plus-lg"></i> New Report
+            </a>
+            <button type="button" class="btn-print" onclick="print_reports()">
+                <i class="bi bi-printer"></i> Print Reports
+            </button>
+        </div>
     </div>
 
     <form class="filters-row" method="get" action="view_reports.php">
@@ -466,5 +486,30 @@ function getCategoryClass($category) {
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    function print_reports() {
+        const currentParams = new URLSearchParams(window.location.search);
+
+        // Determine if we are printing all or filtered
+        const hasFilters =
+            currentParams.get('status') ||
+            currentParams.get('animal_type') ||
+            currentParams.get('bite_type') ||
+            currentParams.get('barangay');
+
+        const printParams = new URLSearchParams();
+        printParams.set('type', hasFilters ? 'filtered' : 'all');
+
+        // Pass through supported filter parameters
+        ['date_from', 'date_to', 'animal_type', 'bite_type', 'barangay', 'status'].forEach(key => {
+            const value = currentParams.get(key);
+            if (value) {
+                printParams.set(key, value);
+            }
+        });
+
+        window.open('print_reports.php?' + printParams.toString(), '_blank');
+    }
+</script>
 </body>
 </html>

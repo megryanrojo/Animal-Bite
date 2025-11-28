@@ -192,12 +192,16 @@ function calculateAge($dateOfBirth) {
         .table-card {
             background: #fff;
             border-radius: 10px;
-            overflow: hidden;
             box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+        }
+        .table-responsive {
+            width: 100%;
+            overflow-x: auto;
         }
         table {
             width: 100%;
             border-collapse: collapse;
+            min-width: 900px;
         }
         th {
             background: #f8fafc;
@@ -275,6 +279,47 @@ function calculateAge($dateOfBirth) {
             color: #fff;
             border: 1px solid #3b82f6;
         }
+        
+        /* Mobile Responsive */
+        @media (max-width: 768px) {
+            .page-container {
+                padding: 16px;
+            }
+            
+            .page-header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 12px;
+            }
+            
+            .filters-row {
+                flex-direction: column;
+            }
+            
+            .filters-row input,
+            .filters-row select {
+                width: 100%;
+                min-width: unset;
+            }
+            
+            .table-card {
+                overflow-x: auto;
+            }
+            
+            table {
+                min-width: 600px;
+            }
+        }
+        
+        @media (max-width: 480px) {
+            .page-container {
+                padding: 12px;
+            }
+            
+            .page-header h1 {
+                font-size: 1.25rem;
+            }
+        }
     </style>
 </head>
 <body>
@@ -306,6 +351,7 @@ function calculateAge($dateOfBirth) {
     </form>
 
     <div class="table-card">
+        <div class="table-responsive">
         <table>
             <thead>
                 <tr>
@@ -342,6 +388,7 @@ function calculateAge($dateOfBirth) {
                 <?php endif; ?>
             </tbody>
         </table>
+        </div>
 
         <?php if ($totalPages > 1): ?>
         <div class="pagination-row">

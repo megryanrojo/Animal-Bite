@@ -2,137 +2,143 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>BHW Admin Portal | Login</title>
+  <title>Admin Login | Animal Bite Portal</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
   <style>
+    * { box-sizing: border-box; }
+    
     :root {
-      --bs-primary: #0d6efd;
-      --bs-primary-rgb: 13, 110, 253;
+      --primary: #2563eb;
+      --primary-dark: #1d4ed8;
+      --primary-light: #dbeafe;
+      --gray-50: #f8fafc;
+      --gray-100: #f1f5f9;
+      --gray-200: #e2e8f0;
+      --gray-400: #94a3b8;
+      --gray-500: #64748b;
+      --gray-600: #475569;
+      --gray-700: #334155;
+      --gray-900: #0f172a;
+      --danger: #dc2626;
+      --danger-light: #fef2f2;
+      --success: #16a34a;
+      --success-light: #f0fdf4;
     }
     
     body {
-      background-color: #f0f2f5;
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      height: 100vh;
+      margin: 0;
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background: var(--gray-100);
+      min-height: 100vh;
       display: flex;
       align-items: center;
       justify-content: center;
-      background-image: linear-gradient(135deg, rgba(var(--bs-primary-rgb), 0.05) 0%, rgba(var(--bs-primary-rgb), 0.1) 100%);
-    }
-    
-    .login-container {
-      width: 100%;
-      max-width: 900px;
       padding: 1rem;
     }
     
+    .login-wrapper {
+      width: 100%;
+      max-width: 420px;
+    }
+    
     .login-card {
-      background-color: white;
-      border-radius: 15px;
-      overflow: hidden;
-      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
-      display: flex;
-      flex-direction: row;
-    }
-    
-    .login-sidebar {
-      background-color: var(--bs-primary);
-      color: white;
-      padding: 3rem 2rem;
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      width: 40%;
-      position: relative;
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.08);
       overflow: hidden;
     }
     
-    .login-sidebar::before {
-      content: '';
-      position: absolute;
-      top: -50%;
-      left: -50%;
-      width: 200%;
-      height: 200%;
-      background: radial-gradient(circle, rgba(255,255,255,0.2) 0%, rgba(255,255,255,0) 60%);
-      z-index: 0;
-    }
-    
-    .login-sidebar-content {
-      position: relative;
-      z-index: 1;
-    }
-    
-    .login-form {
-      padding: 3rem 2rem;
-      width: 60%;
+    .login-header {
+      background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+      color: #fff;
+      padding: 1.5rem;
+      text-align: center;
     }
     
     .login-logo {
-      font-size: 2.5rem;
-      margin-bottom: 1.5rem;
       display: flex;
       align-items: center;
-    }
-    
-    .login-logo i {
-      margin-right: 0.75rem;
-    }
-    
-    .login-title {
-      font-size: 1.75rem;
+      justify-content: center;
+      gap: 0.5rem;
+      font-size: 1.25rem;
       font-weight: 600;
-      margin-bottom: 0.5rem;
+      margin-bottom: 0.25rem;
     }
+    
+    .login-logo i { font-size: 1.5rem; }
     
     .login-subtitle {
-      margin-bottom: 2rem;
-      opacity: 0.8;
-      font-size: 1rem;
+      font-size: 0.8rem;
+      opacity: 0.9;
     }
     
-    .form-floating {
-      margin-bottom: 1.5rem;
-    }
-    
-    .form-floating > .form-control {
-      padding: 1.5rem 0.75rem 0.5rem;
-      height: calc(3.5rem + 2px);
-      line-height: 1.25;
-    }
-    
-    .form-floating > label {
-      padding: 1rem 0.75rem;
-    }
-    
-    .form-control:focus {
-      border-color: var(--bs-primary);
-      box-shadow: 0 0 0 0.25rem rgba(var(--bs-primary-rgb), 0.25);
-    }
-    
-    .btn-login {
-      padding: 0.75rem 1.5rem;
-      font-weight: 500;
-      transition: all 0.3s ease;
-    }
-    
-    .btn-login:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 5px 15px rgba(var(--bs-primary-rgb), 0.4);
-    }
-    
-    .login-footer {
-      margin-top: 2rem;
-      text-align: center;
-      color: #6c757d;
-      font-size: 0.875rem;
+    .login-body {
+      padding: 1.5rem;
     }
     
     .alert {
-      margin-bottom: 1.5rem;
-      border-radius: 10px;
+      padding: 0.75rem 1rem;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      margin-bottom: 1rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    
+    .alert-danger {
+      background: var(--danger-light);
+      color: var(--danger);
+      border: 1px solid #fecaca;
+    }
+    
+    .alert-success {
+      background: var(--success-light);
+      color: var(--success);
+      border: 1px solid #bbf7d0;
+    }
+    
+    .form-group {
+      margin-bottom: 1rem;
+    }
+    
+    .form-label {
+      display: block;
+      font-size: 0.8rem;
+      font-weight: 500;
+      color: var(--gray-700);
+      margin-bottom: 0.35rem;
+    }
+    
+    .input-group {
+      position: relative;
+    }
+    
+    .input-icon {
+      position: absolute;
+      left: 12px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--gray-400);
+      font-size: 1rem;
+      pointer-events: none;
+    }
+    
+    .form-control {
+      width: 100%;
+      padding: 0.65rem 0.75rem 0.65rem 2.25rem;
+      font-size: 0.9rem;
+      border: 1px solid var(--gray-200);
+      border-radius: 8px;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    
+    .form-control:focus {
+      outline: none;
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px var(--primary-light);
     }
     
     .password-toggle {
@@ -142,121 +148,231 @@
       transform: translateY(-50%);
       background: none;
       border: none;
-      color: #6c757d;
+      color: var(--gray-400);
       cursor: pointer;
-      z-index: 5;
+      padding: 4px;
     }
     
-    .password-container {
-      position: relative;
+    .password-toggle:hover { color: var(--gray-600); }
+    
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      padding: 0.65rem 1rem;
+      font-size: 0.9rem;
+      font-weight: 500;
+      border-radius: 8px;
+      border: none;
+      cursor: pointer;
+      transition: all 0.2s;
+      width: 100%;
+    }
+    
+    .btn-primary {
+      background: var(--primary);
+      color: #fff;
+    }
+    
+    .btn-primary:hover {
+      background: var(--primary-dark);
+    }
+    
+    .btn-google {
+      background: #fff;
+      color: var(--gray-700);
+      border: 1px solid var(--gray-200);
+      margin-top: 0.75rem;
+    }
+    
+    .btn-google:hover {
+      background: var(--gray-50);
+      border-color: var(--gray-300);
+    }
+    
+    .divider {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      margin: 1rem 0;
+      color: var(--gray-400);
+      font-size: 0.75rem;
+    }
+    
+    .divider::before,
+    .divider::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: var(--gray-200);
     }
     
     .security-notice {
-      margin-top: 1.5rem;
-      padding: 1rem;
-      background-color: rgba(var(--bs-primary-rgb), 0.05);
-      border-radius: 10px;
-      font-size: 0.875rem;
+      background: var(--gray-50);
+      border-radius: 8px;
+      padding: 0.75rem;
+      margin-top: 1rem;
+      font-size: 0.75rem;
+      color: var(--gray-600);
     }
     
-    @media (max-width: 768px) {
+    .security-notice strong {
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
+      color: var(--gray-700);
+      margin-bottom: 0.25rem;
+    }
+    
+    .login-footer {
+      text-align: center;
+      padding: 1rem;
+      font-size: 0.75rem;
+      color: var(--gray-500);
+      border-top: 1px solid var(--gray-100);
+    }
+    
+    .features-list {
+      display: none;
+    }
+    
+    /* Tablet and up - show side panel */
+    @media (min-width: 768px) {
+      .login-wrapper {
+        max-width: 800px;
+      }
+      
       .login-card {
+        display: flex;
+      }
+      
+      .login-header {
+        width: 45%;
+        padding: 2rem 1.5rem;
+        text-align: left;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+      }
+      
+      .login-logo {
+        justify-content: flex-start;
+        font-size: 1.1rem;
+      }
+      
+      .features-list {
+        display: block;
+        margin-top: 1.5rem;
+        font-size: 0.8rem;
+      }
+      
+      .features-list p {
+        margin: 0 0 0.5rem 0;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        opacity: 0.9;
+      }
+      
+      .login-main {
+        width: 55%;
+        display: flex;
         flex-direction: column;
       }
       
-      .login-sidebar, .login-form {
-        width: 100%;
-        padding: 2rem 1.5rem;
-      }
-      
-      .login-sidebar {
-        padding-bottom: 1rem;
-      }
-      
-      .login-form {
-        padding-top: 1rem;
+      .login-body {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
       }
     }
     
     /* Animation */
     @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(20px); }
+      from { opacity: 0; transform: translateY(10px); }
       to { opacity: 1; transform: translateY(0); }
     }
     
-    .login-container {
-      animation: fadeIn 0.6s ease-out forwards;
+    .login-wrapper {
+      animation: fadeIn 0.4s ease-out;
+    }
+    
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      25% { transform: translateX(-5px); }
+      75% { transform: translateX(5px); }
+    }
+    
+    .spinner-border-sm {
+      width: 1rem;
+      height: 1rem;
+      border-width: 2px;
     }
   </style>
 </head>
 <body>
-  <div class="login-container">
+  <div class="login-wrapper">
     <div class="login-card">
-      <div class="login-sidebar">
-        <div class="login-sidebar-content">
-          <div class="login-logo">
-            <i class="bi bi-hospital"></i>
-            <span>Animal Bite Admin Portal</span>
-          </div>
-          <h2 class="login-title">City Health Worker Access</h2>
-          <p class="login-subtitle">Log in to access the Animal Bite Incident Admin Portal.</p>
-          <div class="d-none d-md-block">
-            <p class="mb-1"><i class="bi bi-check-circle-fill me-2"></i> Manage staff records</p>
-            <p class="mb-1"><i class="bi bi-check-circle-fill me-2"></i> View health reports</p>
-            <p class="mb-1"><i class="bi bi-check-circle-fill me-2"></i> Monitor urgent cases</p>
-            <p class="mb-1"><i class="bi bi-check-circle-fill me-2"></i> Heatmapping Visuals</p>
-            <p class="mb-1"><i class="bi bi-check-circle-fill me-2"></i> Decision Support</p>
-          </div>
+      <div class="login-header">
+        <div class="login-logo">
+          <i class="bi bi-hospital"></i>
+          <span>Animal Bite Portal</span>
+        </div>
+        <p class="login-subtitle">Admin Access</p>
+        
+        <div class="features-list">
+          <p><i class="bi bi-check-circle-fill"></i> Manage staff records</p>
+          <p><i class="bi bi-check-circle-fill"></i> View health reports</p>
+          <p><i class="bi bi-check-circle-fill"></i> Monitor urgent cases</p>
+          <p><i class="bi bi-check-circle-fill"></i> Heatmapping visuals</p>
+          <p><i class="bi bi-check-circle-fill"></i> Decision support</p>
         </div>
       </div>
       
-      <div class="login-form">
-        <h3 class="mb-4 text-center">Admin Login</h3>
-        
-        <!-- Error message container (hidden by default) -->
-        <div class="alert alert-danger d-none" id="error-message" role="alert">
-          <i class="bi bi-exclamation-triangle-fill me-2"></i>
-          <span id="error-text">Invalid email or password</span>
-        </div>
-        
-        <!-- Success message container (hidden by default) -->
-        <div class="alert alert-success d-none" id="success-message" role="alert">
-          <i class="bi bi-check-circle-fill me-2"></i>
-          <span id="success-text">Login successful!</span>
-        </div>
-        
-        <form action="admin_login.php" method="POST" id="loginForm">
-          <div class="form-floating mb-4">
-            <input type="email" name="email" id="email" class="form-control" placeholder="Email Address" required autofocus>
-            <label for="email"><i class="bi bi-envelope me-2"></i>Email Address</label>
+      <div class="login-main">
+        <div class="login-body">
+          <div class="alert alert-danger d-none" id="error-message">
+            <i class="bi bi-exclamation-triangle-fill"></i>
+            <span id="error-text">Invalid email or password</span>
           </div>
           
-          <div class="form-floating mb-4 password-container">
-            <input type="password" name="password" id="password" class="form-control" placeholder="Password" required>
-            <label for="password"><i class="bi bi-lock me-2"></i>Password</label>
-            <button type="button" class="password-toggle" id="togglePassword">
-              <i class="bi bi-eye"></i>
-            </button>
+          <div class="alert alert-success d-none" id="success-message">
+            <i class="bi bi-check-circle-fill"></i>
+            <span id="success-text">Login successful!</span>
           </div>
           
-          <div class="d-grid mb-3">
-            <button type="submit" class="btn btn-primary btn-login">
-              <i class="bi bi-box-arrow-in-right me-2"></i>Log In
+          <form action="admin_login.php" method="POST" id="loginForm">
+            <div class="form-group">
+              <label class="form-label" for="email">Email Address</label>
+              <div class="input-group">
+                <i class="bi bi-envelope input-icon"></i>
+                <input type="email" name="email" id="email" class="form-control" placeholder="Enter your email" required autofocus>
+              </div>
+            </div>
+            
+            <div class="form-group">
+              <label class="form-label" for="password">Password</label>
+              <div class="input-group">
+                <i class="bi bi-lock input-icon"></i>
+                <input type="password" name="password" id="password" class="form-control" placeholder="Enter your password" required>
+                <button type="button" class="password-toggle" id="togglePassword">
+                  <i class="bi bi-eye"></i>
+                </button>
+              </div>
+            </div>
+            
+            <button type="submit" class="btn btn-primary">
+              <i class="bi bi-box-arrow-in-right"></i>
+              Log In
             </button>
-          </div>
-        </form>
-        
-        <!-- Google Sign-In Button -->
-        <div class="text-center mb-3">
-          <div class="position-relative">
-            <hr>
-            <span class="position-absolute top-50 start-50 translate-middle bg-white px-3 text-muted small">or</span>
-          </div>
-        </div>
-        
-        <div class="d-grid">
-          <button type="button" class="btn btn-outline-danger" id="googleSignInBtn">
-            <svg width="18" height="18" viewBox="0 0 24 24" class="me-2">
+          </form>
+          
+          <div class="divider">or</div>
+          
+          <button type="button" class="btn btn-google" id="googleSignInBtn">
+            <svg width="16" height="16" viewBox="0 0 24 24">
               <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
               <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
               <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
@@ -264,18 +380,15 @@
             </svg>
             Continue with Google
           </button>
-        </div>
-        
-        <div class="security-notice">
-          <div class="d-flex align-items-center mb-2">
-            <i class="bi bi-shield-lock me-2 text-primary"></i>
-            <strong>Security Notice</strong>
+          
+          <div class="security-notice">
+            <strong><i class="bi bi-shield-lock"></i> Security Notice</strong>
+            <p style="margin:0">Unauthorized access attempts are logged and may be reported.</p>
           </div>
-          <p class="mb-0">This is a secure admin area. Unauthorized access attempts are logged and may be reported to authorities.</p>
         </div>
         
         <div class="login-footer">
-          <p>© <?php echo date('Y'); ?> Animal Bite Incident Admin Portal</p>
+          &copy; <?php echo date('Y'); ?> Animal Bite Incident Portal
         </div>
       </div>
     </div>
@@ -295,12 +408,10 @@
       measurementId: "G-KFCC50YQ7J"
     };
 
-    // Initialize Firebase
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
     const googleProvider = new GoogleAuthProvider();
 
-    // Make auth, provider and functions available globally
     window.firebaseAuth = auth;
     window.googleProvider = googleProvider;
     window.getIdToken = getIdToken;
@@ -326,7 +437,6 @@
     window.addEventListener('DOMContentLoaded', function() {
       const urlParams = new URLSearchParams(window.location.search);
       
-      // Handle error messages
       if (urlParams.has('error')) {
         const errorMessage = document.getElementById('error-message');
         errorMessage.classList.remove('d-none');
@@ -355,14 +465,10 @@
             document.getElementById('error-text').textContent = 'An error occurred. Please try again.';
         }
         
-        // Add shake animation to error message
         errorMessage.style.animation = 'shake 0.5s ease-in-out';
-        setTimeout(() => {
-          errorMessage.style.animation = '';
-        }, 500);
+        setTimeout(() => { errorMessage.style.animation = ''; }, 500);
       }
       
-      // Handle success messages
       if (urlParams.has('success')) {
         const successMessage = document.getElementById('success-message');
         successMessage.classList.remove('d-none');
@@ -370,66 +476,48 @@
       }
     });
     
-    // Google Sign-In functionality with Firebase
     document.getElementById('googleSignInBtn').addEventListener('click', async function() {
       const btn = this;
       const originalText = btn.innerHTML;
       
-      // Disable button and show loading
       btn.disabled = true;
-      btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span>Signing in...';
+      btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> Signing in...';
       
       try {
-        // Wait for Firebase to be initialized
         if (!window.firebaseAuth || !window.googleProvider) {
           await new Promise(resolve => setTimeout(resolve, 500));
         }
 
-        // Sign in with Google using Firebase
         const result = await window.signInWithPopup(window.firebaseAuth, window.googleProvider);
         const user = result.user;
-        
-        // Get ID token
         const idToken = await window.getIdToken(user, true);
         
-        // Send token to backend for verification
         const response = await fetch('firebase_auth.php', {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            idToken: idToken,
-            type: 'admin'
-          })
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ idToken: idToken, type: 'admin' })
         });
 
         const data = await response.json();
 
         if (data.success) {
-          // Show success message
           const successMessage = document.getElementById('success-message');
           successMessage.classList.remove('d-none');
           document.getElementById('success-text').textContent = 'Login successful! Redirecting...';
           
-          // Redirect to dashboard
           setTimeout(() => {
             window.location.href = data.redirect || '../admin/admin_dashboard.php';
           }, 1000);
         } else {
-          // Show error message
           const errorMessage = document.getElementById('error-message');
           errorMessage.classList.remove('d-none');
           document.getElementById('error-text').textContent = data.error || 'Google authentication failed. Please try again.';
-          
-          // Re-enable button
           btn.disabled = false;
           btn.innerHTML = originalText;
         }
       } catch (error) {
         console.error('Google sign-in error:', error);
         
-        // Show error message
         const errorMessage = document.getElementById('error-message');
         errorMessage.classList.remove('d-none');
         
@@ -441,27 +529,12 @@
         }
         
         document.getElementById('error-text').textContent = errorText;
-        
-        // Re-enable button
         btn.disabled = false;
         btn.innerHTML = originalText;
       }
     });
     
-    // Add shake animation CSS
-    const style = document.createElement('style');
-    style.textContent = `
-      @keyframes shake {
-        0%, 100% { transform: translateX(0); }
-        25% { transform: translateX(-5px); }
-        75% { transform: translateX(5px); }
-      }
-    `;
-    document.head.appendChild(style);
-    
-    // Add automatic session timeout for security
     document.getElementById('loginForm').addEventListener('submit', function() {
-      // Set a session timeout cookie (30 minutes)
       document.cookie = "session_timeout=true; max-age=1800; path=/";
     });
   </script>

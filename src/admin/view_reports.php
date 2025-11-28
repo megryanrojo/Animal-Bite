@@ -271,12 +271,16 @@ function getCategoryClass($category) {
         .table-card {
             background: #fff;
             border-radius: 10px;
-            overflow: hidden;
             box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+        }
+        .table-responsive {
+            width: 100%;
+            overflow-x: auto;
         }
         table {
             width: 100%;
             border-collapse: collapse;
+            min-width: 900px;
         }
         th {
             background: #f8fafc;
@@ -360,6 +364,45 @@ function getCategoryClass($category) {
             color: #fff;
             border: 1px solid #3b82f6;
         }
+        @media (max-width: 992px) {
+            .page-container {
+                padding: 16px;
+            }
+        }
+        @media (max-width: 768px) {
+            .page-header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 12px;
+            }
+            .table-card {
+                border-radius: 8px;
+            }
+            table {
+                min-width: 720px;
+            }
+            .filters-row {
+                flex-direction: column;
+            }
+            .filters-row input,
+            .filters-row select {
+                width: 100%;
+                min-width: unset;
+            }
+            .btn-search,
+            .btn-clear {
+                width: 100%;
+                justify-content: center;
+            }
+        }
+        @media (max-width: 480px) {
+            .page-container {
+                padding: 12px;
+            }
+            table {
+                min-width: 640px;
+            }
+        }
     </style>
 </head>
 <body>
@@ -372,9 +415,6 @@ function getCategoryClass($category) {
             <span class="record-count"><?php echo $totalRecords; ?> total records</span>
         </div>
         <div class="d-flex gap-2">
-            <a href="new_report.php" class="btn-new">
-                <i class="bi bi-plus-lg"></i> New Report
-            </a>
             <button type="button" class="btn-print" onclick="print_reports()">
                 <i class="bi bi-printer"></i> Print Reports
             </button>
@@ -432,6 +472,7 @@ function getCategoryClass($category) {
     </form>
 
     <div class="table-card">
+        <div class="table-responsive">
         <table>
             <thead>
                 <tr>
@@ -470,6 +511,7 @@ function getCategoryClass($category) {
                 <?php endif; ?>
             </tbody>
         </table>
+        </div>
 
         <?php if ($totalPages > 1): ?>
         <div class="pagination-row">

@@ -18,11 +18,56 @@ try {
 }
 
 // Initialize filter variables
+$defaultDateTo = date('Y-m-d');
+$defaultDateFrom = date('Y-m-d', strtotime('-12 months', strtotime($defaultDateTo)));
+$defaultDateTo = date('Y-m-d');
+$defaultDateFrom = date('Y-m-d', strtotime('-12 months', strtotime($defaultDateTo)));
 $dateFrom = isset($_GET['date_from']) ? $_GET['date_from'] : '';
 $dateTo = isset($_GET['date_to']) ? $_GET['date_to'] : '';
 $animalType = isset($_GET['animal_type']) ? $_GET['animal_type'] : '';
 $biteCategory = isset($_GET['bite_category']) ? $_GET['bite_category'] : '';
 $status = isset($_GET['status']) ? $_GET['status'] : '';
+$appliedDefaultRange = false;
+
+if ($dateFrom === '' && $dateTo === '') {
+    $dateFrom = $defaultDateFrom;
+    $dateTo = $defaultDateTo;
+    $appliedDefaultRange = true;
+} elseif ($dateFrom === '' && $dateTo !== '') {
+    $dateFrom = date('Y-m-d', strtotime('-12 months', strtotime($dateTo)));
+} elseif ($dateFrom !== '' && $dateTo === '') {
+    $dateTo = $defaultDateTo;
+}
+
+if ($dateFrom !== '' && $dateTo !== '' && strtotime($dateFrom) > strtotime($dateTo)) {
+    $tmp = $dateFrom;
+    $dateFrom = $dateTo;
+    $dateTo = $tmp;
+}
+
+$dateRangeLabel = date('M d, Y', strtotime($dateFrom)) . ' – ' . date('M d, Y', strtotime($dateTo));
+$dateWindowMonths = max(1, round((strtotime($dateTo) - strtotime($dateFrom)) / (30 * 24 * 60 * 60)));
+
+$appliedDefaultRange = false;
+
+if ($dateFrom === '' && $dateTo === '') {
+    $dateFrom = $defaultDateFrom;
+    $dateTo = $defaultDateTo;
+    $appliedDefaultRange = true;
+} elseif ($dateFrom === '' && $dateTo !== '') {
+    $dateFrom = date('Y-m-d', strtotime('-12 months', strtotime($dateTo)));
+} elseif ($dateFrom !== '' && $dateTo === '') {
+    $dateTo = $defaultDateTo;
+}
+
+if (strtotime($dateFrom) > strtotime($dateTo)) {
+    $tmp = $dateFrom;
+    $dateFrom = $dateTo;
+    $dateTo = $tmp;
+}
+
+$dateRangeLabel = date('M d, Y', strtotime($dateFrom)) . ' – ' . date('M d, Y', strtotime($dateTo));
+$dateWindowMonths = max(1, round((strtotime($dateTo) - strtotime($dateFrom)) / (30 * 24 * 60 * 60)));
 
 // Get unique animal types for filter dropdown
 try {
@@ -211,22 +256,13 @@ foreach ($cases as &$case) {
 }
 unset($case);
 
-// Center coordinates for the map
-if (count($barangayCoordinates) > 0) {
-    $latSum = 0;
-    $lngSum = 0;
-    $count = 0;
-    foreach ($barangayCoordinates as $coord) {
-        $latSum += $coord['lat'];
-        $lngSum += $coord['lng'];
-        $count++;
-    }
-    $centerLat = $latSum / $count;
-    $centerLng = $lngSum / $count;
-} else {
-    $centerLat = 10.7425;
-    $centerLng = 122.9740;
-}
+// Lock map to Talisay City bounds
+$centerLat = 10.735;
+$centerLng = 122.966;
+$mapBounds = [
+    'southWest' => ['lat' => 10.65, 'lng' => 122.90],
+    'northEast' => ['lat' => 10.84, 'lng' => 123.02]
+];
 
 // Prepare heatmap data for JavaScript
 $jsHeatmapData = [];
@@ -243,6 +279,8 @@ foreach ($heatmapData as $data) {
 }
 
 $maxCount = !empty($barangayCounts) ? max(array_column($barangayCounts, 'count')) : 1;
+$lowThreshold = max(1, (int)ceil($maxCount * 0.3));
+$highThreshold = max($lowThreshold + 1, (int)ceil($maxCount * 0.7));
 ?>
 
 <!DOCTYPE html>
@@ -327,6 +365,29 @@ $maxCount = !empty($barangayCounts) ? max(array_column($barangayCounts, 'count')
             border-bottom: 1px solid var(--gray-200);
             flex-shrink: 0;
             flex-wrap: wrap;
+        }
+        .filters-meta {
+            flex-basis: 100%;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            font-size: 0.78rem;
+            color: var(--gray-500);
+        }
+        .range-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            background: var(--gray-100);
+            border: 1px solid var(--gray-200);
+            border-radius: 999px;
+            padding: 0.15rem 0.75rem;
+            font-weight: 600;
+            color: var(--gray-600);
+            width: fit-content;
+        }
+        .range-note {
+            color: var(--gray-500);
         }
         
         .filters-bar .page-title {
@@ -437,7 +498,7 @@ $maxCount = !empty($barangayCounts) ? max(array_column($barangayCounts, 'count')
             z-index: 1000;
             width: 260px;
             font-size: 0.85rem;
-            max-height: 320px;
+            max-height: 380px;
             overflow: hidden;
             display: flex;
             flex-direction: column;
@@ -497,19 +558,28 @@ $maxCount = !empty($barangayCounts) ? max(array_column($barangayCounts, 'count')
             margin-bottom: 0.5rem;
             font-weight: 600;
         }
+        .legend-note {
+            font-size: 0.75rem;
+            color: var(--gray-500);
+            margin-top: 0.25rem;
+        }
         
         .legend-gradient {
-            height: 14px;
+            height: 20px;
             border-radius: 4px;
-            background: linear-gradient(to right, #22c55e, #facc15, #f97316, #ef4444, #7f1d1d);
-            margin-bottom: 0.35rem;
+            background: linear-gradient(to right, #22c55e, #84cc16, #facc15, #f97316, #ef4444, #be123c, #7f1d1d);
+            margin-bottom: 0.5rem;
+            box-shadow: inset 0 1px 3px rgba(0,0,0,0.1);
+            border: 1px solid rgba(0,0,0,0.1);
         }
         
         .legend-labels {
             display: flex;
             justify-content: space-between;
             font-size: 0.75rem;
-            color: var(--gray-500);
+            color: var(--gray-600);
+            font-weight: 500;
+            margin-bottom: 0.5rem;
         }
         
         .legend-item {
@@ -631,8 +701,9 @@ $maxCount = !empty($barangayCounts) ? max(array_column($barangayCounts, 'count')
         }
         
         .data-body {
-            padding: 0.75rem 1rem;
+            padding: 0.5rem 0.75rem;
             overflow-y: auto;
+            overflow-x: hidden;
         }
         
         .data-body.collapsed { display: none; }
@@ -673,24 +744,29 @@ $maxCount = !empty($barangayCounts) ? max(array_column($barangayCounts, 'count')
         /* Better table styling */
         .data-table {
             width: 100%;
-            font-size: 0.85rem;
+            font-size: 0.8rem;
+            border-collapse: collapse;
+            table-layout: fixed;
         }
         
         .data-table th {
             text-align: left;
             font-weight: 600;
             color: var(--gray-500);
-            padding: 0.5rem 0.5rem;
+            padding: 0.4rem 0.4rem;
             border-bottom: 2px solid var(--gray-200);
             text-transform: uppercase;
-            font-size: 0.7rem;
+            font-size: 0.65rem;
             letter-spacing: 0.5px;
+            word-break: break-word;
         }
         
         .data-table td {
-            padding: 0.5rem 0.5rem;
+            padding: 0.4rem 0.4rem;
             border-bottom: 1px solid var(--gray-100);
             color: var(--gray-700);
+            word-break: break-word;
+            overflow-wrap: break-word;
         }
         
         .data-table tbody tr {
@@ -701,11 +777,13 @@ $maxCount = !empty($barangayCounts) ? max(array_column($barangayCounts, 'count')
         .data-table tbody tr:hover td { background: var(--gray-50); }
         
         .badge {
-            padding: 0.2rem 0.5rem;
-            border-radius: 4px;
-            font-size: 0.7rem;
+            padding: 0.15rem 0.35rem;
+            border-radius: 3px;
+            font-size: 0.65rem;
             font-weight: 600;
             text-transform: uppercase;
+            white-space: nowrap;
+            display: inline-block;
         }
         
         .badge-critical { background: #fef2f2; color: #991b1b; }
@@ -757,6 +835,41 @@ $maxCount = !empty($barangayCounts) ? max(array_column($barangayCounts, 'count')
             font-weight: 500;
         }
         
+        /* Focused location header in sidebar */
+        .focused-location-header {
+            padding: 0.75rem 1rem;
+            background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+            color: white;
+            border-bottom: 2px solid #1d4ed8;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .focused-location-header h5 {
+            margin: 0;
+            font-size: 0.95rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .focused-location-header button {
+            background: rgba(255,255,255,0.2);
+            border: 1px solid rgba(255,255,255,0.3);
+            color: white;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.8rem;
+            transition: background 0.15s;
+        }
+        
+        .focused-location-header button:hover {
+            background: rgba(255,255,255,0.3);
+        }
+        
         /* Responsive */
         @media (max-width: 1024px) {
             .main-wrapper {
@@ -772,19 +885,196 @@ $maxCount = !empty($barangayCounts) ? max(array_column($barangayCounts, 'count')
             }
             .sidebar-toggle {
                 right: 0;
+                top: 50%;
+                transform: translateY(-50%);
             }
             .sidebar-toggle:not(.collapsed) {
                 right: 340px;
+            }
+            .map-controls {
+                top: 15px;
+                left: 15px;
+            }
+            .map-legend {
+                bottom: 15px;
+                left: 15px;
+                width: 280px;
+                max-height: 350px;
             }
         }
         
         @media (max-width: 768px) {
             .filters-bar {
                 padding: 0.5rem;
-                gap: 0.5rem;
+                gap: 0.3rem;
+                flex-wrap: wrap;
+            }
+            .page-title {
+                flex-basis: 100% !important;
+                font-size: 0.95rem !important;
             }
             .filter-item label { display: none; }
-            .data-sidebar { width: 100%; }
+            .filter-item input,
+            .filter-item select {
+                min-width: 80px;
+                padding: 0.35rem 0.4rem;
+                font-size: 0.8rem;
+            }
+            .filter-btn {
+                padding: 0.35rem 0.6rem;
+                font-size: 0.75rem;
+            }
+            .filters-meta {
+                font-size: 0.7rem;
+                gap: 2px;
+            }
+            .range-note {
+                font-size: 0.65rem;
+            }
+            .data-sidebar {
+                position: fixed;
+                width: 100% !important;
+                right: -100% !important;
+                top: auto !important;
+                bottom: 0 !important;
+                max-height: 85vh;
+                transition: right 0.3s ease;
+                border-radius: 12px 12px 0 0;
+                border-left: none;
+                border-bottom: none;
+            }
+            .data-sidebar:not(.collapsed) {
+                right: 0 !important;
+            }
+            .sidebar-toggle {
+                position: fixed;
+                right: 12px;
+                bottom: 12px;
+                width: 44px;
+                height: 44px;
+                top: auto !important;
+                transform: none !important;
+                border-radius: 50%;
+                border: 1px solid var(--gray-300);
+                background: white;
+                box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+                z-index: 150;
+            }
+            .sidebar-toggle.collapsed {
+                right: 12px;
+                bottom: 12px;
+            }
+            .map-legend {
+                bottom: 70px;
+                left: 12px;
+                right: 12px;
+                width: auto;
+                max-width: none;
+                max-height: 35vh;
+            }
+            .map-controls {
+                top: 12px;
+                left: 12px;
+                right: 12px;
+                width: auto;
+                flex-direction: row;
+                gap: 0.4rem;
+            }
+            .map-control-btn {
+                flex: 1;
+                text-align: center;
+            }
+            .data-table {
+                font-size: 0.75rem;
+            }
+            .data-table th {
+                font-size: 0.6rem;
+                padding: 0.3rem 0.3rem;
+            }
+            .data-table td {
+                padding: 0.3rem 0.3rem;
+            }
+            .stat-value {
+                font-size: 1.2rem;
+            }
+            .stat-label {
+                font-size: 0.65rem;
+            }
+            .data-header h6 {
+                font-size: 0.8rem;
+            }
+            .badge {
+                padding: 0.1rem 0.25rem;
+                font-size: 0.6rem;
+            }
+        }
+        
+        @media (max-width: 480px) {
+            .filters-bar {
+                padding: 0.4rem;
+                gap: 0.2rem;
+            }
+            .filter-group {
+                flex-direction: column;
+                width: 100%;
+                gap: 0.3rem;
+            }
+            .filter-item {
+                width: 100%;
+            }
+            .filter-item input,
+            .filter-item select {
+                width: 100%;
+                min-width: unset;
+            }
+            .data-sidebar {
+                width: 100% !important;
+                max-height: 80vh;
+            }
+            .page-title {
+                font-size: 0.9rem !important;
+            }
+            .case-count-badge {
+                font-size: 0.7rem;
+                padding: 0.2rem 0.4rem;
+            }
+            .map-legend {
+                bottom: 60px;
+                left: 8px;
+                right: 8px;
+                max-height: 30vh;
+                width: auto;
+            }
+            .map-controls {
+                top: 8px;
+                left: 8px;
+                right: 8px;
+                width: calc(100% - 16px);
+                gap: 0.25rem;
+            }
+            .map-control-btn {
+                flex: 1;
+                font-size: 0.7rem;
+                padding: 0.35rem 0.5rem;
+            }
+            .sidebar-toggle {
+                right: 10px;
+                bottom: 10px;
+                width: 44px;
+                height: 44px;
+            }
+            .stat-grid {
+                grid-template-columns: 1fr;
+            }
+            .legend-item-value {
+                font-size: 0.7rem;
+            }
+            .map-legend {
+                max-width: 100%;
+            }
+            .legend-body {
+                max-height: 25vh;
+            }
         }
     </style>
 </head>
@@ -847,6 +1137,15 @@ $maxCount = !empty($barangayCounts) ? max(array_column($barangayCounts, 'count')
                     <i class="bi bi-x-lg"></i> Clear
                 </a>
             </div>
+            <div class="filters-meta">
+                <span class="range-pill">
+                    Showing <?= $dateRangeLabel; ?>
+                </span>
+                <span class="range-note">
+                    Heatmap focuses on approximately <?= $dateWindowMonths; ?> month<?= $dateWindowMonths > 1 ? 's' : ''; ?> of cases<?php if ($appliedDefaultRange): ?> by default<?php endif; ?>.
+                    Adjust the date range to review multi-year totals.
+                </span>
+            </div>
         </form>
         
         <!-- Main content area -->
@@ -880,8 +1179,11 @@ $maxCount = !empty($barangayCounts) ? max(array_column($barangayCounts, 'count')
                             <div class="legend-section-title">Intensity Scale</div>
                             <div class="legend-gradient"></div>
                             <div class="legend-labels">
-                                <span>Low (1-<?= ceil($maxCount * 0.25) ?>)</span>
-                                <span>High (<?= ceil($maxCount * 0.75) ?>+)</span>
+                                <span>Low (1–<?= $lowThreshold ?>)</span>
+                                <span>High (<?= $highThreshold ?>+)</span>
+                            </div>
+                            <div class="legend-note">
+                                Map highlights roughly <?= $dateWindowMonths; ?> month<?= $dateWindowMonths > 1 ? 's' : ''; ?> of data for clearer hotspot shading.
                             </div>
                         </div>
                         <div class="legend-section">
@@ -1020,7 +1322,17 @@ $maxCount = !empty($barangayCounts) ? max(array_column($barangayCounts, 'count')
         // Initialize map with center coordinates from PHP
         const centerLat = <?= $centerLat ?>;
         const centerLng = <?= $centerLng ?>;
-        const map = L.map('map').setView([centerLat, centerLng], 13);
+        const talisayBounds = L.latLngBounds(
+            [<?= $mapBounds['southWest']['lat'] ?>, <?= $mapBounds['southWest']['lng'] ?>],
+            [<?= $mapBounds['northEast']['lat'] ?>, <?= $mapBounds['northEast']['lng'] ?>]
+        );
+        const map = L.map('map', {
+            maxBounds: talisayBounds,
+            maxBoundsViscosity: 1.0,
+            minZoom: 12,
+            maxZoom: 18
+        }).setView([centerLat, centerLng], 13);
+        map.fitBounds(talisayBounds);
         const heatmapBtnEl = document.getElementById('heatmapBtn');
         const markersBtnEl = document.getElementById('markersBtn');
         
@@ -1034,28 +1346,62 @@ $maxCount = !empty($barangayCounts) ? max(array_column($barangayCounts, 'count')
         const barangayCoords = <?= json_encode($barangayCoordinates) ?>;
         const maxCount = <?= (int)$maxCount ?> || 1;
         
+        // Build barangay case data for quick lookup
+        const barangayCaseData = {};
+        cases.forEach(c => {
+            const barangay = c.barangay || 'Unknown';
+            if (!barangayCaseData[barangay]) {
+                barangayCaseData[barangay] = [];
+            }
+            barangayCaseData[barangay].push(c);
+        });
+        
+        // Track focused location
+        let focusedLocation = null;
+        
         // Layers
         let heatLayer = null;
         let markersLayer = L.layerGroup();
         const markerPoints = [];
         
-        // Create heatmap from case coordinates
+        // Create heatmap from case coordinates with improved intensity
         const heatPoints = heatmapData
             .filter(point => point.lat && point.lng)
-            .map(point => [
-                parseFloat(point.lat),
-                parseFloat(point.lng),
-                Math.max(point.count / maxCount, 0.2)
-            ]);
+            .map(point => {
+                const lat = parseFloat(point.lat);
+                const lng = parseFloat(point.lng);
+                // Enhanced normalization for better visibility
+                let intensity = 0;
+                if (maxCount > 0) {
+                    // Use power function for better distribution
+                    const normalized = point.count / maxCount;
+                    intensity = Math.pow(normalized, 0.5); // Square root for better spread
+                    intensity = Math.min(Math.max(intensity * 1.8, 0.3), 1); // Boost and clamp
+                } else {
+                    intensity = 0.5;
+                }
+                return [lat, lng, intensity];
+            });
         
         let dataBounds = null;
         
         if (heatPoints.length > 0) {
             heatLayer = L.heatLayer(heatPoints, {
-                radius: 30,
-                blur: 20,
-                maxZoom: 17,
-                gradient: {0.2: '#22c55e', 0.4: '#facc15', 0.6: '#f97316', 0.8: '#ef4444', 1: '#7f1d1d'}
+                radius: 50,
+                blur: 30,
+                max: 1.0,
+                maxZoom: 18,
+                minOpacity: 0.2,
+                gradient: {
+                    0.0: '#22c55e',
+                    0.1: '#22c55e',
+                    0.25: '#84cc16',
+                    0.4: '#facc15',
+                    0.55: '#f97316',
+                    0.7: '#ef4444',
+                    0.85: '#fb7185',
+                    1.0: '#7f1d1d'
+                }
             }).addTo(map);
             
             dataBounds = L.latLngBounds(heatPoints.map(p => [p[0], p[1]]));
@@ -1089,10 +1435,6 @@ $maxCount = !empty($barangayCounts) ? max(array_column($barangayCounts, 'count')
         
         if (!dataBounds && markerPoints.length > 0) {
             dataBounds = L.latLngBounds(markerPoints.map(p => [p[0], p[1]]));
-        }
-        
-        if (dataBounds) {
-            map.fitBounds(dataBounds, { padding: [50, 50] });
         }
         
         if (!heatLayer && markerPoints.length > 0) {
@@ -1151,13 +1493,167 @@ $maxCount = !empty($barangayCounts) ? max(array_column($barangayCounts, 'count')
             // First try barangay coordinates
             if (barangayCoords[barangay]) {
                 map.setView([barangayCoords[barangay].lat, barangayCoords[barangay].lng], 15);
-                return;
+            } else {
+                // Fallback to first case in that barangay
+                const location = cases.find(c => c.barangay === barangay && c.latitude && c.longitude);
+                if (location) {
+                    map.setView([parseFloat(location.latitude), parseFloat(location.longitude)], 15);
+                }
             }
-            // Fallback to first case in that barangay
-            const location = cases.find(c => c.barangay === barangay && c.latitude && c.longitude);
-            if (location) {
-                map.setView([parseFloat(location.latitude), parseFloat(location.longitude)], 15);
+            
+            // Update focused location and display data
+            focusedLocation = barangay;
+            displayFocusedLocationData(barangay);
+        }
+        
+        function displayFocusedLocationData(barangay) {
+            const casesForBarangay = barangayCaseData[barangay] || [];
+            const sidebar = document.getElementById('dataSidebar');
+            
+            // Create focused header if it doesn't exist
+            let focusedHeader = sidebar.querySelector('.focused-location-header');
+            if (!focusedHeader) {
+                focusedHeader = document.createElement('div');
+                focusedHeader.className = 'focused-location-header';
+                sidebar.insertBefore(focusedHeader, sidebar.firstChild);
             }
+            
+            // Calculate risk level
+            const caseCount = casesForBarangay.length;
+            const ratio = maxCount > 0 ? caseCount / maxCount : 0;
+            let riskLevel = 'Low';
+            let riskColor = '#22c55e';
+            if (ratio >= 0.75) { riskLevel = 'Critical'; riskColor = '#dc2626'; }
+            else if (ratio >= 0.5) { riskLevel = 'High'; riskColor = '#f97316'; }
+            else if (ratio >= 0.25) { riskLevel = 'Medium'; riskColor = '#facc15'; }
+            
+            focusedHeader.innerHTML = `
+                <h5><i class="bi bi-pin-fill" style="color: ${riskColor}"></i> ${barangay}</h5>
+                <button onclick="clearFocusedLocation()"><i class="bi bi-x-lg"></i></button>
+            `;
+            focusedHeader.style.display = 'flex';
+            
+            // Update stats for focused location
+            const statsSection = sidebar.querySelector('.data-section');
+            const statsBody = statsSection.querySelector('.data-body');
+            
+            // Count animal types for this barangay
+            const animalTypesSet = new Set(casesForBarangay.map(c => c.animalType).filter(Boolean));
+            
+            statsBody.innerHTML = `
+                <div class="stat-grid">
+                    <div class="stat-card primary">
+                        <div class="stat-value">${caseCount}</div>
+                        <div class="stat-label">Cases</div>
+                    </div>
+                    <div class="stat-card" style="background: linear-gradient(135deg, rgba(220, 38, 38, 0.1), rgba(239, 68, 68, 0.1));">
+                        <div class="stat-value" style="color: ${riskColor}; font-size: 1.1rem;">${riskLevel}</div>
+                        <div class="stat-label">Risk Level</div>
+                    </div>
+                    <div class="stat-card warning">
+                        <div class="stat-value">${animalTypesSet.size}</div>
+                        <div class="stat-label">Animal Types</div>
+                    </div>
+                    <div class="stat-card success">
+                        <div class="stat-value">${casesForBarangay.filter(c => c.status === 'Completed').length}</div>
+                        <div class="stat-label">Completed</div>
+                    </div>
+                </div>
+            `;
+            
+            // Update affected areas table to show only this barangay
+            const affectedAreasSection = sidebar.querySelectorAll('.data-section')[1];
+            const affectedAreasBody = affectedAreasSection.querySelector('.data-body');
+            
+            affectedAreasBody.innerHTML = `
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Animal Type</th>
+                            <th>Count</th>
+                            <th>%</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+            
+            // Count animals by type
+            const animalCounts = {};
+            casesForBarangay.forEach(c => {
+                const animal = c.animalType || 'Unknown';
+                animalCounts[animal] = (animalCounts[animal] || 0) + 1;
+            });
+            
+            Object.entries(animalCounts)
+                .sort((a, b) => b[1] - a[1])
+                .forEach(([animal, count]) => {
+                    const pct = caseCount > 0 ? ((count / caseCount) * 100).toFixed(1) : 0;
+                    affectedAreasBody.innerHTML += `
+                        <tr>
+                            <td>${animal}</td>
+                            <td><strong>${count}</strong></td>
+                            <td>${pct}%</td>
+                        </tr>
+                    `;
+                });
+            
+            affectedAreasBody.innerHTML += `
+                    </tbody>
+                </table>
+            `;
+            
+            // Update recent cases to show recent from this barangay
+            const recentCasesSection = sidebar.querySelectorAll('.data-section')[2];
+            const recentCasesBody = recentCasesSection.querySelector('.data-body');
+            
+            const recentBarangayCases = casesForBarangay
+                .sort((a, b) => new Date(b.biteDate) - new Date(a.biteDate))
+                .slice(0, 10);
+            
+            recentCasesBody.innerHTML = `
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Animal</th>
+                            <th>Category</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+            
+            recentBarangayCases.forEach(c => {
+                const dateStr = new Date(c.biteDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                recentCasesBody.innerHTML += `
+                    <tr>
+                        <td>${dateStr}</td>
+                        <td>${c.animalType || 'N/A'}</td>
+                        <td><span class="badge badge-medium">${c.biteType || 'N/A'}</span></td>
+                    </tr>
+                `;
+            });
+            
+            if (recentBarangayCases.length === 0) {
+                recentCasesBody.innerHTML += `
+                    <tr><td colspan="3" style="text-align: center; color: var(--gray-500);">No cases</td></tr>
+                `;
+            }
+            
+            recentCasesBody.innerHTML += `
+                    </tbody>
+                </table>
+            `;
+        }
+        
+        function clearFocusedLocation() {
+            focusedLocation = null;
+            const sidebar = document.getElementById('dataSidebar');
+            const focusedHeader = sidebar.querySelector('.focused-location-header');
+            if (focusedHeader) {
+                focusedHeader.style.display = 'none';
+            }
+            // Reset display to show all data
+            location.reload();
         }
     </script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>

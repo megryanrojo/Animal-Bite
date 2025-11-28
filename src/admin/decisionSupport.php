@@ -323,7 +323,7 @@ function buildUrl($newParams = []) {
         }
         
         body.has-sidebar .main-wrapper {
-            margin-left: var(--sidebar-width);
+            margin-left: 0;
         }
         
         @media (max-width: 1024px) {

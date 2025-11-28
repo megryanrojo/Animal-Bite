@@ -49,12 +49,66 @@ try {
     $allStaffStmt->execute();
     $allStaff = $allStaffStmt->fetchAll(PDO::FETCH_ASSOC);
     
+    // Fetch vaccination records linked to this report (PEP management)
+    $reportVaccStmt = $pdo->prepare("SELECT * FROM vaccination_records WHERE reportId = ? ORDER BY doseNumber ASC, dateGiven DESC");
+    $reportVaccStmt->execute([$reportId]);
+    $reportVaccinations = $reportVaccStmt->fetchAll(PDO::FETCH_ASSOC);
+    
+    // helper: compute next dose number for this report (PEP)
+    function autodoseNumber($pdo, $reportId) {
+        $cstmt = $pdo->prepare("SELECT COUNT(*) as cnt FROM vaccination_records WHERE reportId = ? AND exposureType = 'PEP'");
+        $cstmt->execute([$reportId]);
+        $row = $cstmt->fetch(PDO::FETCH_ASSOC);
+        $count = $row ? (int)$row['cnt'] : 0;
+        return $count + 1;
+    }
+    
 } catch (PDOException $e) {
     $error = "Database error: " . $e->getMessage();
 }
 
 // Process form submission for updating report
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    // Handle vaccination actions for PEP linked to this report
+    if (isset($_POST['vaccination_action'])) {
+        $vaction = $_POST['vaccination_action'];
+        try {
+            if ($vaction === 'add') {
+                $doseNumber = isset($_POST['doseNumber']) ? (int)$_POST['doseNumber'] : autodoseNumber($pdo, $reportId);
+                $dateGiven = !empty($_POST['dateGiven']) ? $_POST['dateGiven'] : null;
+                $vaccineName = !empty($_POST['vaccineName']) ? $_POST['vaccineName'] : null;
+                $batchNumber = !empty($_POST['batchNumber']) ? $_POST['batchNumber'] : null;
+                $administeredBy = !empty($_POST['administeredBy']) ? $_POST['administeredBy'] : null;
+                $remarks = !empty($_POST['remarks']) ? $_POST['remarks'] : null;
+
+                $insert = $pdo->prepare("INSERT INTO vaccination_records (patientId, reportId, exposureType, doseNumber, dateGiven, vaccineName, batchNumber, administeredBy, remarks) VALUES (?, ?, 'PEP', ?, ?, ?, ?, ?, ?)");
+                $insert->execute([$report['patientId'], $reportId, $doseNumber, $dateGiven, $vaccineName, $batchNumber, $administeredBy, $remarks]);
+                header("Location: view_report.php?id={$reportId}&vacc_updated=1");
+                exit;
+            } elseif ($vaction === 'edit' && isset($_POST['vaccinationId']) && is_numeric($_POST['vaccinationId'])) {
+                $vaccinationId = (int)$_POST['vaccinationId'];
+                $doseNumber = isset($_POST['doseNumber']) ? (int)$_POST['doseNumber'] : 1;
+                $dateGiven = !empty($_POST['dateGiven']) ? $_POST['dateGiven'] : null;
+                $vaccineName = !empty($_POST['vaccineName']) ? $_POST['vaccineName'] : null;
+                $batchNumber = !empty($_POST['batchNumber']) ? $_POST['batchNumber'] : null;
+                $administeredBy = !empty($_POST['administeredBy']) ? $_POST['administeredBy'] : null;
+                $remarks = !empty($_POST['remarks']) ? $_POST['remarks'] : null;
+
+                $update = $pdo->prepare("UPDATE vaccination_records SET doseNumber = ?, dateGiven = ?, vaccineName = ?, batchNumber = ?, administeredBy = ?, remarks = ?, updated_at = CURRENT_TIMESTAMP WHERE vaccinationId = ? AND reportId = ?");
+                $update->execute([$doseNumber, $dateGiven, $vaccineName, $batchNumber, $administeredBy, $remarks, $vaccinationId, $reportId]);
+                header("Location: view_report.php?id={$reportId}&vacc_updated=1");
+                exit;
+            } elseif ($vaction === 'delete' && isset($_POST['vaccinationId']) && is_numeric($_POST['vaccinationId'])) {
+                $vaccinationId = (int)$_POST['vaccinationId'];
+                $del = $pdo->prepare("DELETE FROM vaccination_records WHERE vaccinationId = ? AND reportId = ?");
+                $del->execute([$vaccinationId, $reportId]);
+                header("Location: view_report.php?id={$reportId}&vacc_deleted=1");
+                exit;
+            }
+        } catch (PDOException $e) {
+            $error = "Vaccination action failed: " . $e->getMessage();
+        }
+    }
     if (isset($_POST['update_report'])) {
         $status = $_POST['status'];
         $notes = $_POST['notes'];
@@ -503,6 +557,76 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         </div>
                     </div>
                 </div>
+        
+                    <!-- PEP Vaccination Management -->
+                    <div class="card no-print">
+                        <div class="card-header">
+                            <h2>Post-Exposure Vaccination (PEP)</h2>
+                            <div>
+                                <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#pepModal">
+                                    <i class="bi bi-plus"></i> Add PEP Dose
+                                </button>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <?php if (!empty($reportVaccinations)): ?>
+                            <div class="table-container mobile-cards">
+                                <table class="table">
+                                    <thead>
+                                        <tr>
+                                            <th>Dose</th>
+                                            <th>Date</th>
+                                            <th>Vaccine</th>
+                                            <th>Batch #</th>
+                                            <th>By</th>
+                                            <th>Remarks</th>
+                                            <th></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <?php foreach ($reportVaccinations as $pv): ?>
+                                        <tr>
+                                            <td data-label="Dose"><?php echo (int)$pv['doseNumber']; ?></td>
+                                            <td data-label="Date"><?php echo $pv['dateGiven'] ? date('M d, Y', strtotime($pv['dateGiven'])) : '-'; ?></td>
+                                            <td data-label="Vaccine"><?php echo htmlspecialchars($pv['vaccineName'] ?? '-'); ?></td>
+                                            <td data-label="Batch"><?php echo htmlspecialchars($pv['batchNumber'] ?? '-'); ?></td>
+                                            <td data-label="By"><?php echo htmlspecialchars($pv['administeredBy'] ?? '-'); ?></td>
+                                            <td data-label="Remarks" style="max-width:200px;">
+                                                <span style="display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
+                                                    <?php echo htmlspecialchars($pv['remarks'] ?? '-'); ?>
+                                                </span>
+                                            </td>
+                                            <td>
+                                                <button class="btn btn-outline btn-icon btn-sm" data-bs-toggle="modal" data-bs-target="#pepModal"
+                                                    data-vaccination-id="<?php echo (int)$pv['vaccinationId']; ?>"
+                                                    data-dose-number="<?php echo (int)$pv['doseNumber']; ?>"
+                                                    data-date-given="<?php echo htmlspecialchars($pv['dateGiven']); ?>"
+                                                    data-vaccine-name="<?php echo htmlspecialchars($pv['vaccineName'] ?? ''); ?>"
+                                                    data-batch-number="<?php echo htmlspecialchars($pv['batchNumber'] ?? ''); ?>"
+                                                    data-administered-by="<?php echo htmlspecialchars($pv['administeredBy'] ?? ''); ?>"
+                                                    data-remarks="<?php echo htmlspecialchars($pv['remarks'] ?? ''); ?>">
+                                                    <i class="bi bi-pencil"></i>
+                                                </button>
+                                                <form method="POST" style="display:inline-block; margin-left:6px;" onsubmit="return confirm('Delete this PEP dose?');">
+                                                    <input type="hidden" name="vaccination_action" value="delete">
+                                                    <input type="hidden" name="vaccinationId" value="<?php echo (int)$pv['vaccinationId']; ?>">
+                                                    <button type="submit" class="btn btn-danger btn-icon btn-sm"><i class="bi bi-trash"></i></button>
+                                                </form>
+                                            </td>
+                                        </tr>
+                                        <?php endforeach; ?>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <?php else: ?>
+                            <div class="empty-state">
+                                <i class="bi bi-syringe"></i>
+                                <h5>No PEP Doses Recorded</h5>
+                                <p>Add PEP doses for this report here.</p>
+                            </div>
+                            <?php endif; ?>
+                        </div>
+                    </div>
                 
                 <!-- Patient Information -->
                 <div class="card">
@@ -655,17 +779,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             </select>
                         </div>
                         <div>
-                            <label for="staffId" class="form-label">Assign Staff</label>
-                            <select class="form-select" id="staffId" name="staffId">
-                                <option value="">-- Not Assigned --</option>
-                                <?php foreach ($allStaff as $s): ?>
-                                <option value="<?php echo $s['staffId']; ?>" <?php echo $report['staffId'] == $s['staffId'] ? 'selected' : ''; ?>>
-                                    <?php echo htmlspecialchars($s['firstName'] . ' ' . $s['lastName']); ?>
-                                </option>
-                                <?php endforeach; ?>
-                            </select>
-                        </div>
-                        <div>
                             <label for="followUpDate" class="form-label">Follow-up Date</label>
                             <input type="date" class="form-control" id="followUpDate" name="followUpDate" value="<?php echo !empty($report['followUpDate']) ? date('Y-m-d', strtotime($report['followUpDate'])) : ''; ?>">
                         </div>
@@ -687,5 +800,92 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- PEP Modal -->
+    <div class="modal fade" id="pepModal" tabindex="-1" aria-labelledby="pepModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content">
+                <form method="POST">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="pepModalLabel">Add PEP Dose</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <input type="hidden" name="vaccination_action" id="pepVaccAction" value="add">
+                        <input type="hidden" name="vaccinationId" id="pepVaccinationId" value="">
+                        <input type="hidden" name="exposureType" value="PEP">
+                        <div class="row g-3">
+                            <div class="col-md-4">
+                                <label class="form-label">Dose Number</label>
+                                <input type="number" min="1" class="form-control" name="doseNumber" id="pepDoseNumber" value="<?php echo autodoseNumber($pdo, $reportId); ?>" required>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Date Given</label>
+                                <input type="date" class="form-control" name="dateGiven" id="pepDateGiven" required>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Vaccine Name</label>
+                                <input type="text" class="form-control" name="vaccineName" id="pepVaccineName" placeholder="e.g., Verorab, Rabipur">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Batch Number</label>
+                                <input type="text" class="form-control" name="batchNumber" id="pepBatchNumber">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Administered By</label>
+                                <input type="text" class="form-control" name="administeredBy" id="pepAdminBy">
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label">Remarks</label>
+                                <textarea class="form-control" name="remarks" id="pepRemarks" rows="3" placeholder="Notes, adverse reactions, schedule"></textarea>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-outline" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-primary">Save Dose</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const pepModal = document.getElementById('pepModal');
+        if (pepModal) {
+            pepModal.addEventListener('show.bs.modal', function (event) {
+                const button = event.relatedTarget;
+                const vaccId = button ? button.getAttribute('data-vaccination-id') : '';
+
+                const actionInput = document.getElementById('pepVaccAction');
+                const idInput = document.getElementById('pepVaccinationId');
+                const doseInput = document.getElementById('pepDoseNumber');
+                const dateInput = document.getElementById('pepDateGiven');
+                const vacName = document.getElementById('pepVaccineName');
+                const batch = document.getElementById('pepBatchNumber');
+                const adminBy = document.getElementById('pepAdminBy');
+                const remarks = document.getElementById('pepRemarks');
+
+                if (vaccId) {
+                    actionInput.value = 'edit';
+                    idInput.value = vaccId;
+                    doseInput.value = button.getAttribute('data-dose-number') || doseInput.value;
+                    dateInput.value = button.getAttribute('data-date-given') || '';
+                    vacName.value = button.getAttribute('data-vaccine-name') || '';
+                    batch.value = button.getAttribute('data-batch-number') || '';
+                    adminBy.value = button.getAttribute('data-administered-by') || '';
+                    remarks.value = button.getAttribute('data-remarks') || '';
+                } else {
+                    actionInput.value = 'add';
+                    idInput.value = '';
+                    // Default next dose number is set by server-side when modal markup is rendered.
+                    dateInput.value = '';
+                    vacName.value = '';
+                    batch.value = '';
+                    adminBy.value = '';
+                    remarks.value = '';
+                }
+            });
+        }
+    </script>
 </body>
 </html>

@@ -106,7 +106,6 @@ $staffMembers = $stmt->fetchAll(PDO::FETCH_ASSOC);
         }
         
         .main-content {
-            margin-left: var(--sidebar-width);
             min-height: 100vh;
             display: flex;
             flex-direction: column;
@@ -115,9 +114,7 @@ $staffMembers = $stmt->fetchAll(PDO::FETCH_ASSOC);
         .page-container {
             flex: 1;
             padding: 24px;
-            max-width: 1400px;
             width: 100%;
-            margin: 0 auto;
         }
         
         /* Page Header */
@@ -506,14 +503,14 @@ $staffMembers = $stmt->fetchAll(PDO::FETCH_ASSOC);
         
         /* Mobile Responsive */
         @media (max-width: 992px) {
-            .main-content {
-                margin-left: 0;
+            .page-container {
+                padding: 16px;
             }
         }
         
         @media (max-width: 768px) {
             .page-container {
-                padding: 16px;
+                padding: 12px;
             }
             
             .page-header {

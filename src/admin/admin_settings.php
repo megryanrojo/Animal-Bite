@@ -12,6 +12,21 @@ $stmt = $pdo->prepare("SELECT name, email FROM admin WHERE adminId = ?");
 $stmt->execute([$admin_id]);
 $admin = $stmt->fetch(PDO::FETCH_ASSOC);
 
+// Fetch vaccination aggregation and recent vaccination records for visualization
+try {
+    $vacStmt = $pdo->query("SELECT r.animalVaccinated, COUNT(*) as count FROM reports r JOIN patients p ON r.patientId = p.patientId GROUP BY r.animalVaccinated");
+    $vaccinationData = $vacStmt->fetchAll(PDO::FETCH_ASSOC);
+} catch (PDOException $e) {
+    $vaccinationData = [];
+}
+
+try {
+    $recentVacStmt = $pdo->query("SELECT r.reportId, r.biteDate, r.animalType, r.animalVaccinated, p.barangay FROM reports r JOIN patients p ON r.patientId = p.patientId WHERE r.animalVaccinated IS NOT NULL ORDER BY r.biteDate DESC LIMIT 10");
+    $recentVaccinations = $recentVacStmt->fetchAll(PDO::FETCH_ASSOC);
+} catch (PDOException $e) {
+    $recentVaccinations = [];
+}
+
 $account_updated = false;
 $password_updated = false;
 $error = "";
@@ -28,15 +43,12 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         if ($result) {
             $error = "Email already in use by another admin.";
         } else {
-            // Update admin information
             $stmt = $pdo->prepare("UPDATE admin SET name = ?, email = ? WHERE adminId = ?");
             
             try {
                 $stmt->execute([$name, $email, $admin_id]);
                 $account_updated = true;
-                // Update session data
                 $_SESSION['admin_name'] = $name;
-                // Refresh admin data
                 $admin['name'] = $name;
                 $admin['email'] = $email;
             } catch (PDOException $e) {
@@ -50,7 +62,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         $new_password = $_POST['newPassword'];
         $confirm_password = $_POST['confirmPassword'];
         
-        // Verify current password
         $stmt = $pdo->prepare("SELECT password FROM admin WHERE adminId = ?");
         $stmt->execute([$admin_id]);
         $row = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -62,10 +73,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         } else if (strlen($new_password) < 8) {
             $error = "Password must be at least 8 characters long.";
         } else {
-            // Hash the new password
             $hashed_password = password_hash($new_password, PASSWORD_DEFAULT);
-            
-            // Update password
             $stmt = $pdo->prepare("UPDATE admin SET password = ? WHERE adminId = ?");
             
             try {
@@ -88,190 +96,445 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
     <style>
+        :root {
+            --sidebar-width: 250px;
+            --primary-color: #4361ee;
+            --primary-hover: #3a56d4;
+            --bg-color: #f0f2f5;
+            --card-bg: #ffffff;
+            --text-primary: #1a1a2e;
+            --text-secondary: #6c757d;
+            --border-color: #e0e0e0;
+            --success-color: #10b981;
+            --error-color: #ef4444;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
         body {
-            background-color: #f8f9fa;
+            margin: 0;
+            padding: 0;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            padding-top: 60px; /* Add padding to prevent content from going under navbar */
-        }
-        
-        .navbar {
-            background-color: white;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            z-index: 1000;
+            font-size: 14px;
+            background-color: var(--bg-color);
+            color: var(--text-primary);
         }
 
-        .navbar-brand {
+        .main-content {
+            margin-left: 0;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .top-bar {
+            background: var(--card-bg);
+            padding: 16px 24px;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .top-bar h1 {
+            font-size: 1.25rem;
             font-weight: 600;
-            color: #0d6efd;
+            margin: 0;
+            color: var(--text-primary);
         }
 
-        .nav-link {
-            color: #495057;
-            padding: 0.5rem 1rem;
-            transition: color 0.2s;
+        .top-bar .subtitle {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            margin: 0;
         }
 
-        .nav-link:hover {
-            color: #0d6efd;
+        .content-area {
+            padding: 24px;
+            flex: 1;
         }
 
-        .nav-link.active {
-            color: #0d6efd;
-            font-weight: 500;
-        }
-
-        .btn-logout {
-            background-color: #dc3545;
-            color: white;
-            border: none;
-            padding: 0.5rem 1.25rem;
-            border-radius: 5px;
-            transition: all 0.2s;
-        }
-        
-        .btn-logout:hover {
-            background-color: #bb2d3b;
-            color: white;
-        }
-        
-        .settings-container {
-            max-width: 800px;
+        .settings-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 20px;
+            max-width: 1100px;
+            width: 100%;
             margin: 0 auto;
-            padding: 2rem 1rem;
         }
-        
+
         .settings-card {
-            background-color: white;
+            background: var(--card-bg);
             border-radius: 10px;
-            box-shadow: 0 2px 15px rgba(0, 0, 0, 0.05);
-            margin-bottom: 1.5rem;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.08);
             overflow: hidden;
         }
-        
+
         .settings-card-header {
-            padding: 1.25rem 1.5rem;
-            border-bottom: 1px solid rgba(0, 0, 0, 0.05);
-            background-color: rgba(13, 110, 253, 0.03);
-        }
-        
-        .settings-card-body {
-            padding: 1.5rem;
-        }
-        
-        .settings-icon {
-            font-size: 1.5rem;
-            color: #0d6efd;
-            margin-right: 0.75rem;
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            gap: 12px;
         }
 
-        .page-header {
-            background-color: white;
+        .settings-card-header .icon {
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, var(--primary-color), #6366f1);
             border-radius: 10px;
-            padding: 1.5rem;
-            margin-bottom: 2rem;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 1.1rem;
+        }
+
+        .settings-card-header h3 {
+            font-size: 1rem;
+            font-weight: 600;
+            margin: 0;
+            color: var(--text-primary);
+        }
+
+        .settings-card-header p {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            margin: 0;
+        }
+
+        .settings-card-body {
+            padding: 20px;
+        }
+
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        .form-group:last-of-type {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            font-size: 0.85rem;
+            font-weight: 500;
+            color: var(--text-primary);
+            margin-bottom: 6px;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 10px 14px;
+            font-size: 0.9rem;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            transition: border-color 0.2s, box-shadow 0.2s;
+            background: #fafafa;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(67, 97, 238, 0.1);
+            background: white;
+        }
+
+        .btn-save {
+            background: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            font-size: 0.9rem;
+            font-weight: 500;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-save:hover {
+            background: var(--primary-hover);
+        }
+
+        .alert {
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-size: 0.9rem;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            max-width: 1000px;
+        }
+
+        .alert-success {
+            background: #ecfdf5;
+            color: #065f46;
+            border: 1px solid #a7f3d0;
+        }
+
+        .alert-error {
+            background: #fef2f2;
+            color: #991b1b;
+            border: 1px solid #fecaca;
+        }
+
+        .alert i {
+            font-size: 1.1rem;
+        }
+
+        .alert-close {
+            margin-left: auto;
+            background: none;
+            border: none;
+            font-size: 1.2rem;
+            cursor: pointer;
+            color: inherit;
+            opacity: 0.7;
+        }
+
+        .alert-close:hover {
+            opacity: 1;
+        }
+
+        /* Mobile Responsive */
+        @media (max-width: 1024px) {
+            .main-content {
+                margin-left: 0;
+            }
+
+            .settings-grid {
+                grid-template-columns: 1fr;
+            }
         }
 
         @media (max-width: 768px) {
-            body {
-                padding-top: 56px; /* Adjust padding for mobile navbar height */
+            .top-bar {
+                padding: 14px 16px;
             }
-            
-            .settings-container {
-                padding: 1rem;
+
+            .content-area {
+                padding: 16px;
             }
-            
-            .page-header {
-                padding: 1rem;
+
+            .settings-card-header {
+                padding: 14px 16px;
+            }
+
+            .settings-card-body {
+                padding: 16px;
+            }
+
+            .form-group input {
+                padding: 12px 14px;
+            }
+
+            .btn-save {
+                width: 100%;
+                justify-content: center;
             }
         }
     </style>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.3.0/dist/chart.umd.min.js"></script>
 </head>
 <body>
-    <!-- Include the navbar -->
     <?php include 'includes/navbar.php'; ?>
 
-    <div class="settings-container">
-        <!-- Page Header -->
-        <div class="page-header mb-4">
-            <div class="d-flex justify-content-between align-items-center">
-                <div>
-                    <h2 class="mb-0">Settings</h2>
-                    <p class="text-muted mb-0">Manage your account settings</p>
+    <div class="main-content">
+        <div class="top-bar">
+            <div>
+                <h1>Settings</h1>
+                <p class="subtitle">Manage your account preferences</p>
+            </div>
+        </div>
+
+        <div class="content-area">
+            <?php if (!empty($error)): ?>
+            <div class="alert alert-error">
+                <i class="bi bi-exclamation-circle"></i>
+                <span><?php echo $error; ?></span>
+                <button class="alert-close" onclick="this.parentElement.remove()">&times;</button>
+            </div>
+            <?php endif; ?>
+
+            <?php if ($account_updated): ?>
+            <div class="alert alert-success">
+                <i class="bi bi-check-circle"></i>
+                <span>Account information updated successfully!</span>
+                <button class="alert-close" onclick="this.parentElement.remove()">&times;</button>
+            </div>
+            <?php endif; ?>
+
+            <?php if ($password_updated): ?>
+            <div class="alert alert-success">
+                <i class="bi bi-check-circle"></i>
+                <span>Password updated successfully!</span>
+                <button class="alert-close" onclick="this.parentElement.remove()">&times;</button>
+            </div>
+            <?php endif; ?>
+
+            <div class="settings-grid">
+                <!-- Account Settings -->
+                <div class="settings-card">
+                    <div class="settings-card-header">
+                        <div class="icon">
+                            <i class="bi bi-person"></i>
+                        </div>
+                        <div>
+                            <h3>Account Settings</h3>
+                            <p>Update your profile information</p>
+                        </div>
+                    </div>
+                    <div class="settings-card-body">
+                        <form method="POST" action="">
+                            <div class="form-group">
+                                <label for="name">Full Name</label>
+                                <input type="text" id="name" name="name" value="<?php echo htmlspecialchars($admin['name']); ?>" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="email">Email Address</label>
+                                <input type="email" id="email" name="email" value="<?php echo htmlspecialchars($admin['email']); ?>" required>
+                            </div>
+                            <button type="submit" name="update_account" class="btn-save">
+                                <i class="bi bi-check2"></i> Save Changes
+                            </button>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Change Password -->
+                <div class="settings-card">
+                    <div class="settings-card-header">
+                        <div class="icon">
+                            <i class="bi bi-key"></i>
+                        </div>
+                        <div>
+                            <h3>Change Password</h3>
+                            <p>Update your security credentials</p>
+                        </div>
+                    </div>
+                    <div class="settings-card-body">
+                        <form method="POST" action="">
+                            <div class="form-group">
+                                <label for="currentPassword">Current Password</label>
+                                <input type="password" id="currentPassword" name="currentPassword" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="newPassword">New Password</label>
+                                <input type="password" id="newPassword" name="newPassword" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="confirmPassword">Confirm New Password</label>
+                                <input type="password" id="confirmPassword" name="confirmPassword" required>
+                            </div>
+                            <button type="submit" name="update_password" class="btn-save">
+                                <i class="bi bi-shield-check"></i> Update Password
+                            </button>
+                        </form>
+                    </div>
                 </div>
             </div>
-        </div>
-
-        <?php if (!empty($error)): ?>
-        <div class="alert alert-danger alert-dismissible fade show" role="alert">
-            <?php echo $error; ?>
-            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-        </div>
-        <?php endif; ?>
-
-        <?php if ($account_updated): ?>
-        <div class="alert alert-success alert-dismissible fade show" role="alert">
-            Account information updated successfully!
-            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-        </div>
-        <?php endif; ?>
-
-        <?php if ($password_updated): ?>
-        <div class="alert alert-success alert-dismissible fade show" role="alert">
-            Password updated successfully!
-            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-        </div>
-        <?php endif; ?>
-
-        <!-- Account Settings -->
-        <div class="settings-card">
-            <div class="settings-card-header">
-                <h5 class="mb-0"><i class="bi bi-person settings-icon"></i>Account Settings</h5>
-            </div>
-            <div class="settings-card-body">
-                <form method="POST" action="">
-                    <div class="mb-3">
-                        <label for="name" class="form-label">Full Name</label>
-                        <input type="text" class="form-control" id="name" name="name" value="<?php echo htmlspecialchars($admin['name']); ?>" required>
+            
+            <!-- Vaccination Visualization -->
+            <div class="settings-card">
+                <div class="settings-card-header">
+                    <div class="icon">
+                        <i class="bi bi-shield-check"></i>
                     </div>
-                    <div class="mb-3">
-                        <label for="email" class="form-label">Email Address</label>
-                        <input type="email" class="form-control" id="email" name="email" value="<?php echo htmlspecialchars($admin['email']); ?>" required>
+                    <div>
+                        <h3>Vaccination Overview</h3>
+                        <p>Animal vaccination status (last reports)</p>
                     </div>
-                    <button type="submit" name="update_account" class="btn btn-primary">Save Changes</button>
-                </form>
-            </div>
-        </div>
-        
-        <!-- Change Password -->
-        <div class="settings-card">
-            <div class="settings-card-header">
-                <h5 class="mb-0"><i class="bi bi-key settings-icon"></i>Change Password</h5>
-            </div>
-            <div class="settings-card-body">
-                <form method="POST" action="">
-                    <div class="mb-3">
-                        <label for="currentPassword" class="form-label">Current Password</label>
-                        <input type="password" class="form-control" id="currentPassword" name="currentPassword" required>
+                </div>
+                <div class="settings-card-body">
+                    <div style="display:flex; gap:16px; align-items:flex-start; flex-wrap:wrap;">
+                        <div style="flex:1 1 240px; min-width:220px; max-width:360px;">
+                            <canvas id="vaccinationChart" aria-label="Vaccination chart" role="img"></canvas>
+                        </div>
+                        <div style="flex:1 1 260px; min-width:220px;">
+                            <div style="font-size:0.9rem; font-weight:600; margin-bottom:8px;">Recent Vaccination Records</div>
+                            <div style="max-height:220px; overflow:auto;">
+                                <table class="data-table" style="min-width:100%;">
+                                    <thead>
+                                        <tr><th>Date</th><th>Animal</th><th>Vaccinated</th></tr>
+                                    </thead>
+                                    <tbody id="recentVaccRows">
+                                        <?php foreach ($recentVaccinations as $rv): ?>
+                                            <tr>
+                                                <td><?php echo date('M j, Y', strtotime($rv['biteDate'])); ?></td>
+                                                <td><?php echo htmlspecialchars($rv['animalType'] ?? 'N/A'); ?></td>
+                                                <td><?php echo htmlspecialchars($rv['animalVaccinated']); ?></td>
+                                            </tr>
+                                        <?php endforeach; ?>
+                                        <?php if (empty($recentVaccinations)): ?>
+                                            <tr><td colspan="3" style="text-align:center;color:var(--text-secondary);">No recent vaccination data</td></tr>
+                                        <?php endif; ?>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
                     </div>
-                    <div class="mb-3">
-                        <label for="newPassword" class="form-label">New Password</label>
-                        <input type="password" class="form-control" id="newPassword" name="newPassword" required>
-                    </div>
-                    <div class="mb-3">
-                        <label for="confirmPassword" class="form-label">Confirm New Password</label>
-                        <input type="password" class="form-control" id="confirmPassword" name="confirmPassword" required>
-                    </div>
-                    <button type="submit" name="update_password" class="btn btn-primary">Update Password</button>
-                </form>
+                </div>
             </div>
         </div>
     </div>
 
+    <script>
+        // Prepare vaccination data from PHP
+        const vacLabels = [];
+        const vacCounts = [];
+        <?php foreach ($vaccinationData as $v): ?>
+            vacLabels.push('<?php echo addslashes($v['animalVaccinated']); ?>');
+            vacCounts.push(<?php echo (int)$v['count']; ?>);
+        <?php endforeach; ?>
+
+        // Fallback if no data
+        if (vacLabels.length === 0) {
+            vacLabels.push('Unknown');
+            vacCounts.push(0);
+        }
+
+        // Colors mapping
+        const vacColors = vacLabels.map(l => {
+            if (l === 'Yes') return '#10b981';
+            if (l === 'No') return '#ef4444';
+            return '#f59e0b';
+        });
+
+        // Render donut chart
+        (function renderVacChart(){
+            const ctx = document.getElementById('vaccinationChart');
+            if (!ctx) return;
+            // Ensure canvas size is reasonable
+            ctx.style.maxWidth = '100%';
+            const chart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: vacLabels,
+                    datasets: [{
+                        data: vacCounts,
+                        backgroundColor: vacColors,
+                        hoverOffset: 8,
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    aspectRatio: 1.2,
+                    plugins: {
+                        legend: { position: 'bottom', labels: {boxWidth:12, padding:8} },
+                        tooltip: { callbacks: { label: function(ctx){ const v = ctx.raw; const total = vacCounts.reduce((a,b)=>a+b,0); const pct = total?((v/total)*100).toFixed(1)+'%':'0%'; return ctx.label+': '+v+' ('+pct+')'; } } }
+                    }
+                }
+            });
+        })();
+    </script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>

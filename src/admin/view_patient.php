@@ -15,20 +15,22 @@ $patientId = (int)$_GET['id'];
 $error = '';
 $success = '';
 
-// Handle Vaccination CRUD actions (PrEP + PEP history)
+// Handle Vaccination CRUD actions (PrEP only on patient view)
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['vaccination_action'])) {
     $action = $_POST['vaccination_action'];
 
     try {
         if ($action === 'add' || $action === 'edit') {
-            $exposureType   = isset($_POST['exposureType']) ? $_POST['exposureType'] : 'PrEP';
+            // On patient view only allow Pre-Exposure entries (PrEP)
+            $exposureType   = 'PrEP';
             $doseNumber     = isset($_POST['doseNumber']) ? (int)$_POST['doseNumber'] : 1;
             $dateGiven      = !empty($_POST['dateGiven']) ? $_POST['dateGiven'] : null;
             $vaccineName    = !empty($_POST['vaccineName']) ? $_POST['vaccineName'] : null;
             $batchNumber    = !empty($_POST['batchNumber']) ? $_POST['batchNumber'] : null;
             $administeredBy = !empty($_POST['administeredBy']) ? $_POST['administeredBy'] : null;
             $remarks        = !empty($_POST['remarks']) ? $_POST['remarks'] : null;
-            $reportId       = !empty($_POST['reportId']) ? (int)$_POST['reportId'] : null;
+            // Ensure patient-level vaccinations created here are not linked to a report
+            $reportId       = null;
 
             if ($action === 'add') {
                 $insertStmt = $pdo->prepare("
@@ -734,25 +736,35 @@ function calculateAge($dateOfBirth) {
                         </td>
                         <td data-label="">
                             <div class="action-cell">
-                                <button class="btn btn-outline btn-icon btn-sm" data-bs-toggle="modal" data-bs-target="#vaccinationModal"
-                                    data-vaccination-id="<?php echo (int)$vacc['vaccinationId']; ?>"
-                                    data-exposure-type="<?php echo htmlspecialchars($vacc['exposureType']); ?>"
-                                    data-dose-number="<?php echo (int)$vacc['doseNumber']; ?>"
-                                    data-date-given="<?php echo htmlspecialchars($vacc['dateGiven']); ?>"
-                                    data-vaccine-name="<?php echo htmlspecialchars($vacc['vaccineName'] ?? ''); ?>"
-                                    data-batch-number="<?php echo htmlspecialchars($vacc['batchNumber'] ?? ''); ?>"
-                                    data-administered-by="<?php echo htmlspecialchars($vacc['administeredBy'] ?? ''); ?>"
-                                    data-remarks="<?php echo htmlspecialchars($vacc['remarks'] ?? ''); ?>"
-                                    data-report-id="<?php echo htmlspecialchars($vacc['reportId'] ?? ''); ?>">
-                                    <i class="bi bi-pencil"></i>
-                                </button>
-                                <form method="POST" onsubmit="return confirm('Delete this vaccination dose?');">
-                                    <input type="hidden" name="vaccination_action" value="delete">
-                                    <input type="hidden" name="vaccinationId" value="<?php echo (int)$vacc['vaccinationId']; ?>">
-                                    <button type="submit" class="btn btn-danger btn-icon btn-sm">
-                                        <i class="bi bi-trash"></i>
+                                <?php if ($vacc['exposureType'] === 'PEP'): ?>
+                                    <?php if (!empty($vacc['reportId'])): ?>
+                                        <a href="view_report.php?id=<?php echo (int)$vacc['reportId']; ?>" class="btn btn-outline btn-sm" title="Manage PEP on linked report">
+                                            <i class="bi bi-box-arrow-up-right"></i> Manage on Report
+                                        </a>
+                                    <?php else: ?>
+                                        <span class="text-muted small">PEP managed on report</span>
+                                    <?php endif; ?>
+                                <?php else: ?>
+                                    <button class="btn btn-outline btn-icon btn-sm" data-bs-toggle="modal" data-bs-target="#vaccinationModal"
+                                        data-vaccination-id="<?php echo (int)$vacc['vaccinationId']; ?>"
+                                        data-exposure-type="<?php echo htmlspecialchars($vacc['exposureType']); ?>"
+                                        data-dose-number="<?php echo (int)$vacc['doseNumber']; ?>"
+                                        data-date-given="<?php echo htmlspecialchars($vacc['dateGiven']); ?>"
+                                        data-vaccine-name="<?php echo htmlspecialchars($vacc['vaccineName'] ?? ''); ?>"
+                                        data-batch-number="<?php echo htmlspecialchars($vacc['batchNumber'] ?? ''); ?>"
+                                        data-administered-by="<?php echo htmlspecialchars($vacc['administeredBy'] ?? ''); ?>"
+                                        data-remarks="<?php echo htmlspecialchars($vacc['remarks'] ?? ''); ?>"
+                                        data-report-id="<?php echo htmlspecialchars($vacc['reportId'] ?? ''); ?>">
+                                        <i class="bi bi-pencil"></i>
                                     </button>
-                                </form>
+                                    <form method="POST" onsubmit="return confirm('Delete this vaccination dose?');" style="display:inline-block; margin-left:6px;">
+                                        <input type="hidden" name="vaccination_action" value="delete">
+                                        <input type="hidden" name="vaccinationId" value="<?php echo (int)$vacc['vaccinationId']; ?>">
+                                        <button type="submit" class="btn btn-danger btn-icon btn-sm">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </form>
+                                <?php endif; ?>
                             </div>
                         </td>
                     </tr>
@@ -855,10 +867,9 @@ function calculateAge($dateOfBirth) {
                     <div class="row g-3">
                         <div class="col-md-4">
                             <label class="form-label">Exposure Type</label>
-                            <select class="form-select" name="exposureType" id="exposureType" required>
-                                <option value="PrEP">Pre-Exposure (PrEP)</option>
-                                <option value="PEP">Post-Exposure (PEP)</option>
-                            </select>
+                            <div class="form-control" style="background:#fff;">Pre-Exposure (PrEP)</div>
+                            <input type="hidden" name="exposureType" id="exposureType" value="PrEP">
+                            <div class="form-text">Post-Exposure (PEP) vaccinations are managed on individual reports.</div>
                         </div>
                         <div class="col-md-4">
                             <label class="form-label">Dose Number</label>
@@ -881,16 +892,9 @@ function calculateAge($dateOfBirth) {
                             <input type="text" class="form-control" name="administeredBy" id="administeredBy" placeholder="Health worker name">
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label">Linked Report (Optional)</label>
-                            <select class="form-select" name="reportId" id="reportId">
-                                <option value="">Not linked</option>
-                                <?php foreach ($reports as $report): ?>
-                                    <option value="<?php echo $report['reportId']; ?>">
-                                        Report #<?php echo $report['reportId']; ?> - 
-                                        <?php echo isset($report['biteDate']) ? date('M d, Y', strtotime($report['biteDate'])) : 'No bite date'; ?>
-                                    </option>
-                                <?php endforeach; ?>
-                            </select>
+                            <label class="form-label">Linked Report (Not applicable)</label>
+                            <div class="form-control" style="background:#fff;">Patient-level PrEP (not linked to reports)</div>
+                            <input type="hidden" name="reportId" id="reportId" value="">
                         </div>
                         <div class="col-12">
                             <label class="form-label">Remarks</label>

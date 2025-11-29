@@ -681,15 +681,6 @@ $staffMembers = $stmt->fetchAll(PDO::FETCH_ASSOC);
                         <p>Active Members</p>
                     </div>
                 </div>
-                <div class="stat-card">
-                    <div class="stat-icon orange">
-                        <i class="bi bi-list-ul"></i>
-                    </div>
-                    <div class="stat-info">
-                        <h3><?php echo $totalPages; ?></h3>
-                        <p>Total Pages</p>
-                    </div>
-                </div>
             </div>
             
             <!-- Search Filter -->

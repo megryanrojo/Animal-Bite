@@ -5,6 +5,8 @@ if (!isset($_SESSION['admin_id'])) {
     exit;
 }
 require_once '../conn/conn.php';
+// Use enhanced vaccination helper v2 for PEP/PrEP separation and improved features
+require_once 'includes/vaccination_helper_v2.php';
 
 // Get report ID from URL
 $reportId = isset($_GET['id']) ? (int)$_GET['id'] : 0;
@@ -48,18 +50,13 @@ try {
     $allStaffStmt->execute();
     $allStaff = $allStaffStmt->fetchAll(PDO::FETCH_ASSOC);
 
-    $reportVaccStmt = $pdo->prepare("SELECT * FROM vaccination_records WHERE reportId = ? ORDER BY doseNumber ASC, dateGiven DESC");
-    $reportVaccStmt->execute([$reportId]);
-    $reportVaccinations = $reportVaccStmt->fetchAll(PDO::FETCH_ASSOC);
-
-    // helper: compute next dose number for this report (PEP)
-    function autodoseNumber($pdo, $reportId) {
-        $cstmt = $pdo->prepare("SELECT COUNT(*) as cnt FROM vaccination_records WHERE reportId = ? AND exposureType = 'PEP'");
-        $cstmt->execute([$reportId]);
-        $row = $cstmt->fetch(PDO::FETCH_ASSOC);
-        $count = $row ? (int)$row['cnt'] : 0;
-        return $count + 1;
-    }
+    // Get all PEP vaccinations (report-specific)
+    $reportVaccinations = getPEPVaccinations($pdo, $reportId);
+    
+    // Get organized vaccinations with PEP/PrEP separation
+    $organizetVaccinations = getOrganizedVaccinations($pdo, $report['patientId'], $reportId);
+    $pepVaccinations = $organizetVaccinations['pep']['vaccinations'];
+    $pepLockStatus = $organizetVaccinations['pep']['lockStatus'];
 
 } catch (PDOException $e) {
     $error = "Database error: " . $e->getMessage();
@@ -69,36 +66,87 @@ try {
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (isset($_POST['vaccination_action'])) {
         $vaction = $_POST['vaccination_action'];
+        $vacc_error = null;
+        
         try {
             if ($vaction === 'add') {
-                $doseNumber = isset($_POST['doseNumber']) ? (int)$_POST['doseNumber'] : autodoseNumber($pdo, $reportId);
+                // Get form inputs
+                $doseNumber = isset($_POST['doseNumber']) ? (int)$_POST['doseNumber'] : getNextDoseNumber($pdo, $reportId);
                 $dateGiven = !empty($_POST['dateGiven']) ? $_POST['dateGiven'] : null;
                 $vaccineName = !empty($_POST['vaccineName']) ? $_POST['vaccineName'] : null;
-                $batchNumber = !empty($_POST['batchNumber']) ? $_POST['batchNumber'] : null;
                 $administeredBy = !empty($_POST['administeredBy']) ? $_POST['administeredBy'] : null;
                 $remarks = !empty($_POST['remarks']) ? $_POST['remarks'] : null;
-                $insert = $pdo->prepare("INSERT INTO vaccination_records (patientId, reportId, exposureType, doseNumber, dateGiven, vaccineName, batchNumber, administeredBy, remarks) VALUES (?, ?, 'PEP', ?, ?, ?, ?, ?, ?)");
-                $insert->execute([$report['patientId'], $reportId, $doseNumber, $dateGiven, $vaccineName, $batchNumber, $administeredBy, $remarks]);
-                header("Location: view_report.php?id={$reportId}&vacc_updated=1");
-                exit;
+                
+                // Validation checks
+                if (!requiresPEP($pdo, $reportId)) {
+                    $vacc_error = "Category I: PEP vaccination not required for this report";
+                } else {
+                    $seqCheck = validateDoseSequence($pdo, $reportId, $doseNumber, 'add');
+                    if (!$seqCheck['valid']) {
+                        $vacc_error = $seqCheck['message'];
+                    }
+                }
+                
+                if (!$vacc_error) {
+                    // Calculate suggested date if not provided
+                    if (!$dateGiven && $report['biteDate']) {
+                        $dateGiven = calculateSuggestedDoseDate($report['biteDate'], $doseNumber);
+                    }
+                    
+                    $insert = $pdo->prepare("INSERT INTO vaccination_records (patientId, reportId, exposureType, doseNumber, dateGiven, vaccineName, administeredBy, remarks) VALUES (?, ?, 'PEP', ?, ?, ?, ?, ?)");
+                    $insert->execute([$report['patientId'], $reportId, $doseNumber, $dateGiven, $vaccineName, $administeredBy, $remarks]);
+                    
+                    header("Location: view_report.php?id={$reportId}&vacc_updated=1");
+                    exit;
+                } else {
+                    $error = "Cannot add dose: " . $vacc_error;
+                }
+                
             } elseif ($vaction === 'edit' && isset($_POST['vaccinationId']) && is_numeric($_POST['vaccinationId'])) {
                 $vaccinationId = (int)$_POST['vaccinationId'];
                 $doseNumber = isset($_POST['doseNumber']) ? (int)$_POST['doseNumber'] : 1;
                 $dateGiven = !empty($_POST['dateGiven']) ? $_POST['dateGiven'] : null;
                 $vaccineName = !empty($_POST['vaccineName']) ? $_POST['vaccineName'] : null;
-                $batchNumber = !empty($_POST['batchNumber']) ? $_POST['batchNumber'] : null;
                 $administeredBy = !empty($_POST['administeredBy']) ? $_POST['administeredBy'] : null;
                 $remarks = !empty($_POST['remarks']) ? $_POST['remarks'] : null;
-                $update = $pdo->prepare("UPDATE vaccination_records SET doseNumber = ?, dateGiven = ?, vaccineName = ?, batchNumber = ?, administeredBy = ?, remarks = ?, updated_at = CURRENT_TIMESTAMP WHERE vaccinationId = ? AND reportId = ?");
-                $update->execute([$doseNumber, $dateGiven, $vaccineName, $batchNumber, $administeredBy, $remarks, $vaccinationId, $reportId]);
-                header("Location: view_report.php?id={$reportId}&vacc_updated=1");
-                exit;
+                
+                // Check if record is locked
+                if (isRecordLocked($pdo, $reportId)) {
+                    $vacc_error = "Record is locked: all 5 doses completed. Cannot edit.";
+                }
+                
+                // Check if past date
+                if (!$vacc_error && isPastDate($dateGiven)) {
+                    $vacc_error = "Cannot edit: dose date is in the past";
+                }
+                
+                if (!$vacc_error) {
+                    $update = $pdo->prepare("UPDATE vaccination_records SET doseNumber = ?, dateGiven = ?, vaccineName = ?, administeredBy = ?, remarks = ?, updated_at = CURRENT_TIMESTAMP WHERE vaccinationId = ? AND reportId = ?");
+                    $update->execute([$doseNumber, $dateGiven, $vaccineName, $administeredBy, $remarks, $vaccinationId, $reportId]);
+                    
+                    header("Location: view_report.php?id={$reportId}&vacc_updated=1");
+                    exit;
+                } else {
+                    $error = "Cannot edit dose: " . $vacc_error;
+                }
+                
             } elseif ($vaction === 'delete' && isset($_POST['vaccinationId']) && is_numeric($_POST['vaccinationId'])) {
                 $vaccinationId = (int)$_POST['vaccinationId'];
-                $del = $pdo->prepare("DELETE FROM vaccination_records WHERE vaccinationId = ? AND reportId = ?");
-                $del->execute([$vaccinationId, $reportId]);
-                header("Location: view_report.php?id={$reportId}&vacc_deleted=1");
-                exit;
+                
+                // Check if record is locked
+                if (isRecordLocked($pdo, $reportId)) {
+                    $vacc_error = "Record is locked: all 5 doses completed. Cannot delete.";
+                } else {
+                    $del = $pdo->prepare("DELETE FROM vaccination_records WHERE vaccinationId = ? AND reportId = ?");
+                    $del->execute([$vaccinationId, $reportId]);
+                    
+                    header("Location: view_report.php?id={$reportId}&vacc_deleted=1");
+                    exit;
+                }
+                
+                if ($vacc_error) {
+                    $error = "Cannot delete dose: " . $vacc_error;
+                }
             }
         } catch (PDOException $e) {
             $error = "Vaccination action failed: " . $e->getMessage();
@@ -795,9 +843,6 @@ $daysSinceBite = $now->diff($biteDate)->days;
                 <button class="btn btn-outline" onclick="window.print();">
                     <i class="bi bi-printer"></i> Print Report
                 </button>
-                <a href="tel:<?php echo htmlspecialchars($report['contactNumber']); ?>" class="btn btn-outline">
-                    <i class="bi bi-telephone"></i> Call Patient
-                </a>
             </div>
         </div>
 
@@ -930,58 +975,76 @@ $daysSinceBite = $now->diff($biteDate)->days;
             </div>
         </div>
 
-        <!-- PEP Vaccination Schedule -->
+        <!-- PEP Vaccination Schedule - Enhanced with Status Tracking -->
         <div class="section">
             <div class="section-header">
                 <h2 class="section-title"><i class="bi bi-shield-plus"></i> PEP Vaccination Schedule</h2>
-                <button class="btn btn-primary btn-sm no-print" data-bs-toggle="modal" data-bs-target="#pepModal">
-                    <i class="bi bi-plus"></i> Add Dose
-                </button>
+                <div class="section-header-meta">
+                    <?php if ($pepLockStatus): ?>
+                    <span class="badge bg-<?php echo $pepLockStatus['is_locked'] ? 'danger' : 'info'; ?>" title="<?php echo htmlspecialchars($pepLockStatus['message']); ?>">
+                        <i class="bi bi-<?php echo $pepLockStatus['is_locked'] ? 'lock-fill' : 'info-circle'; ?>"></i>
+                        <?php echo htmlspecialchars($pepLockStatus['message']); ?>
+                    </span>
+                    <?php endif; ?>
+                    <button class="btn btn-primary btn-sm no-print" data-bs-toggle="modal" data-bs-target="#pepModal" <?php echo ($pepLockStatus && $pepLockStatus['is_locked']) ? 'disabled' : ''; ?>>
+                        <i class="bi bi-plus"></i> Add Dose
+                    </button>
+                </div>
             </div>
             <div class="section-body">
-                <?php if (!empty($reportVaccinations)): ?>
+                <?php if (!empty($pepVaccinations)): ?>
                 <div class="vacc-timeline">
-                    <?php foreach ($reportVaccinations as $pv): ?>
-                    <div class="vacc-item">
-                        <div class="vacc-dose <?php echo $pv['dateGiven'] ? 'completed' : ''; ?>">
-                            <?php echo (int)$pv['doseNumber']; ?>
+                    <?php foreach ($pepVaccinations as $pv): 
+                        $statusInfo = $pv['statusInfo'];
+                    ?>
+                    <div class="vacc-item" data-vaccine-id="<?php echo (int)$pv['id']; ?>">
+                        <div class="vacc-dose <?php echo strtolower($pv['status']); ?>" title="<?php echo htmlspecialchars($statusInfo['label']); ?>">
+                            <?php echo (int)$pv['dose']; ?>
                         </div>
                         <div class="vacc-details">
                             <div class="vacc-date">
-                                <?php echo $pv['dateGiven'] ? date('F d, Y', strtotime($pv['dateGiven'])) : 'Not yet given'; ?>
+                                <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 4px;">
+                                    <span><?php echo $pv['dateGiven'] ? date('F d, Y', strtotime($pv['dateGiven'])) : 'Scheduled for: ' . ($pv['nextScheduledDate'] ? date('F d, Y', strtotime($pv['nextScheduledDate'])) : 'Not yet scheduled'); ?></span>
+                                    <span class="badge <?php echo htmlspecialchars($statusInfo['badge_class']); ?>" title="<?php echo htmlspecialchars($statusInfo['label']); ?>">
+                                        <i class="bi bi-<?php echo htmlspecialchars($statusInfo['icon']); ?>"></i>
+                                        <?php echo htmlspecialchars($statusInfo['label']); ?>
+                                    </span>
+                                </div>
                             </div>
                             <div class="vacc-meta">
                                 <?php if (!empty($pv['vaccineName'])): ?>
                                 <span><i class="bi bi-capsule"></i> <?php echo htmlspecialchars($pv['vaccineName']); ?></span>
                                 <?php endif; ?>
-                                <?php if (!empty($pv['batchNumber'])): ?>
-                                <span><i class="bi bi-upc"></i> <?php echo htmlspecialchars($pv['batchNumber']); ?></span>
-                                <?php endif; ?>
                                 <?php if (!empty($pv['administeredBy'])): ?>
                                 <span><i class="bi bi-person"></i> <?php echo htmlspecialchars($pv['administeredBy']); ?></span>
                                 <?php endif; ?>
+                                <?php if ($pv['workload']['level'] !== 'N/A'): ?>
+                                <span class="badge <?php echo htmlspecialchars($pv['workload']['badge_css']); ?>" title="<?php echo htmlspecialchars($pv['workload']['message']); ?>">
+                                    <i class="bi bi-graph-up"></i> <?php echo htmlspecialchars($pv['workload']['level']); ?>
+                                </span>
+                                <?php endif; ?>
                             </div>
                             <?php if (!empty($pv['remarks'])): ?>
-                            <div class="vacc-meta" style="margin-top: 4px; font-style: italic;">
-                                <?php echo htmlspecialchars($pv['remarks']); ?>
+                            <div class="vacc-meta" style="margin-top: 4px; font-style: italic; color: var(--gray-600);">
+                                <i class="bi bi-chat-quote"></i> <?php echo htmlspecialchars($pv['remarks']); ?>
                             </div>
                             <?php endif; ?>
                         </div>
                         <div class="vacc-actions no-print">
                             <button class="btn btn-outline btn-icon btn-sm" data-bs-toggle="modal" data-bs-target="#pepModal"
-                                data-vaccination-id="<?php echo (int)$pv['vaccinationId']; ?>"
-                                data-dose-number="<?php echo (int)$pv['doseNumber']; ?>"
-                                data-date-given="<?php echo htmlspecialchars($pv['dateGiven']); ?>"
+                                data-vaccination-id="<?php echo (int)$pv['id']; ?>"
+                                data-dose-number="<?php echo (int)$pv['dose']; ?>"
+                                data-date-given="<?php echo htmlspecialchars($pv['dateGiven'] ?? ''); ?>"
                                 data-vaccine-name="<?php echo htmlspecialchars($pv['vaccineName'] ?? ''); ?>"
-                                data-batch-number="<?php echo htmlspecialchars($pv['batchNumber'] ?? ''); ?>"
                                 data-administered-by="<?php echo htmlspecialchars($pv['administeredBy'] ?? ''); ?>"
-                                data-remarks="<?php echo htmlspecialchars($pv['remarks'] ?? ''); ?>">
+                                data-remarks="<?php echo htmlspecialchars($pv['remarks'] ?? ''); ?>"
+                                <?php echo $pv['isLocked'] ? 'disabled' : ''; ?>>
                                 <i class="bi bi-pencil"></i>
                             </button>
-                            <form method="POST" style="display:inline-block;" onsubmit="return confirm('Delete this PEP dose?');">
+                            <form method="POST" style="display:inline-block;" onsubmit="return confirm('Delete this PEP dose? This action cannot be undone.');">
                                 <input type="hidden" name="vaccination_action" value="delete">
-                                <input type="hidden" name="vaccinationId" value="<?php echo (int)$pv['vaccinationId']; ?>">
-                                <button type="submit" class="btn btn-outline btn-icon btn-sm" style="color: var(--danger);">
+                                <input type="hidden" name="vaccinationId" value="<?php echo (int)$pv['id']; ?>">
+                                <button type="submit" class="btn btn-outline btn-icon btn-sm" style="color: var(--danger);" <?php echo $pv['isLocked'] ? 'disabled' : ''; ?>>
                                     <i class="bi bi-trash"></i>
                                 </button>
                             </form>
@@ -1098,42 +1161,61 @@ $daysSinceBite = $now->diff($biteDate)->days;
         </div>
     </div>
 
-    <!-- PEP Modal -->
+    <!-- PEP Modal with Smart Scheduling -->
     <div class="modal fade" id="pepModal" tabindex="-1" aria-labelledby="pepModalLabel" aria-hidden="true">
         <div class="modal-dialog modal-lg modal-dialog-centered">
             <div class="modal-content">
                 <form method="POST">
                     <div class="modal-header">
-                        <h5 class="modal-title" id="pepModalLabel">Add PEP Dose</h5>
+                        <div>
+                            <h5 class="modal-title" id="pepModalLabel">Add PEP Dose</h5>
+                            <small id="pepLockStatus" class="text-muted"></small>
+                        </div>
                         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                     </div>
                     <div class="modal-body">
                         <input type="hidden" name="vaccination_action" id="pepVaccAction" value="add">
                         <input type="hidden" name="vaccinationId" id="pepVaccinationId" value="">
                         <input type="hidden" name="exposureType" value="PEP">
+                        
+                        <!-- Status & Warnings -->
+                        <div id="pepValidations" class="mb-3"></div>
+                        
+                        <!-- Dose Selection & Info -->
                         <div class="row g-3">
                             <div class="col-md-4">
                                 <label class="form-label">Dose Number</label>
-                                <input type="number" min="1" class="form-control" name="doseNumber" id="pepDoseNumber" 
-                                    value="<?php echo autodoseNumber($pdo, $reportId); ?>" required>
+                                <input type="number" min="1" max="3" class="form-control" name="doseNumber" id="pepDoseNumber" required>
+                                <small class="text-muted" id="pepDoseInfo"></small>
                             </div>
-                            <div class="col-md-4">
+                            <div class="col-md-8">
                                 <label class="form-label">Date Given</label>
-                                <input type="date" class="form-control" name="dateGiven" id="pepDateGiven" required>
+                                <div class="input-group">
+                                    <input type="date" class="form-control" name="dateGiven" id="pepDateGiven" required>
+                                    <button type="button" class="btn btn-outline-secondary" id="pepSuggestDateBtn" title="Use suggested date">
+                                        <i class="bi bi-calendar-check"></i>
+                                    </button>
+                                </div>
+                                <small class="text-muted" id="pepDateSuggestion"></small>
+                                <small class="d-block text-muted" id="pepWorkloadInfo"></small>
                             </div>
-                            <div class="col-md-4">
+                        </div>
+                        
+                        <!-- Vaccine Details -->
+                        <div class="row g-3 mt-2">
+                            <div class="col-md-6">
                                 <label class="form-label">Vaccine Name</label>
                                 <input type="text" class="form-control" name="vaccineName" id="pepVaccineName" 
                                     placeholder="e.g., Verorab, Rabipur">
                             </div>
                             <div class="col-md-6">
-                                <label class="form-label">Batch Number</label>
-                                <input type="text" class="form-control" name="batchNumber" id="pepBatchNumber">
-                            </div>
-                            <div class="col-md-6">
                                 <label class="form-label">Administered By</label>
                                 <input type="text" class="form-control" name="administeredBy" id="pepAdminBy">
                             </div>
+                        </div>
+                        
+                        <!-- Remarks -->
+                        <div class="row g-3 mt-2">
                             <div class="col-12">
                                 <label class="form-label">Remarks</label>
                                 <textarea class="form-control" name="remarks" id="pepRemarks" rows="3" 
@@ -1143,7 +1225,7 @@ $daysSinceBite = $now->diff($biteDate)->days;
                     </div>
                     <div class="modal-footer">
                         <button type="button" class="btn btn-outline" data-bs-dismiss="modal">Cancel</button>
-                        <button type="submit" class="btn btn-primary">Save Dose</button>
+                        <button type="submit" class="btn btn-primary" id="pepSaveBtn">Save Dose</button>
                     </div>
                 </form>
             </div>
@@ -1152,6 +1234,66 @@ $daysSinceBite = $now->diff($biteDate)->days;
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
+        // Configuration
+        const PEP_INTERVALS = {1: 0, 2: 7, 3: 21};
+        const BITE_DATE = '<?php echo isset($report['biteDate']) ? htmlspecialchars($report['biteDate']) : ''; ?>';
+        const REPORT_ID = <?php echo $reportId; ?>;
+        
+        // Calculate suggested dose date
+        function calculateSuggestedDate(doseNum) {
+            if (!BITE_DATE || !doseNum) return null;
+            const interval = PEP_INTERVALS[parseInt(doseNum)] || 0;
+            const date = new Date(BITE_DATE);
+            date.setDate(date.getDate() + interval);
+            return date.toISOString().split('T')[0];
+        }
+        
+        // Fetch and display workload for a date
+        function updateWorkloadInfo(dateStr) {
+            if (!dateStr) {
+                document.getElementById('pepWorkloadInfo').textContent = '';
+                return;
+            }
+            
+            fetch('get_workload.php?date=' + encodeURIComponent(dateStr))
+                .then(r => r.json())
+                .then(data => {
+                    if (data.level && data.level !== 'UNKNOWN') {
+                        const colors = {
+                            'LOW': 'success',
+                            'MODERATE': 'warning',
+                            'HIGH': 'danger',
+                            'VERY HIGH': 'dark'
+                        };
+                        const color = colors[data.level] || 'secondary';
+                        document.getElementById('pepWorkloadInfo').innerHTML = 
+                            '<span class="badge bg-' + color + '">' + data.message + '</span>' +
+                            (data.level !== 'LOW' ? ' <small>(You can still schedule here)</small>' : '');
+                    }
+                })
+                .catch(e => console.log('Workload fetch error:', e));
+        }
+        
+        // Update dose information
+        function updateDoseInfo(doseNum) {
+            const doseNumInt = parseInt(doseNum);
+            if (doseNumInt < 1 || doseNumInt > 5) {
+                document.getElementById('pepDoseInfo').textContent = '';
+                return;
+            }
+            
+            let infoText = `Day ${PEP_INTERVALS[doseNumInt]} after bite`;
+            document.getElementById('pepDoseInfo').textContent = infoText;
+            
+            // Update suggested date
+            const suggested = calculateSuggestedDate(doseNum);
+            if (suggested) {
+                document.getElementById('pepDateSuggestion').textContent = 
+                    'Suggested: ' + new Date(suggested).toLocaleDateString();
+            }
+        }
+        
+        // Modal show event - populate form with existing data or defaults
         const pepModal = document.getElementById('pepModal');
         if (pepModal) {
             pepModal.addEventListener('show.bs.modal', function (event) {
@@ -1162,10 +1304,25 @@ $daysSinceBite = $now->diff($biteDate)->days;
                 const doseInput = document.getElementById('pepDoseNumber');
                 const dateInput = document.getElementById('pepDateGiven');
                 const vacName = document.getElementById('pepVaccineName');
-                const batch = document.getElementById('pepBatchNumber');
                 const adminBy = document.getElementById('pepAdminBy');
                 const remarks = document.getElementById('pepRemarks');
                 const modalTitle = document.getElementById('pepModalLabel');
+                const lockStatus = document.getElementById('pepLockStatus');
+                
+                // Fetch lock status
+                fetch('get_pep_status.php?reportId=' + REPORT_ID)
+                    .then(r => r.json())
+                    .then(data => {
+                        lockStatus.textContent = data.message;
+                        if (data.is_locked) {
+                            document.getElementById('pepSaveBtn').disabled = true;
+                            document.getElementById('pepSaveBtn').textContent = 'Record Locked';
+                        } else {
+                            document.getElementById('pepSaveBtn').disabled = false;
+                            document.getElementById('pepSaveBtn').textContent = 'Save Dose';
+                        }
+                    })
+                    .catch(e => console.log('Status fetch error:', e));
 
                 if (vaccId) {
                     actionInput.value = 'edit';
@@ -1173,23 +1330,53 @@ $daysSinceBite = $now->diff($biteDate)->days;
                     doseInput.value = button.getAttribute('data-dose-number') || '';
                     dateInput.value = button.getAttribute('data-date-given') || '';
                     vacName.value = button.getAttribute('data-vaccine-name') || '';
-                    batch.value = button.getAttribute('data-batch-number') || '';
                     adminBy.value = button.getAttribute('data-administered-by') || '';
                     remarks.value = button.getAttribute('data-remarks') || '';
                     modalTitle.textContent = 'Edit PEP Dose';
+                    updateWorkloadInfo(dateInput.value);
                 } else {
                     actionInput.value = 'add';
                     idInput.value = '';
-                    doseInput.value = <?php echo autodoseNumber($pdo, $reportId); ?>;
+                    doseInput.value = '';
                     dateInput.value = '';
                     vacName.value = '';
-                    batch.value = '';
                     adminBy.value = '';
                     remarks.value = '';
                     modalTitle.textContent = 'Add PEP Dose';
+                    document.getElementById('pepDateSuggestion').textContent = '';
+                    document.getElementById('pepDoseInfo').textContent = '';
+                    document.getElementById('pepWorkloadInfo').textContent = '';
                 }
+                
+                // Clear validations
+                document.getElementById('pepValidations').innerHTML = '';
             });
         }
+        
+        // Event listeners for smart updates
+        document.getElementById('pepDoseNumber').addEventListener('change', function() {
+            updateDoseInfo(this.value);
+            // Suggest date if available
+            const suggested = calculateSuggestedDate(this.value);
+            if (suggested && !document.getElementById('pepDateGiven').value) {
+                document.getElementById('pepDateGiven').value = suggested;
+                updateWorkloadInfo(suggested);
+            }
+        });
+        
+        document.getElementById('pepDateGiven').addEventListener('change', function() {
+            updateWorkloadInfo(this.value);
+        });
+        
+        // Suggest date button
+        document.getElementById('pepSuggestDateBtn').addEventListener('click', function() {
+            const doseNum = document.getElementById('pepDoseNumber').value;
+            const suggested = calculateSuggestedDate(doseNum);
+            if (suggested) {
+                document.getElementById('pepDateGiven').value = suggested;
+                updateWorkloadInfo(suggested);
+            }
+        });
     </script>
 </body>
 </html>

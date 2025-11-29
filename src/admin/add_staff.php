@@ -30,14 +30,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         ]);
 
         $_SESSION['message'] = "Staff added successfully!";
-        header("Location: add_staff.html");
+        header("Location: add_staff_page.php?success=1");
         exit;
 
     } catch (PDOException $e) {
         die("Error adding staff: " . $e->getMessage());
     }
 } else {
-    header("Location: add_staff.html");
+    header("Location: add_staff_page.php");
     exit;
 }
 ?>

@@ -6,6 +6,7 @@ if (!isset($_SESSION['admin_id'])) {
 }
 
 require_once '../conn/conn.php';
+require_once 'includes/vaccination_helper_v2.php';
 
 if (!isset($_GET['id']) || !is_numeric($_GET['id'])) {
     header('Location: view_patients.php');
@@ -586,6 +587,52 @@ function calculateAge($dateOfBirth) {
                 grid-template-columns: 1fr;
             }
         }
+        /* Vaccination Sections - PEP and PrEP Separation */
+        .section {
+            margin-bottom: 20px;
+            padding: 16px;
+            background: white;
+            border-radius: 8px;
+            border: 1px solid var(--gray-200);
+        }
+        .section:first-child {
+            margin-top: 0;
+        }
+        .section-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 16px;
+            padding-bottom: 12px;
+            border-bottom: 2px solid var(--gray-200);
+        }
+        .section-header h3 {
+            margin: 0;
+            font-size: 15px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .section-header small {
+            font-size: 12px;
+            color: var(--secondary);
+            font-weight: 400;
+        }
+        .section-header .btn {
+            margin-left: auto;
+        }
+        /* PrEP Section Styling */
+        .section:has(h3:contains("PrEP")) {
+            border-left: 4px solid #f59e0b;
+            background: linear-gradient(135deg, rgba(245, 158, 11, 0.03) 0%, rgba(245, 158, 11, 0.01) 100%);
+        }
+        /* PEP Section Styling */
+        .section:has(h3:contains("PEP")) {
+            border-left: 4px solid #ef4444;
+            background: linear-gradient(135deg, rgba(239, 68, 68, 0.03) 0%, rgba(239, 68, 68, 0.01) 100%);
+        }
     </style>
 </head>
 <body>
@@ -680,71 +727,55 @@ function calculateAge($dateOfBirth) {
         </div>
     </div>
 
-    <!-- Vaccination Records -->
+    <!-- Vaccination Records - Separated PEP and PrEP -->
     <div class="card">
         <div class="card-header">
             <h2 class="card-title"><i class="bi bi-syringe"></i> Vaccination Records</h2>
-            <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#vaccinationModal"
-                    data-vaccination-id="" data-exposure-type="PrEP" data-dose-number="1"
-                    data-date-given="" data-vaccine-name="" data-batch-number=""
-                    data-administered-by="" data-remarks="" data-report-id="">
-                <i class="bi bi-plus"></i> Add Dose
-            </button>
         </div>
-        <?php if (!empty($vaccinations)): ?>
-        <div class="table-container mobile-cards">
-            <table class="table">
-                <thead>
-                    <tr>
-                        <th>Date</th>
-                        <th>Type</th>
-                        <th>Dose</th>
-                        <th>Vaccine</th>
-                        <th>Batch #</th>
-                        <th>By</th>
-                        <th>Linked Report</th>
-                        <th>Remarks</th>
-                        <th></th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php foreach ($vaccinations as $vacc): ?>
-                    <tr>
-                        <td data-label="Date"><?php echo $vacc['dateGiven'] ? date('M d, Y', strtotime($vacc['dateGiven'])) : 'N/A'; ?></td>
-                        <td data-label="Type">
-                            <span class="badge <?php echo $vacc['exposureType'] === 'PEP' ? 'badge-pep' : 'badge-prep'; ?>">
-                                <?php echo htmlspecialchars($vacc['exposureType']); ?>
-                            </span>
-                        </td>
-                        <td data-label="Dose"><?php echo (int)$vacc['doseNumber']; ?></td>
-                        <td data-label="Vaccine"><?php echo htmlspecialchars($vacc['vaccineName'] ?? '-'); ?></td>
-                        <td data-label="Batch"><?php echo htmlspecialchars($vacc['batchNumber'] ?? '-'); ?></td>
-                        <td data-label="By"><?php echo htmlspecialchars($vacc['administeredBy'] ?? '-'); ?></td>
-                        <td data-label="Report">
-                            <?php if (!empty($vacc['reportId'])): ?>
-                                <!-- Styled linked report -->
-                                <a href="view_report.php?id=<?php echo (int)$vacc['reportId']; ?>" style="color: var(--primary); font-weight: 500;">#<?php echo (int)$vacc['reportId']; ?></a>
-                            <?php else: ?>
-                                <span style="color: var(--secondary);">-</span>
-                            <?php endif; ?>
-                        </td>
-                        <!-- Adjusted remarks width -->
-                        <td data-label="Remarks" style="max-width: 180px;">
-                            <span style="display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-                                <?php echo htmlspecialchars($vacc['remarks'] ?? '-'); ?>
-                            </span>
-                        </td>
-                        <td data-label="">
-                            <div class="action-cell">
-                                <?php if ($vacc['exposureType'] === 'PEP'): ?>
-                                    <?php if (!empty($vacc['reportId'])): ?>
-                                        <a href="view_report.php?id=<?php echo (int)$vacc['reportId']; ?>" class="btn btn-outline btn-sm" title="Manage PEP on linked report">
-                                            <i class="bi bi-box-arrow-up-right"></i> Manage on Report
-                                        </a>
-                                    <?php else: ?>
-                                        <span class="text-muted small">PEP managed on report</span>
-                                    <?php endif; ?>
-                                <?php else: ?>
+
+        <!-- PrEP Section (Patient-Level Preventive Vaccinations) -->
+        <div class="section">
+            <div class="section-header">
+                <h3 class="section-title"><i class="bi bi-shield-check"></i> PrEP (Preventive)</h3>
+                <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#vaccinationModal"
+                        data-vaccination-id="" data-exposure-type="PrEP" data-dose-number="1"
+                        data-date-given="" data-vaccine-name="" data-batch-number=""
+                        data-administered-by="" data-remarks="" data-report-id="">
+                    <i class="bi bi-plus"></i> Add PrEP Dose
+                </button>
+            </div>
+
+            <?php 
+            $prepVaccinations = !empty($vaccinations) ? array_filter($vaccinations, fn($v) => $v['exposureType'] === 'PrEP') : [];
+            ?>
+
+            <?php if (!empty($prepVaccinations)): ?>
+            <div class="table-container mobile-cards" style="margin-bottom: 20px;">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Dose</th>
+                            <th>Vaccine</th>
+                            <th>By</th>
+                            <th>Remarks</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($prepVaccinations as $vacc): ?>
+                        <tr>
+                            <td data-label="Date"><?php echo $vacc['dateGiven'] ? date('M d, Y', strtotime($vacc['dateGiven'])) : 'N/A'; ?></td>
+                            <td data-label="Dose"><?php echo (int)$vacc['doseNumber']; ?></td>
+                            <td data-label="Vaccine"><?php echo htmlspecialchars($vacc['vaccineName'] ?? '-'); ?></td>
+                            <td data-label="By"><?php echo htmlspecialchars($vacc['administeredBy'] ?? '-'); ?></td>
+                            <td data-label="Remarks" style="max-width: 180px;">
+                                <span style="display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                                    <?php echo htmlspecialchars($vacc['remarks'] ?? '-'); ?>
+                                </span>
+                            </td>
+                            <td data-label="">
+                                <div class="action-cell">
                                     <button class="btn btn-outline btn-icon btn-sm" data-bs-toggle="modal" data-bs-target="#vaccinationModal"
                                         data-vaccination-id="<?php echo (int)$vacc['vaccinationId']; ?>"
                                         data-exposure-type="<?php echo htmlspecialchars($vacc['exposureType']); ?>"
@@ -757,34 +788,105 @@ function calculateAge($dateOfBirth) {
                                         data-report-id="<?php echo htmlspecialchars($vacc['reportId'] ?? ''); ?>">
                                         <i class="bi bi-pencil"></i>
                                     </button>
-                                    <form method="POST" onsubmit="return confirm('Delete this vaccination dose?');" style="display:inline-block; margin-left:6px;">
+                                    <form method="POST" onsubmit="return confirm('Delete this PrEP dose?');" style="display:inline-block; margin-left:6px;">
                                         <input type="hidden" name="vaccination_action" value="delete">
                                         <input type="hidden" name="vaccinationId" value="<?php echo (int)$vacc['vaccinationId']; ?>">
                                         <button type="submit" class="btn btn-danger btn-icon btn-sm">
                                             <i class="bi bi-trash"></i>
                                         </button>
                                     </form>
+                                </div>
+                            </td>
+                        </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+            <?php else: ?>
+            <div class="empty-state" style="background: #fffbeb; border-left: 4px solid #f59e0b; margin-bottom: 20px;">
+                <i class="bi bi-info-circle" style="color: #f59e0b;"></i>
+                <p style="color: #78350f; margin-bottom: 10px;">No PrEP doses recorded.</p>
+                <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#vaccinationModal"
+                        data-vaccination-id="" data-exposure-type="PrEP" data-dose-number="1"
+                        data-date-given="" data-vaccine-name="" data-batch-number=""
+                        data-administered-by="" data-remarks="" data-report-id="">
+                    <i class="bi bi-plus"></i> Add First PrEP Dose
+                </button>
+            </div>
+            <?php endif; ?>
+        </div>
+
+        <!-- PEP Section (Report-Linked Post-Exposure Prophylaxis) -->
+        <div class="section">
+            <div class="section-header">
+                <h3 class="section-title"><i class="bi bi-shield-exclamation"></i> PEP (Post-Exposure)</h3>
+                <small style="color: #666;">Linked to bite reports - managed per incident</small>
+            </div>
+
+            <?php 
+            $pepVaccinations = !empty($vaccinations) ? array_filter($vaccinations, fn($v) => $v['exposureType'] === 'PEP') : [];
+            ?>
+
+            <?php if (!empty($pepVaccinations)): ?>
+            <div class="table-container mobile-cards">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Dose</th>
+                            <th>Vaccine</th>
+                            <th>By</th>
+                            <th>Linked Report</th>
+                            <th>Remarks</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($pepVaccinations as $vacc): ?>
+                        <tr>
+                            <td data-label="Date"><?php echo $vacc['dateGiven'] ? date('M d, Y', strtotime($vacc['dateGiven'])) : 'N/A'; ?></td>
+                            <td data-label="Dose"><?php echo (int)$vacc['doseNumber']; ?></td>
+                            <td data-label="Vaccine"><?php echo htmlspecialchars($vacc['vaccineName'] ?? '-'); ?></td>
+                            <td data-label="By"><?php echo htmlspecialchars($vacc['administeredBy'] ?? '-'); ?></td>
+                            <td data-label="Report">
+                                <?php if (!empty($vacc['reportId'])): ?>
+                                    <a href="view_report.php?id=<?php echo (int)$vacc['reportId']; ?>" style="color: var(--primary); font-weight: 500;">#<?php echo (int)$vacc['reportId']; ?></a>
+                                <?php else: ?>
+                                    <span style="color: var(--secondary);">-</span>
                                 <?php endif; ?>
-                            </div>
-                        </td>
-                    </tr>
-                    <?php endforeach; ?>
-                </tbody>
-            </table>
+                            </td>
+                            <td data-label="Remarks" style="max-width: 180px;">
+                                <span style="display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                                    <?php echo htmlspecialchars($vacc['remarks'] ?? '-'); ?>
+                                </span>
+                            </td>
+                            <td data-label="">
+                                <div class="action-cell">
+                                    <?php if (!empty($vacc['reportId'])): ?>
+                                        <a href="view_report.php?id=<?php echo (int)$vacc['reportId']; ?>" class="btn btn-outline btn-sm" title="Manage PEP on linked report">
+                                            <i class="bi bi-box-arrow-up-right"></i> Manage on Report
+                                        </a>
+                                    <?php else: ?>
+                                        <span class="text-muted small">Managed on report</span>
+                                    <?php endif; ?>
+                                </div>
+                            </td>
+                        </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+            <?php else: ?>
+            <div class="empty-state" style="background: #fee2e2; border-left: 4px solid #dc2626; margin-top: 0;">
+                <i class="bi bi-info-circle" style="color: #dc2626;"></i>
+                <p style="color: #7f1d1d;">No PEP doses recorded. PEP vaccinations are managed from bite reports.</p>
+                <small style="color: #991b1b; display: block; margin-top: 8px;">
+                    <i class="bi bi-arrow-right"></i> Create a bite report to start PEP vaccination schedule
+                </small>
+            </div>
+            <?php endif; ?>
         </div>
-        <?php else: ?>
-        <div class="empty-state">
-            <i class="bi bi-syringe"></i>
-            <h5>No Vaccination Records</h5>
-            <p>No PrEP or PEP doses recorded yet.</p>
-            <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#vaccinationModal"
-                    data-vaccination-id="" data-exposure-type="PrEP" data-dose-number="1"
-                    data-date-given="" data-vaccine-name="" data-batch-number=""
-                    data-administered-by="" data-remarks="" data-report-id="">
-                <i class="bi bi-plus"></i> Add First Dose
-            </button>
-        </div>
-        <?php endif; ?>
+    </div>
     </div>
 
     <!-- Bite Reports -->

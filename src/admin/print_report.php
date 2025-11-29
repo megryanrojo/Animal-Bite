@@ -24,7 +24,7 @@ require_once '../conn/conn.php';
 // Check if report ID is provided
 if (!isset($_GET['id']) || !is_numeric($_GET['id'])) {
     ob_end_clean();
-    header("Location: reports.php");
+    header("Location: view_reports.php");
     exit;
 }
 
@@ -43,7 +43,7 @@ try {
     
     if (!$report) {
         ob_end_clean();
-        header("Location: reports.php");
+        header("Location: view_reports.php");
         exit;
     }
 } catch (PDOException $e) {

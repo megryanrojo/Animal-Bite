@@ -112,7 +112,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 
                 // Check if record is locked
                 if (isRecordLocked($pdo, $reportId)) {
-                    $vacc_error = "Record is locked: all 5 doses completed. Cannot edit.";
+                    $vacc_error = "Record is locked: all 3 doses completed. Cannot edit.";
                 }
                 
                 // Check if past date
@@ -135,7 +135,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 
                 // Check if record is locked
                 if (isRecordLocked($pdo, $reportId)) {
-                    $vacc_error = "Record is locked: all 5 doses completed. Cannot delete.";
+                    $vacc_error = "Record is locked: all 3 doses completed. Cannot delete.";
                 } else {
                     $del = $pdo->prepare("DELETE FROM vaccination_records WHERE vaccinationId = ? AND reportId = ?");
                     $del->execute([$vaccinationId, $reportId]);
@@ -183,6 +183,14 @@ $age = $now->diff($dob)->y;
 // Days since bite
 $biteDate = new DateTime($report['biteDate']);
 $daysSinceBite = $now->diff($biteDate)->days;
+
+// Extract latest classification from notes for clearer UI
+$classificationText = null;
+if (!empty($report['notes'])) {
+    if (preg_match_all('/\[Classification\](.*?)(?=\n\[|$)/s', $report['notes'], $matches)) {
+        $classificationText = trim(end($matches[1]));
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -757,7 +765,7 @@ $daysSinceBite = $now->diff($biteDate)->days;
             .no-print { display: none !important; }
             .section { box-shadow: none; border: 1px solid #ddd; }
             .hero-card { box-shadow: none; }
-            .hero-header { background: #f3f4f6 !important; color: #111 !important; -webkit-print-color-adjust: exact; }
+            .hero-header { background: #f3f4f6 !important; color: #111 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
         }
     </style>
 </head>
@@ -789,6 +797,16 @@ $daysSinceBite = $now->diff($biteDate)->days;
         </div>
         <?php endif; ?>
 
+        <?php if (!empty($classificationText)): ?>
+        <div class="alert alert-info no-print" style="border-left:4px solid #3b82f6;">
+            <strong>Automated Classification:</strong>
+            <div style="margin-top:6px;">
+                <div><strong>Category:</strong> <?php echo htmlspecialchars($report['biteType'] ?? 'N/A'); ?></div>
+                <div style="margin-top:4px;"><strong>Rationale:</strong> <?php echo nl2br(htmlspecialchars($classificationText)); ?></div>
+            </div>
+        </div>
+        <?php endif; ?>
+
         <!-- Hero Card - Patient Overview -->
         <div class="hero-card">
             <div class="hero-header">
@@ -812,6 +830,11 @@ $daysSinceBite = $now->diff($biteDate)->days;
                         <?php echo $report['biteType']; ?>
                     </span>
                     <?php endif; ?>
+                    <div style="margin-left:12px;">
+                        <a href="edit_report.php?id=<?php echo $reportId; ?>" class="btn btn-sm btn-outline-secondary no-print">
+                            <i class="bi bi-pencil me-1"></i>Edit Report
+                        </a>
+                    </div>
                 </div>
             </div>
 
@@ -1277,7 +1300,7 @@ $daysSinceBite = $now->diff($biteDate)->days;
         // Update dose information
         function updateDoseInfo(doseNum) {
             const doseNumInt = parseInt(doseNum);
-            if (doseNumInt < 1 || doseNumInt > 5) {
+            if (doseNumInt < 1 || doseNumInt > 3) {
                 document.getElementById('pepDoseInfo').textContent = '';
                 return;
             }

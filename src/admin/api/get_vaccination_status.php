@@ -25,7 +25,7 @@ header('Content-Type: application/json');
 
 $reportId = $_GET['report_id'] ?? null;
 $exposureType = $_GET['exposure_type'] ?? 'PEP';
-$maxDoses = $_GET['max_doses'] ?? 5;
+$maxDoses = $_GET['max_doses'] ?? 3;
 
 if (!$reportId || !is_numeric($reportId)) {
     http_response_code(400);

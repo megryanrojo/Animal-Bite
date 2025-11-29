@@ -9,7 +9,7 @@
  *   - report_id: Report ID
  *   - bite_date: Bite date (YYYY-MM-DD)
  *   - exposure_type: 'PEP' or 'PrEP' (default: 'PEP')
- *   - max_doses: Maximum doses (default: 5 for PEP)
+ *   - max_doses: Maximum doses (default: 3 for PEP)
  * 
  * Returns: JSON with suggested dose dates
  */
@@ -29,7 +29,7 @@ header('Content-Type: application/json');
 $reportId = $_GET['report_id'] ?? null;
 $biteDate = $_GET['bite_date'] ?? null;
 $exposureType = $_GET['exposure_type'] ?? 'PEP';
-$maxDoses = (int)($_GET['max_doses'] ?? 5);
+$maxDoses = (int)($_GET['max_doses'] ?? 3);
 
 if (!$reportId || !is_numeric($reportId) || !$biteDate) {
     http_response_code(400);

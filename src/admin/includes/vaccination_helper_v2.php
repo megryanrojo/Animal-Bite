@@ -14,7 +14,7 @@
  * - Auto-lock on final dose completion
  * 
  * SCHEDULES:
- * PEP: Days 0, 3, 7, 14, 28 (5 doses max) - Post-bite emergency
+ * PEP: Days 0, 3, 7 (3 doses max) - Post-bite emergency
  * PrEP: Custom intervals - Preventive vaccination
  * ====================================================================
  */
@@ -25,18 +25,16 @@
 
 /**
  * Get PEP dose interval from bite date
- * Standard WHO rabies PEP: Days 0, 3, 7, 14, 28 (5 doses total)
+ * Standard WHO rabies PEP: Days 0, 3, 7 (3 doses total)
  * 
- * @param int $doseNumber The dose number (1-5)
+ * @param int $doseNumber The dose number (1-3)
  * @return int|null Days offset from bite date, or null if invalid
  */
 function getPEPDoseInterval($doseNumber) {
     $intervals = [
         1 => 0,    // Day 0 - immediately
         2 => 3,    // Day 3
-        3 => 7,    // Day 7
-        4 => 14,   // Day 14
-        5 => 28    // Day 28
+        3 => 7     // Day 7
     ];
     return isset($intervals[$doseNumber]) ? $intervals[$doseNumber] : null;
 }
@@ -95,10 +93,10 @@ function calculateSuggestedDoseDate($baseDate, $doseNumber, $exposureType = 'PEP
  * @param PDO $pdo Database connection
  * @param int $reportId Report ID (for PEP)
  * @param string $exposureType 'PEP' or 'PrEP'
- * @param int $maxDoses Maximum doses allowed (5 for PEP, unlimited for PrEP)
+ * @param int $maxDoses Maximum doses allowed (3 for PEP, unlimited for PrEP)
  * @return int|null Next dose number, or null if complete
  */
-function getNextDoseNumber($pdo, $reportId = null, $exposureType = 'PEP', $maxDoses = 5) {
+function getNextDoseNumber($pdo, $reportId = null, $exposureType = 'PEP', $maxDoses = 3) {
     try {
         if ($exposureType === 'PEP' && $reportId) {
             $stmt = $pdo->prepare("
@@ -343,7 +341,7 @@ function requiresPEP($pdo, $reportId) {
  * @param int $maxDoses Maximum allowed doses
  * @return array ['valid' => bool, 'message' => string]
  */
-function validateDoseSequence($pdo, $reportId, $doseNumber, $action = 'add', $maxDoses = 5) {
+function validateDoseSequence($pdo, $reportId, $doseNumber, $action = 'add', $maxDoses = 3) {
     $doseNumber = (int)$doseNumber;
     
     if ($doseNumber < 1 || $doseNumber > $maxDoses) {
@@ -413,7 +411,7 @@ function isPastDate($dateGiven) {
  * @param int $maxDoses Maximum doses for completion
  * @return bool True if locked
  */
-function isRecordLocked($pdo, $reportId, $maxDoses = 5) {
+function isRecordLocked($pdo, $reportId, $maxDoses = 3) {
     try {
         $stmt = $pdo->prepare("
             SELECT COUNT(*) as dose_count 
@@ -438,7 +436,7 @@ function isRecordLocked($pdo, $reportId, $maxDoses = 5) {
  * @param int $maxDoses Maximum doses
  * @return array Lock status data
  */
-function getLockStatus($pdo, $reportId, $maxDoses = 5) {
+function getLockStatus($pdo, $reportId, $maxDoses = 3) {
     try {
         $stmt = $pdo->prepare("
             SELECT COUNT(*) as dose_count 
@@ -637,7 +635,7 @@ function getEditDoseValidations($pdo, $reportId, $doseNumber, $vaccinationId, $n
         $messages[] = [
             'type' => 'danger',
             'icon' => 'lock-fill',
-            'text' => 'This record is locked (all 5 doses completed). Cannot edit.'
+            'text' => 'This record is locked (all 3 doses completed). Cannot edit.'
         ];
     }
     

@@ -264,7 +264,7 @@ if (isset($_POST['mark_in_progress']) && isset($_POST['report_id'])) {
                         <a class="nav-link" href="dashboard.php"><i class="bi bi-house-door me-1"></i> Dashboard</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="reports.php"><i class="bi bi-file-earmark-text me-1"></i> Reports</a>
+                        <a class="nav-link" href="view_reports.php"><i class="bi bi-file-earmark-text me-1"></i> Reports</a>
                     </li>
                     <li class="nav-item">
                         <a class="nav-link" href="patients.php"><i class="bi bi-people me-1"></i> Patients</a>

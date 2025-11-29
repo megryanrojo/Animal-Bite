@@ -24,7 +24,7 @@ require_once '../conn/conn.php';
 // Check if report ID is provided
 if (!isset($_GET['id']) || !is_numeric($_GET['id'])) {
     ob_end_clean();
-    header("Location: reports.php");
+    header("Location: view_reports.php");
     exit;
 }
 
@@ -49,11 +49,64 @@ try {
     
     if (!$report) {
         ob_end_clean();
-        header("Location: reports.php");
+        header("Location: view_reports.php");
         exit;
     }
 } catch (PDOException $e) {
     $error = "Database error: " . $e->getMessage();
+}
+
+// Server-side classification helper (same heuristic used elsewhere)
+function classifyIncidentServer($pdo, $patientId, $input) {
+    $biteLocation = strtolower(trim($input['bite_location'] ?? $input['biteLocation'] ?? ''));
+    $multiple = !empty($input['multiple_bites']) || (!empty($input['multipleBites']));
+    $ownership = strtolower($input['animal_ownership'] ?? $input['animalOwnership'] ?? '');
+    $animalVaccinated = strtolower($input['animal_vaccinated'] ?? $input['animalVaccinated'] ?? '');
+    $provoked = isset($input['provoked']) ? $input['provoked'] : null;
+
+    $age = null;
+    if ($patientId) {
+        try {
+            $stmt = $pdo->prepare("SELECT dateOfBirth FROM patients WHERE patientId = ?");
+            $stmt->execute([$patientId]);
+            $row = $stmt->fetch(PDO::FETCH_ASSOC);
+            if (!empty($row['dateOfBirth'])) {
+                $dob = new DateTime($row['dateOfBirth']);
+                $now = new DateTime();
+                $age = (int)$now->diff($dob)->y;
+            }
+        } catch (PDOException $e) { }
+    }
+
+    $highRiskLocations = ['face','head','neck','scalp','eyes','mouth','lips','nose','ear','hands','fingers'];
+    $isHighLocation = false;
+    foreach ($highRiskLocations as $frag) {
+        if ($frag !== '' && strpos($biteLocation, $frag) !== false) { $isHighLocation = true; break; }
+    }
+
+    $score = 0;
+    if ($isHighLocation) $score += 3;
+    if ($multiple) $score += 3;
+    if ($ownership === 'stray' || $ownership === 'unknown') $score += 2;
+    if ($animalVaccinated === 'no' || $animalVaccinated === 'unknown' || $animalVaccinated === '') $score += 2;
+    if ($provoked === '0' || strtolower($provoked) === 'no') $score += 1;
+    if ($age !== null && $age <= 5) $score += 2;
+
+    if ($score >= 6) {
+        $category = 'Category III'; $severity = 'High';
+    } elseif ($score >= 3) {
+        $category = 'Category II'; $severity = 'Moderate';
+    } else {
+        $category = 'Category I'; $severity = 'Low';
+    }
+
+    $rationale = "Auto-classified as $category (Severity: $severity) — score=$score;";
+    $rationale .= $isHighLocation ? " location_high;" : " location_low;";
+    $rationale .= $multiple ? " multiple_bites;" : " single_bite;";
+    $rationale .= " ownership={$ownership}; vaccinated={$animalVaccinated};";
+    if ($age !== null) $rationale .= " age={$age};";
+
+    return ['biteType' => $category, 'severity' => $severity, 'rationale' => $rationale, 'score' => $score];
 }
 
 // Process form submission
@@ -93,6 +146,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     ];
     $missingFields = [];
     
+    // (classification helper is defined above to avoid duplicate function declarations)
     foreach ($requiredFields as $label => $value) {
         if (empty($value)) {
             $missingFields[] = ucfirst(str_replace('_', ' ', $label));
@@ -103,6 +157,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $error = 'Please fill in the following required fields: ' . implode(', ', $missingFields);
     } else {
         try {
+            // Determine automated classification (unless override provided)
+            $classification = classifyIncidentServer($pdo, $report['patientId'], $_POST);
+            if (isset($_POST['category_override']) && !empty($_POST['category_override'])) {
+                $overrideVal = $_POST['category_override'];
+                $overrideReason = !empty($_POST['override_reason']) ? $_POST['override_reason'] : 'No reason provided';
+                $classification['biteType'] = $overrideVal;
+                $classification['rationale'] .= " [OVERRIDE by admin: {$overrideVal}; reason={$overrideReason}]";
+            }
+
+            // Append classification rationale to notes for audit trail
+            $notes = trim(($notes ? $notes . "\n\n" : "") . "[Classification] " . $classification['rationale']);
+
+            // Use classification['biteType'] as the biteType to store
+            $biteType = $classification['biteType'];
+
             // Update report information
             $updateStmt = $pdo->prepare("
                 UPDATE reports SET
@@ -330,7 +399,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <a href="view_report.php?id=<?php echo $reportId; ?>" class="btn btn-sm btn-success me-2">
                     <i class="bi bi-eye me-1"></i> View Report
                 </a>
-                <a href="reports.php" class="btn btn-sm btn-outline-success">
+                <a href="view_reports.php" class="btn btn-sm btn-outline-success">
                     <i class="bi bi-file-text me-1"></i> View All Reports
                 </a>
             </div>
@@ -484,7 +553,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                     <option value="Category III" <?php echo $report['biteType'] === 'Category III' ? 'selected' : ''; ?>>Category III</option>
                                 </select>
                                 
-                                <div class="category-info mt-3">
+                                                                <div id="autoClassification" style="margin-top:10px; padding:10px; border-radius:6px; background:#f8fafc; border:1px solid #e6eef9; display:none;">
+                                                                    <strong>Auto-classification:</strong>
+                                                                    <div id="autoCategory" style="margin-top:6px; font-size:1.05rem;"></div>
+                                                                    <div id="autoRationale" style="margin-top:6px; font-size:0.9rem; color:#475569;"></div>
+                                                                </div>
+
+                                                                <div style="margin-top:10px;">
+                                                                    <div class="form-check">
+                                                                        <input class="form-check-input" type="checkbox" id="overrideCheckbox">
+                                                                        <label class="form-check-label" for="overrideCheckbox">Override auto-classification</label>
+                                                                    </div>
+                                                                </div>
+
+                                                                <div id="overrideSection" style="display:none; margin-top:10px;">
+                                                                    <label class="form-label">Manual Category (if overriding)</label>
+                                                                    <select class="form-select" id="category_override" name="category_override">
+                                                                        <option value="">-- Select Override Category --</option>
+                                                                        <option value="Category I">Category I</option>
+                                                                        <option value="Category II">Category II</option>
+                                                                        <option value="Category III">Category III</option>
+                                                                    </select>
+                                                                    <label class="form-label" style="margin-top:8px;">Override Reason</label>
+                                                                    <textarea class="form-control" id="override_reason" name="override_reason" rows="2" placeholder="Explain why you are overriding the automated classification (required when overriding)"></textarea>
+                                                                </div>
+
+                                                                <div class="category-info mt-3">
                                     <h5>Bite Categories:</h5>
                                     <p><strong>Category I:</strong> Touching or feeding of animals, licks on intact skin</p>
                                     <p><strong>Category II:</strong> Nibbling of uncovered skin, minor scratches or abrasions without bleeding</p>
@@ -626,20 +720,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
+        const PATIENT_ID = <?php echo json_encode($report['patientId'] ?? null); ?>;
+
+        // Simple form validation and override enforcement
         document.querySelector('form').addEventListener('submit', function(event) {
             const requiredFields = ['bite_date', 'animal_type', 'bite_type', 'bite_location'];
             let isValid = true;
             
             requiredFields.forEach(field => {
                 const input = document.getElementById(field);
-                if (!input.value.trim()) {
-                    input.classList.add('is-invalid');
+                if (!input || !input.value || !input.value.toString().trim()) {
+                    if (input) input.classList.add('is-invalid');
                     isValid = false;
                 } else {
-                    input.classList.remove('is-invalid');
+                    if (input) input.classList.remove('is-invalid');
                 }
             });
             
+            const overrideCheckbox = document.getElementById('overrideCheckbox');
+            const overrideReason = document.getElementById('override_reason');
+            if (overrideCheckbox && overrideCheckbox.checked) {
+                if (!overrideReason || !overrideReason.value.trim()) {
+                    alert('Please provide a reason for overriding the automated classification.');
+                    event.preventDefault();
+                    return;
+                }
+            }
+
             if (!isValid) {
                 event.preventDefault();
                 alert('Please fill in all required fields.');
@@ -658,13 +765,86 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             const hospitalNameSection = document.getElementById('hospitalNameSection');
 
             function toggleSection(checkbox, section) {
+                if (!checkbox || !section) return;
                 section.style.display = checkbox.checked ? 'block' : 'none';
             }
 
-            rabiesVaccineCheckbox.addEventListener('change', () => toggleSection(rabiesVaccineCheckbox, rabiesVaccineDateSection));
-            antiTetanusCheckbox.addEventListener('change', () => toggleSection(antiTetanusCheckbox, antiTetanusDateSection));
-            antibioticsCheckbox.addEventListener('change', () => toggleSection(antibioticsCheckbox, antibioticsDetailsSection));
-            referredToHospitalCheckbox.addEventListener('change', () => toggleSection(referredToHospitalCheckbox, hospitalNameSection));
+            if (rabiesVaccineCheckbox && rabiesVaccineDateSection) rabiesVaccineCheckbox.addEventListener('change', () => toggleSection(rabiesVaccineCheckbox, rabiesVaccineDateSection));
+            if (antiTetanusCheckbox && antiTetanusDateSection) antiTetanusCheckbox.addEventListener('change', () => toggleSection(antiTetanusCheckbox, antiTetanusDateSection));
+            if (antibioticsCheckbox && antibioticsDetailsSection) antibioticsCheckbox.addEventListener('change', () => toggleSection(antibioticsCheckbox, antibioticsDetailsSection));
+            if (referredToHospitalCheckbox && hospitalNameSection) referredToHospitalCheckbox.addEventListener('change', () => toggleSection(referredToHospitalCheckbox, hospitalNameSection));
+
+            // Classification UI elements
+            const autoDiv = document.getElementById('autoClassification');
+            const autoCategory = document.getElementById('autoCategory');
+            const autoRationale = document.getElementById('autoRationale');
+            const overrideCheckbox = document.getElementById('overrideCheckbox');
+            const overrideSection = document.getElementById('overrideSection');
+            const biteLocationInput = document.getElementById('bite_location');
+            const animalOwnershipInput = document.getElementById('animal_ownership');
+            const animalVaccinatedInput = document.getElementById('animal_vaccinated');
+            const provokedInput = document.getElementById('provoked');
+            const multipleBitesInput = document.getElementById('multiple_bites');
+            const biteTypeSelect = document.getElementById('bite_type');
+
+            let classifyTimer = null;
+            function scheduleClassification() {
+                if (classifyTimer) clearTimeout(classifyTimer);
+                classifyTimer = setTimeout(runClassification, 450);
+            }
+
+            function runClassification() {
+                if (!biteLocationInput) return;
+                const payload = new URLSearchParams();
+                payload.append('patient_id', PATIENT_ID);
+                payload.append('bite_location', biteLocationInput.value || '');
+                if (animalOwnershipInput) payload.append('animal_ownership', animalOwnershipInput.value || '');
+                if (animalVaccinatedInput) payload.append('animal_vaccinated', animalVaccinatedInput.value || '');
+                if (provokedInput) payload.append('provoked', provokedInput.value || '');
+                if (multipleBitesInput) payload.append('multiple_bites', multipleBitesInput.checked ? '1' : '0');
+
+                fetch('classify_incident.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: payload.toString()
+                }).then(r => r.json()).then(data => {
+                    if (!data) return;
+                    // Accept both shapes: {biteType, rationale, score} or {success:true,data:{...}}
+                    const res = data.data ? data.data : data;
+                    if (!res) return;
+                    autoDiv.style.display = 'block';
+                    autoCategory.textContent = res.biteType + (res.severity ? (' — ' + res.severity) : '');
+                    autoRationale.textContent = res.rationale || ('Score: ' + (res.score ?? 'N/A'));
+
+                    if (overrideCheckbox && !overrideCheckbox.checked) {
+                        if (biteTypeSelect) biteTypeSelect.value = res.biteType;
+                    }
+                }).catch(err => {
+                    console.error('Classification error', err);
+                });
+            }
+
+            // Wire inputs to classification
+            if (biteLocationInput) biteLocationInput.addEventListener('input', scheduleClassification);
+            if (animalOwnershipInput) animalOwnershipInput.addEventListener('change', scheduleClassification);
+            if (animalVaccinatedInput) animalVaccinatedInput.addEventListener('change', scheduleClassification);
+            if (provokedInput) provokedInput.addEventListener('change', scheduleClassification);
+            if (multipleBitesInput) multipleBitesInput.addEventListener('change', scheduleClassification);
+
+            if (overrideCheckbox) {
+                overrideCheckbox.addEventListener('change', function() {
+                    if (this.checked) {
+                        overrideSection.style.display = 'block';
+                    } else {
+                        overrideSection.style.display = 'none';
+                        const overrideReason = document.getElementById('override_reason');
+                        if (overrideReason) overrideReason.value = '';
+                    }
+                });
+            }
+
+            // Initial run
+            scheduleClassification();
         });
     </script>
 </body>

@@ -258,20 +258,24 @@ foreach ($heatmapData as $data) {
 
 $maxCount = !empty($barangayCounts) ? max(array_column($barangayCounts, 'count')) : 1;
 
-// Enhanced statistical analysis for better risk assessment
-$allCounts = array_column($barangayCounts, 'count');
-sort($allCounts);
-$stats = [
-    'count' => count($allCounts),
-    'min' => !empty($allCounts) ? min($allCounts) : 0,
-    'max' => $maxCount,
-    'mean' => !empty($allCounts) ? array_sum($allCounts) / count($allCounts) : 0,
-    'median' => !empty($allCounts) ? $allCounts[floor(count($allCounts)/2)] : 0,
-    'p25' => !empty($allCounts) ? $allCounts[floor(count($allCounts) * 0.25)] : 0,
-    'p75' => !empty($allCounts) ? $allCounts[floor(count($allCounts) * 0.75)] : 0,
-    'p95' => !empty($allCounts) ? $allCounts[floor(count($allCounts) * 0.95)] : 0,
-    'std_dev' => calculateStandardDeviation($allCounts)
-];
+        // Enhanced statistical analysis for better risk assessment
+        $allCounts = array_column($barangayCounts, 'count');
+        sort($allCounts);
+        $stats = [
+            'count' => count($allCounts),
+            'min' => !empty($allCounts) ? min($allCounts) : 0,
+            'max' => $maxCount,
+            'mean' => !empty($allCounts) ? array_sum($allCounts) / count($allCounts) : 0,
+            'median' => !empty($allCounts) ? $allCounts[floor(count($allCounts)/2)] : 0,
+            'p25' => !empty($allCounts) ? $allCounts[floor(count($allCounts) * 0.25)] : 0,
+            'p75' => !empty($allCounts) ? $allCounts[floor(count($allCounts) * 0.75)] : 0,
+            'p95' => !empty($allCounts) ? $allCounts[floor(count($allCounts) * 0.95)] : 0,
+            'std_dev' => calculateStandardDeviation($allCounts)
+        ];
+
+        // Calculate dynamic thresholds for legend
+        $lowThreshold = max(1, (int)ceil($stats['p25']));
+        $highThreshold = max($lowThreshold + 1, (int)ceil($stats['p95']));
 
 function calculateStandardDeviation($numbers) {
     if (empty($numbers)) return 0;
@@ -282,7 +286,7 @@ function calculateStandardDeviation($numbers) {
 
 // Risk thresholds based on statistical analysis
 $lowThreshold = max(1, (int)ceil($stats['p25']));
-$highThreshold = max($lowThreshold + 1, (int)ceil($stats['p75']));
+$highThreshold = max($lowThreshold + 1, (int)ceil($stats['p95']));
 ?>
 
 <!DOCTYPE html>
@@ -1348,8 +1352,8 @@ $highThreshold = max($lowThreshold + 1, (int)ceil($stats['p75']));
                                 <div class="legend-section-title">Intensity Scale</div>
                                 <div class="legend-gradient"></div>
                                 <div class="legend-labels">
-                                    <span>Low (1–<?= $lowThreshold ?>)</span>
-                                    <span>High (<?= $highThreshold ?>+)</span>
+                                    <span id="legendLowLabel">Low (1–<?= $lowThreshold ?>)</span>
+                                    <span id="legendHighLabel">High (<?= $highThreshold ?>+)</span>
                                 </div>
                             </div>
                             <div class="legend-section">
@@ -1581,6 +1585,12 @@ $highThreshold = max($lowThreshold + 1, (int)ceil($stats['p75']));
             status: ''
         };
 
+        // Dynamic legend thresholds
+        let currentLegendThresholds = {
+            low: <?= $lowThreshold ?>,
+            high: <?= $highThreshold ?>
+        };
+
         // Enhanced intensity calculation using statistical analysis and risk scoring
         function calculateHeatmapIntensity(count, barangay = null) {
             const { p25, p50, p75, p95, mean, std_dev } = stats;
@@ -1756,9 +1766,15 @@ $highThreshold = max($lowThreshold + 1, (int)ceil($stats['p75']));
         }
 
         function createHeatmapDirectly(heatPoints) {
+            // Adjust radius and blur based on zoom level for consistent visual density
+            const currentZoom = map.getZoom();
+            const zoomFactor = 1 + (currentZoom - 13) * 0.1; // Subtle scaling around zoom 13
+            const adjustedRadius = Math.max(15, Math.min(60, heatmapConfig.radius * zoomFactor));
+            const adjustedBlur = Math.max(15, Math.min(40, heatmapConfig.blur * zoomFactor));
+
             heatLayer = L.heatLayer(heatPoints, {
-                radius: heatmapConfig.radius,
-                blur: heatmapConfig.blur,
+                radius: adjustedRadius,
+                blur: adjustedBlur,
                 max: heatmapConfig.max,
                 maxZoom: heatmapConfig.maxZoom,
                 minOpacity: heatmapConfig.minOpacity,
@@ -1780,6 +1796,12 @@ $highThreshold = max($lowThreshold + 1, (int)ceil($stats['p75']));
         }
 
         function createHeatmapWithWorker(heatPoints) {
+            // Adjust radius and blur based on zoom level for consistent visual density
+            const currentZoom = map.getZoom();
+            const zoomFactor = 1 + (currentZoom - 13) * 0.1; // Subtle scaling around zoom 13
+            const adjustedRadius = Math.max(15, Math.min(60, heatmapConfig.radius * zoomFactor));
+            const adjustedBlur = Math.max(15, Math.min(40, heatmapConfig.blur * zoomFactor));
+
             // For very large datasets, process in chunks to prevent UI blocking
             const chunkSize = 500;
             const chunks = [];
@@ -1789,8 +1811,8 @@ $highThreshold = max($lowThreshold + 1, (int)ceil($stats['p75']));
 
             // Process first chunk immediately
             heatLayer = L.heatLayer(chunks[0], {
-                radius: heatmapConfig.radius,
-                blur: heatmapConfig.blur,
+                radius: adjustedRadius,
+                blur: adjustedBlur,
                 max: heatmapConfig.max,
                 maxZoom: heatmapConfig.maxZoom,
                 minOpacity: heatmapConfig.minOpacity,
@@ -1826,6 +1848,16 @@ $highThreshold = max($lowThreshold + 1, (int)ceil($stats['p75']));
 
         // Initialize heatmap
         createHeatmap();
+
+        // Update heatmap when zoom level changes to maintain consistent visual density
+        map.on('zoomend', function() {
+            if (heatLayer && heatmapBtnEl.classList.contains('active')) {
+                createHeatmap();
+            }
+        });
+
+        // Initialize legend thresholds
+        updateLegendThresholds();
         
         // Create markers
         cases.forEach(c => {
@@ -1934,6 +1966,7 @@ $highThreshold = max($lowThreshold + 1, (int)ceil($stats['p75']));
 
             createHeatmap();
             updateSidebarWithFilteredData();
+            updateLegendThresholds();
         }
 
         function updateCustomTimeFilter() {
@@ -1953,6 +1986,7 @@ $highThreshold = max($lowThreshold + 1, (int)ceil($stats['p75']));
 
             createHeatmap();
             updateSidebarWithFilteredData();
+            updateLegendThresholds();
         }
 
         // Multivariate filter functions
@@ -1965,6 +1999,40 @@ $highThreshold = max($lowThreshold + 1, (int)ceil($stats['p75']));
 
             createHeatmap();
             updateSidebarWithFilteredData();
+            updateLegendThresholds();
+            updateLegendThresholds();
+        }
+
+        // Calculate and update dynamic legend thresholds based on filtered data
+        function updateLegendThresholds() {
+            const filteredCases = getFilteredCases();
+            const filteredBarangayCounts = {};
+
+            filteredCases.forEach(c => {
+                const barangay = c.barangay || 'Unknown';
+                filteredBarangayCounts[barangay] = (filteredBarangayCounts[barangay] || 0) + 1;
+            });
+
+            const counts = Object.values(filteredBarangayCounts);
+            if (counts.length === 0) {
+                currentLegendThresholds = { low: 1, high: 7 };
+            } else {
+                counts.sort((a, b) => a - b);
+                const p25 = counts[Math.floor(counts.length * 0.25)] || 1;
+                const p95 = counts[Math.floor(counts.length * 0.95)] || Math.max(...counts);
+
+                currentLegendThresholds.low = Math.max(1, Math.ceil(p25));
+                currentLegendThresholds.high = Math.max(currentLegendThresholds.low + 1, Math.ceil(p95));
+            }
+
+            // Update legend labels
+            const lowLabel = document.getElementById('legendLowLabel');
+            const highLabel = document.getElementById('legendHighLabel');
+
+            if (lowLabel && highLabel) {
+                lowLabel.textContent = `Low (1–${currentLegendThresholds.low})`;
+                highLabel.textContent = `High (${currentLegendThresholds.high}+)`;
+            }
         }
 
         // Export functionality

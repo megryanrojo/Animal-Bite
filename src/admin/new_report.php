@@ -826,7 +826,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     <div class="alert alert-info mb-0 py-2">
                       <i class="bi bi-check-circle me-2"></i>
                       <strong>Selected:</strong> <span id="selected_patient_name"></span>
-                      <button type="button" class="btn btn-sm btn-link p-0 ms-2" id="clear_patient_selection">
+                      <button type="button" class="btn btn-sm btn-link p-0 ms-2" id="clear_patient_selection" data-bs-toggle="tooltip" data-bs-placement="top" title="Remove selected patient">
                         <i class="bi bi-x-circle"></i> Clear
                       </button>
                     </div>
@@ -1194,10 +1194,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
               </div>
               
               <div class="d-flex justify-content-between mt-4">
-                <a href="view_reports.php" class="btn btn-outline-secondary">
+                <a href="view_reports.php" class="btn btn-outline-secondary" data-bs-toggle="tooltip" data-bs-placement="top" title="Discard changes and return to reports list">
                   <i class="bi bi-x-circle me-2"></i>Cancel
                 </a>
-                <button type="submit" class="btn btn-primary">
+                <button type="submit" class="btn btn-primary" data-bs-toggle="tooltip" data-bs-placement="top" title="Save the bite incident report">
                   <i class="bi bi-save me-2"></i>Save Report
                 </button>
               </div>

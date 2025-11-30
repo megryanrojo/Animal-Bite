@@ -28,7 +28,22 @@ $records_pages = ['view_reports.php', 'create_report.php', 'view_patients.php'];
 $is_records_active = in_array($current_page, $records_pages);
 ?>
 
-<link rel="stylesheet" href="../css/system-theme.css">
+    <link rel="stylesheet" href="../css/system-theme.css">
+
+    <!-- Bootstrap Tooltip initialization (Bootstrap JS loaded by individual pages) -->
+    <script>
+        // Initialize tooltips when document is ready
+        document.addEventListener('DOMContentLoaded', function() {
+            // Check if Bootstrap is available before initializing tooltips
+            if (typeof bootstrap !== 'undefined') {
+                var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+                var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+                    return new bootstrap.Tooltip(tooltipTriggerEl);
+                });
+            }
+        });
+    </script>
+
 <style>
     .navbar {
         background: #fff;
@@ -105,14 +120,14 @@ $is_records_active = in_array($current_page, $records_pages);
         <div class="collapse navbar-collapse" id="navbarNav">
             <ul class="navbar-nav ms-auto align-items-center gap-1">
                 <li class="nav-item">
-                    <a class="nav-link <?php echo $current_page == 'admin_dashboard.php' ? 'active' : ''; ?>" href="admin_dashboard.php">
+                    <a class="nav-link <?php echo $current_page == 'admin_dashboard.php' ? 'active' : ''; ?>" href="admin_dashboard.php" data-bs-toggle="tooltip" data-bs-placement="bottom" title="View system overview and statistics">
                         <i class="bi bi-grid me-1"></i>Dashboard
                     </a>
                 </li>
                 
                 <!-- Combined Patients & Reports into single "Records" dropdown, removed Add Patient -->
                 <li class="nav-item dropdown">
-                    <a class="nav-link dropdown-toggle <?php echo $is_records_active ? 'active' : ''; ?>" href="javascript:void(0);" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                    <a class="nav-link dropdown-toggle <?php echo $is_records_active ? 'active' : ''; ?>" role="button" data-bs-toggle="dropdown" aria-expanded="false">
                         <i class="bi bi-folder me-1"></i>Records
                     </a>
                     <ul class="dropdown-menu">
@@ -124,31 +139,31 @@ $is_records_active = in_array($current_page, $records_pages);
                 </li>
                 
                 <li class="nav-item">
-                    <a class="nav-link <?php echo $current_page == 'geomapping.php' ? 'active' : ''; ?>" href="geomapping.php">
+                    <a class="nav-link <?php echo $current_page == 'geomapping.php' ? 'active' : ''; ?>" href="geomapping.php" data-bs-toggle="tooltip" data-bs-placement="bottom" title="View geographical distribution of bite incidents">
                         <i class="bi bi-geo-alt me-1"></i>Geomapping
                     </a>
                 </li>
-                
+
                 <li class="nav-item">
-                    <a class="nav-link <?php echo $current_page == 'decisionSupport.php' ? 'active' : ''; ?>" href="decisionSupport.php">
+                    <a class="nav-link <?php echo $current_page == 'decisionSupport.php' ? 'active' : ''; ?>" href="decisionSupport.php" data-bs-toggle="tooltip" data-bs-placement="bottom" title="View analytics and decision support reports">
                         <i class="bi bi-bar-chart me-1"></i>Analytics
                     </a>
                 </li>
-                
+
                 <li class="nav-item">
-                    <a class="nav-link <?php echo $current_page == 'view_staff.php' ? 'active' : ''; ?>" href="view_staff.php">
+                    <a class="nav-link <?php echo $current_page == 'view_staff.php' ? 'active' : ''; ?>" href="view_staff.php" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Manage staff accounts and permissions">
                         <i class="bi bi-person-badge me-1"></i>Staff
                     </a>
                 </li>
-                
+
                 <li class="nav-item">
-                    <a class="nav-link <?php echo $current_page == 'admin_settings.php' ? 'active' : ''; ?>" href="admin_settings.php">
+                    <a class="nav-link <?php echo $current_page == 'admin_settings.php' ? 'active' : ''; ?>" href="admin_settings.php" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Configure system settings and preferences">
                         <i class="bi bi-gear me-1"></i>Settings
                     </a>
                 </li>
-                
+
                 <li class="nav-item ms-2">
-                    <a class="nav-link btn-logout" href="../logout/admin_logout.php">
+                    <a class="nav-link btn-logout" href="../logout/admin_logout.php" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Sign out of the system">
                         <i class="bi bi-box-arrow-right me-1"></i>Logout
                     </a>
                 </li>

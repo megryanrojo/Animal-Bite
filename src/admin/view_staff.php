@@ -637,7 +637,7 @@ $staffMembers = $stmt->fetchAll(PDO::FETCH_ASSOC);
                     <h1>Staff Management</h1>
                     <p>View and manage barangay health workers</p>
                 </div>
-                <a href="add_staff.php" class="btn btn-primary">
+                <a href="add_staff.php" class="btn btn-primary" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Add a new barangay health worker to the system">
                     <i class="bi bi-plus-lg"></i> Add New Staff
                 </a>
             </div>
@@ -752,10 +752,10 @@ $staffMembers = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                     <td data-label="Birth Date"><?php echo date('M d, Y', strtotime($staff['birthDate'])); ?></td>
                                     <td data-label="">
                                         <div class="actions-cell">
-                                            <a href="edit_staff.php?id=<?php echo $staff['staffId']; ?>" class="btn btn-primary btn-sm">
+                                            <a href="edit_staff.php?id=<?php echo $staff['staffId']; ?>" class="btn btn-primary btn-sm" data-bs-toggle="tooltip" data-bs-placement="left" title="Edit staff member information">
                                                 <i class="bi bi-pencil"></i> Edit
                                             </a>
-                                            <a href="view_staff.php?delete=<?php echo $staff['staffId']; ?>" class="btn btn-danger btn-sm" onclick="return confirm('Are you sure you want to delete this staff member?');">
+                                            <a href="view_staff.php?delete=<?php echo $staff['staffId']; ?>" class="btn btn-danger btn-sm" data-bs-toggle="tooltip" data-bs-placement="left" title="Remove staff member from the system" onclick="return confirm('Are you sure you want to delete this staff member?');">
                                                 <i class="bi bi-trash"></i> Delete
                                             </a>
                                         </div>

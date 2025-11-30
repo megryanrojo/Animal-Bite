@@ -1219,10 +1219,10 @@ $highThreshold = max($lowThreshold + 1, (int)ceil($stats['p95']));
                             <option value="Pending" <?= $status === 'Pending' ? 'selected' : '' ?>>Pending</option>
                         </select>
                     </div>
-                    <button type="submit" class="filter-btn filter-btn-primary">
+                    <button type="submit" class="filter-btn filter-btn-primary" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Apply selected filters to the map and data">
                         <i class="bi bi-search"></i> Apply
                     </button>
-                    <a href="geomapping.php" class="filter-btn filter-btn-secondary">
+                    <a href="geomapping.php" class="filter-btn filter-btn-secondary" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Reset all filters and show all data">
                         <i class="bi bi-x-lg"></i> Clear
                     </a>
                 </div>
@@ -1241,19 +1241,19 @@ $highThreshold = max($lowThreshold + 1, (int)ceil($stats['p95']));
                     
                     <!-- Map controls -->
                     <div class="map-controls">
-                        <button type="button" class="map-control-btn active" id="heatmapBtn" onclick="showHeatmap()">
+                        <button type="button" class="map-control-btn active" id="heatmapBtn" onclick="showHeatmap()" data-bs-toggle="tooltip" data-bs-placement="right" title="Display bite incidents as a heat map showing intensity by location">
                             <i class="bi bi-fire"></i> Heatmap
                         </button>
-                        <button type="button" class="map-control-btn" id="markersBtn" onclick="showMarkers()">
+                        <button type="button" class="map-control-btn" id="markersBtn" onclick="showMarkers()" data-bs-toggle="tooltip" data-bs-placement="right" title="Display bite incidents as individual markers on the map">
                             <i class="bi bi-geo-alt"></i> Markers
                         </button>
-                        <button type="button" class="map-control-btn" id="settingsBtn" onclick="toggleHeatmapSettings()">
+                        <button type="button" class="map-control-btn" id="settingsBtn" onclick="toggleHeatmapSettings()" data-bs-toggle="tooltip" data-bs-placement="right" title="Customize heatmap appearance and intensity settings">
                             <i class="bi bi-sliders"></i> Settings
                         </button>
-                        <button type="button" class="map-control-btn" id="timeFilterBtn" onclick="toggleTimeFilter()">
+                        <button type="button" class="map-control-btn" id="timeFilterBtn" onclick="toggleTimeFilter()" data-bs-toggle="tooltip" data-bs-placement="right" title="Filter incidents by time period">
                             <i class="bi bi-clock"></i> Time
                         </button>
-                        <button type="button" class="map-control-btn" id="exportBtn" onclick="exportHeatmapData()">
+                        <button type="button" class="map-control-btn" id="exportBtn" onclick="exportHeatmapData()" data-bs-toggle="tooltip" data-bs-placement="right" title="Export heatmap data as CSV file">
                             <i class="bi bi-download"></i> Export
                         </button>
                     </div>
@@ -1279,8 +1279,8 @@ $highThreshold = max($lowThreshold + 1, (int)ceil($stats['p95']));
                             <div class="setting-group">
                                 <label class="setting-label">Intensity Mode</label>
                                 <select id="intensityMode" onchange="updateIntensityMode(this.value)">
+                                    <option value="linear" selected>Linear (Recommended)</option>
                                     <option value="percentile">Percentile-based</option>
-                                    <option value="linear">Linear</option>
                                     <option value="logarithmic">Logarithmic</option>
                                 </select>
                             </div>
@@ -1319,11 +1319,11 @@ $highThreshold = max($lowThreshold + 1, (int)ceil($stats['p95']));
                         <div class="settings-panel">
                             <div class="time-filter-title">Time Period</div>
                             <div class="time-filter-options">
-                                <button class="time-filter-btn active" data-period="all" onclick="setTimeFilter('all')">All Time</button>
-                                <button class="time-filter-btn" data-period="30" onclick="setTimeFilter('30')">Last 30 Days</button>
-                                <button class="time-filter-btn" data-period="90" onclick="setTimeFilter('90')">Last 3 Months</button>
-                                <button class="time-filter-btn" data-period="180" onclick="setTimeFilter('180')">Last 6 Months</button>
-                                <button class="time-filter-btn" data-period="365" onclick="setTimeFilter('365')">Last Year</button>
+                                <button class="time-filter-btn active" data-period="all" onclick="setTimeFilter('all')" data-bs-toggle="tooltip" data-bs-placement="top" title="Show all bite incidents from the beginning">All Time</button>
+                                <button class="time-filter-btn" data-period="30" onclick="setTimeFilter('30')" data-bs-toggle="tooltip" data-bs-placement="top" title="Show incidents from the last 30 days">Last 30 Days</button>
+                                <button class="time-filter-btn" data-period="90" onclick="setTimeFilter('90')" data-bs-toggle="tooltip" data-bs-placement="top" title="Show incidents from the last 3 months">Last 3 Months</button>
+                                <button class="time-filter-btn" data-period="180" onclick="setTimeFilter('180')" data-bs-toggle="tooltip" data-bs-placement="top" title="Show incidents from the last 6 months">Last 6 Months</button>
+                                <button class="time-filter-btn" data-period="365" onclick="setTimeFilter('365')" data-bs-toggle="tooltip" data-bs-placement="top" title="Show incidents from the last year">Last Year</button>
                             </div>
                             <div class="time-filter-custom" style="margin-top: 0.75rem;">
                                 <label class="setting-label" style="margin-bottom: 0.5rem; display: block;">Custom Range</label>
@@ -1512,6 +1512,9 @@ $highThreshold = max($lowThreshold + 1, (int)ceil($stats['p95']));
     </div>
 
     <script>
+        // Test function availability
+        // console.log('Script loaded, focusLocation function:', typeof focusLocation);
+
         // Initialize map
         const centerLat = <?= $centerLat ?>;
         const centerLng = <?= $centerLng ?>;
@@ -1562,12 +1565,12 @@ $highThreshold = max($lowThreshold + 1, (int)ceil($stats['p95']));
 
         // Heatmap configuration with interactive controls
         let heatmapConfig = {
-            radius: 50,
-            blur: 30,
+            radius: 40,
+            blur: 25,
             max: 1.0,
             maxZoom: 18,
-            minOpacity: 0.2,
-            intensityMode: 'percentile' // 'percentile', 'linear', 'logarithmic'
+            minOpacity: 0.3,
+            intensityMode: 'linear' // 'percentile', 'linear', 'logarithmic' - linear with sqrt scaling for better data reflection
         };
 
         // Time filter configuration
@@ -1592,31 +1595,68 @@ $highThreshold = max($lowThreshold + 1, (int)ceil($stats['p95']));
         };
 
         // Enhanced intensity calculation using statistical analysis and risk scoring
-        function calculateHeatmapIntensity(count, barangay = null) {
+        function calculateHeatmapIntensity(count, barangay = null, localMaxCount = null) {
+            // Use local max count if provided (for filtered data), otherwise use global max
+            const maxCountForScaling = localMaxCount || maxCount;
             const { p25, p50, p75, p95, mean, std_dev } = stats;
             let intensity = 0;
 
             switch(heatmapConfig.intensityMode) {
                 case 'percentile':
-                    if (count <= p25) intensity = Math.max(0.1, count / Math.max(p25, 1) * 0.3);
-                    else if (count <= p50) intensity = 0.3 + (count - p25) / Math.max(p50 - p25, 1) * 0.2;
-                    else if (count <= p75) intensity = 0.5 + (count - p50) / Math.max(p75 - p50, 1) * 0.3;
-                    else if (count <= p95) intensity = 0.8 + (count - p75) / Math.max(p95 - p75, 1) * 0.15;
+                    if (count <= p25) intensity = Math.max(0.05, count / Math.max(p25, 1) * 0.25);
+                    else if (count <= p50) intensity = 0.25 + (count - p25) / Math.max(p50 - p25, 1) * 0.25;
+                    else if (count <= p75) intensity = 0.5 + (count - p50) / Math.max(p75 - p50, 1) * 0.25;
+                    else if (count <= p95) intensity = 0.75 + (count - p75) / Math.max(p95 - p75, 1) * 0.2;
                     else intensity = 0.95 + Math.min(0.05, (count - p95) / Math.max(p95, 1) * 0.05);
+                    break;
 
                 case 'logarithmic':
-                    intensity = Math.min(1.0, Math.max(0.1, Math.log(count + 1) / Math.log(maxCount + 1)));
+                    intensity = Math.min(1.0, Math.max(0.05, Math.log(count + 1) / Math.log(maxCountForScaling + 1)));
                     break;
 
                 case 'linear':
                 default:
-                    intensity = Math.min(1.0, Math.max(0.1, count / maxCount));
+                    // Enhanced scaling that ensures critical areas reach maximum intensity
+                    const ratio = count / maxCountForScaling;
+
+                    // Guarantee that areas with high absolute counts show as critical
+                    if (count >= 10 && ratio >= 0.5) {
+                        // High count areas - force red colors
+                        intensity = Math.max(0.8, 0.8 + (ratio - 0.5) / 0.5 * 0.2);
+                    } else if (count >= maxCountForScaling * 0.7) {
+                        // Top 30% by count - guaranteed high intensity (0.8-1.0)
+                        intensity = 0.8 + (ratio - 0.7) / 0.3 * 0.2;
+                    } else if (ratio >= 0.5) {
+                        // Next tier (0.5-0.7) - medium-high
+                        intensity = 0.5 + (ratio - 0.5) / 0.2 * 0.3;
+                    } else if (ratio >= 0.3) {
+                        // Medium (0.3-0.5)
+                        intensity = 0.3 + (ratio - 0.3) / 0.2 * 0.2;
+                    } else if (ratio >= 0.1) {
+                        // Low-medium (0.1-0.3)
+                        intensity = 0.1 + (ratio - 0.1) / 0.2 * 0.2;
+                    } else {
+                        // Very low (0.05-0.1)
+                        intensity = Math.max(0.05, ratio * 0.5);
+                    }
+                    intensity = Math.min(1.0, Math.max(0.05, intensity));
+                    break;
             }
 
             // Apply risk multiplier if barangay data available
             if (barangay && barangayCaseData[barangay]) {
                 const riskMultiplier = calculateRiskMultiplier(barangay);
-                intensity = Math.min(1.0, intensity * riskMultiplier);
+                // Stronger boost for high-risk areas to ensure they show as critical
+                if (riskMultiplier > 1.3) {
+                    // Critical areas get maximum intensity boost
+                    intensity = Math.min(1.0, intensity * riskMultiplier * 0.8);
+                } else if (riskMultiplier > 1.1) {
+                    // Medium risk areas get moderate boost
+                    intensity = Math.min(1.0, intensity * (1 + (riskMultiplier - 1) * 0.5));
+                } else {
+                    // Low risk areas get minimal boost
+                    intensity = Math.min(1.0, intensity * (1 + (riskMultiplier - 1) * 0.2));
+                }
             }
 
             return intensity;
@@ -1717,7 +1757,8 @@ $highThreshold = max($lowThreshold + 1, (int)ceil($stats['p95']));
             // Performance optimization: Check if we can use cached data
             const currentFilterState = JSON.stringify({
                 timeFilter: currentTimeFilter,
-                multivariateFilters: currentMultivariateFilters
+                multivariateFilters: currentMultivariateFilters,
+                intensityMode: heatmapConfig.intensityMode
             });
 
             let heatPoints;
@@ -1738,12 +1779,15 @@ $highThreshold = max($lowThreshold + 1, (int)ceil($stats['p95']));
                     count: filteredBarangayCounts[point.barangay] || 0
                 })).filter(point => point.count > 0);
 
+                // Calculate local maximum for filtered data
+                const filteredMaxCount = Math.max(...Object.values(filteredBarangayCounts), 1);
+
                 heatPoints = filteredHeatmapData
                     .filter(point => point.lat && point.lng)
                     .map(point => {
                         const lat = parseFloat(point.lat);
                         const lng = parseFloat(point.lng);
-                        const intensity = calculateHeatmapIntensity(point.count, point.barangay);
+                        const intensity = calculateHeatmapIntensity(point.count, point.barangay, filteredMaxCount);
                         return [lat, lng, intensity];
                     });
 
@@ -1768,9 +1812,10 @@ $highThreshold = max($lowThreshold + 1, (int)ceil($stats['p95']));
         function createHeatmapDirectly(heatPoints) {
             // Adjust radius and blur based on zoom level for consistent visual density
             const currentZoom = map.getZoom();
-            const zoomFactor = 1 + (currentZoom - 13) * 0.1; // Subtle scaling around zoom 13
-            const adjustedRadius = Math.max(15, Math.min(60, heatmapConfig.radius * zoomFactor));
-            const adjustedBlur = Math.max(15, Math.min(40, heatmapConfig.blur * zoomFactor));
+            // Less aggressive scaling to prevent over-blending at low zoom
+            const zoomFactor = 1 + (currentZoom - 13) * 0.05;
+            const adjustedRadius = Math.max(20, Math.min(45, heatmapConfig.radius * zoomFactor));
+            const adjustedBlur = Math.max(20, Math.min(35, heatmapConfig.blur * zoomFactor));
 
             heatLayer = L.heatLayer(heatPoints, {
                 radius: adjustedRadius,
@@ -1779,14 +1824,17 @@ $highThreshold = max($lowThreshold + 1, (int)ceil($stats['p95']));
                 maxZoom: heatmapConfig.maxZoom,
                 minOpacity: heatmapConfig.minOpacity,
                 gradient: {
-                    0.0: '#22c55e',
-                    0.1: '#22c55e',
-                    0.25: '#84cc16',
-                    0.4: '#facc15',
-                    0.55: '#f97316',
-                    0.7: '#ef4444',
-                    0.85: '#fb7185',
-                    1.0: '#7f1d1d'
+                    0.0: '#22c55e',   // Low - Green
+                    0.1: '#16a34a',   // Dark Green
+                    0.2: '#65a30d',   // Green
+                    0.3: '#84cc16',   // Light Green
+                    0.4: '#eab308',   // Yellow
+                    0.5: '#f59e0b',   // Orange-Yellow
+                    0.6: '#f97316',   // Orange
+                    0.7: '#ea580c',   // Dark Orange
+                    0.8: '#ef4444',   // Light Red
+                    0.9: '#dc2626',   // Red
+                    1.0: '#b91c1c'    // Dark Red
                 }
             });
 
@@ -1798,9 +1846,10 @@ $highThreshold = max($lowThreshold + 1, (int)ceil($stats['p95']));
         function createHeatmapWithWorker(heatPoints) {
             // Adjust radius and blur based on zoom level for consistent visual density
             const currentZoom = map.getZoom();
-            const zoomFactor = 1 + (currentZoom - 13) * 0.1; // Subtle scaling around zoom 13
-            const adjustedRadius = Math.max(15, Math.min(60, heatmapConfig.radius * zoomFactor));
-            const adjustedBlur = Math.max(15, Math.min(40, heatmapConfig.blur * zoomFactor));
+            // Less aggressive scaling to prevent over-blending at low zoom
+            const zoomFactor = 1 + (currentZoom - 13) * 0.05;
+            const adjustedRadius = Math.max(20, Math.min(45, heatmapConfig.radius * zoomFactor));
+            const adjustedBlur = Math.max(20, Math.min(35, heatmapConfig.blur * zoomFactor));
 
             // For very large datasets, process in chunks to prevent UI blocking
             const chunkSize = 500;
@@ -1817,14 +1866,17 @@ $highThreshold = max($lowThreshold + 1, (int)ceil($stats['p95']));
                 maxZoom: heatmapConfig.maxZoom,
                 minOpacity: heatmapConfig.minOpacity,
                 gradient: {
-                    0.0: '#22c55e',
-                    0.1: '#22c55e',
-                    0.25: '#84cc16',
-                    0.4: '#facc15',
-                    0.55: '#f97316',
-                    0.7: '#ef4444',
-                    0.85: '#fb7185',
-                    1.0: '#7f1d1d'
+                    0.0: '#22c55e',   // Low - Green
+                    0.1: '#16a34a',   // Dark Green
+                    0.2: '#65a30d',   // Green
+                    0.3: '#84cc16',   // Light Green
+                    0.4: '#eab308',   // Yellow
+                    0.5: '#f59e0b',   // Orange-Yellow
+                    0.6: '#f97316',   // Orange
+                    0.7: '#ea580c',   // Dark Orange
+                    0.8: '#ef4444',   // Light Red
+                    0.9: '#dc2626',   // Red
+                    1.0: '#b91c1c'    // Dark Red
                 }
             });
 
@@ -2317,19 +2369,44 @@ $highThreshold = max($lowThreshold + 1, (int)ceil($stats['p95']));
         });
         
         function focusLocation(barangay) {
-            // Pan to location
+            var targetLat, targetLng;
+
+            // Try barangay coordinates first
             if (barangayCoords[barangay]) {
-                map.setView([barangayCoords[barangay].lat, barangayCoords[barangay].lng], 15);
+                targetLat = barangayCoords[barangay].lat;
+                targetLng = barangayCoords[barangay].lng;
             } else {
-                const location = cases.find(c => c.barangay === barangay && c.latitude && c.longitude);
-                if (location) {
-                    map.setView([parseFloat(location.latitude), parseFloat(location.longitude)], 15);
+                // Fallback to case coordinates - find all cases for this barangay and use average position
+                const barangayCases = cases.filter(c => c.barangay === barangay && c.latitude && c.longitude);
+                if (barangayCases.length > 0) {
+                    // Use average position of all cases in this barangay for better centering
+                    const avgLat = barangayCases.reduce((sum, c) => sum + parseFloat(c.latitude), 0) / barangayCases.length;
+                    const avgLng = barangayCases.reduce((sum, c) => sum + parseFloat(c.longitude), 0) / barangayCases.length;
+                    targetLat = avgLat;
+                    targetLng = avgLng;
+                } else {
+                    return; // Exit if no coordinates
                 }
             }
-            
+
+            // Basic validation
+            if (!targetLat || !targetLng) {
+                return;
+            }
+
+            // Get case count for zoom level calculation
+            var casesForBarangay = barangayCaseData[barangay] || [];
+            var caseCount = casesForBarangay.length;
+
+            // Determine appropriate zoom level based on case density
+            let zoomLevel = caseCount > 20 ? 15 : caseCount > 10 ? 16 : 17;
+
+            // Basic bounds check (optional for now)
+
+            // Use setView for immediate zoom
+            map.setView([targetLat, targetLng], zoomLevel);
+
             focusedLocation = barangay;
-            const casesForBarangay = barangayCaseData[barangay] || [];
-            const caseCount = casesForBarangay.length;
             const ratio = maxCount > 0 ? caseCount / maxCount : 0;
             
             let riskLevel = 'Low', riskColor = '#22c55e';
@@ -2539,3 +2616,4 @@ $highThreshold = max($lowThreshold + 1, (int)ceil($stats['p95']));
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
+

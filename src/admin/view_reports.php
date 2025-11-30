@@ -439,7 +439,7 @@ function getCategoryClass($category) {
             <span class="record-count"><?php echo $totalRecords; ?> total records</span>
         </div>
         <div class="d-flex gap-2">
-            <button type="button" class="btn-print" onclick="print_reports()">
+            <button type="button" class="btn-print" onclick="print_reports()" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Print the current list of reports">
                 <i class="bi bi-printer"></i> Print Reports
             </button>
         </div>
@@ -489,9 +489,9 @@ function getCategoryClass($category) {
                 <?php endforeach; ?>
             </select>
         </div>
-        <button type="submit" class="btn-search"><i class="bi bi-search"></i> Search</button>
+        <button type="submit" class="btn-search" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Search reports using the selected filters"><i class="bi bi-search"></i> Search</button>
         <?php if (!empty($search) || !empty($status) || !empty($animalType) || !empty($biteType) || !empty($barangay)): ?>
-            <a href="view_reports.php" class="btn-clear">Clear</a>
+            <a href="view_reports.php" class="btn-clear" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Clear all search filters">Clear</a>
         <?php endif; ?>
     </form>
 
@@ -525,10 +525,10 @@ function getCategoryClass($category) {
                             <td><?php echo $r['reportDate'] ? date('M d, Y', strtotime($r['reportDate'])) : '<span style="color:#94a3b8">—</span>'; ?></td>
                             <td>
                                 <div class="action-buttons">
-                                    <a href="view_report.php?id=<?php echo $r['reportId']; ?>" class="btn-view">
+                                    <a href="view_report.php?id=<?php echo $r['reportId']; ?>" class="btn-view" data-bs-toggle="tooltip" data-bs-placement="left" title="View detailed report information">
                                         <i class="bi bi-eye"></i> View
                                     </a>
-                                    <a href="edit_report.php?id=<?php echo $r['reportId']; ?>" class="btn-edit">
+                                    <a href="edit_report.php?id=<?php echo $r['reportId']; ?>" class="btn-edit" data-bs-toggle="tooltip" data-bs-placement="left" title="Edit report details">
                                         <i class="bi bi-pencil"></i> Edit
                                     </a>
                                 </div>

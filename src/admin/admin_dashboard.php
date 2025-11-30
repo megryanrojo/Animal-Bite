@@ -368,7 +368,7 @@ try {
         <div class="card">
             <div class="card-header">
                 <h2><i class="bi bi-clock-history"></i> Recent Cases</h2>
-                <a href="view_reports.php" class="btn-link">View All <i class="bi bi-arrow-right"></i></a>
+                <a href="view_reports.php" class="btn-link" data-bs-toggle="tooltip" data-bs-placement="top" title="View complete list of all bite incident reports">View All <i class="bi bi-arrow-right"></i></a>
             </div>
             <?php if (count($recentReports) > 0): ?>
             <div class="table-wrap">
@@ -404,7 +404,7 @@ try {
                                 <span class="badge badge-<?php echo $statusClass; ?>"><?php echo ucfirst(str_replace('_', ' ', $status)); ?></span>
                             </td>
                             <td>
-                                <a href="view_report.php?id=<?php echo $report['reportId'] ?? '0'; ?>" class="btn-view">View</a>
+                                <a href="view_report.php?id=<?php echo $report['reportId'] ?? '0'; ?>" class="btn-view" data-bs-toggle="tooltip" data-bs-placement="left" title="View detailed report information">View</a>
                             </td>
                         </tr>
                         <?php endforeach; ?>

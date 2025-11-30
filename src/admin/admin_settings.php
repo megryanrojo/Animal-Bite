@@ -1502,7 +1502,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                             <label for="email">Email Address</label>
                             <input type="email" id="email" name="email" value="<?php echo htmlspecialchars($admin['email']); ?>" required>
                         </div>
-                        <button type="submit" name="update_account" class="btn-primary">
+                        <button type="submit" name="update_account" class="btn-primary" data-bs-toggle="tooltip" data-bs-placement="top" title="Save account information changes">
                             <i class="bi bi-check2"></i> Save Changes
                         </button>
                     </form>
@@ -1534,7 +1534,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                             <label for="confirmPassword">Confirm Password</label>
                             <input type="password" id="confirmPassword" name="confirmPassword" required>
                         </div>
-                        <button type="submit" name="update_password" class="btn-primary">
+                        <button type="submit" name="update_password" class="btn-primary" data-bs-toggle="tooltip" data-bs-placement="top" title="Change your account password">
                             <i class="bi bi-shield-check"></i> Update Password
                         </button>
                     </form>
@@ -1591,15 +1591,15 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 </div>
                 <div class="card-body">
                     <div class="export-grid">
-                        <a href="export_reports.php?format=excel" class="export-btn">
+                        <a href="export_reports.php?format=excel" class="export-btn" data-bs-toggle="tooltip" data-bs-placement="top" title="Download all bite incident reports as Excel spreadsheet">
                             <i class="bi bi-file-earmark-excel"></i>
                             Export Reports (Excel)
                         </a>
-                        <a href="export_reports.php?format=csv" class="export-btn">
+                        <a href="export_reports.php?format=csv" class="export-btn" data-bs-toggle="tooltip" data-bs-placement="top" title="Download all bite incident reports as CSV file">
                             <i class="bi bi-file-earmark-text"></i>
                             Export Reports (CSV)
                         </a>
-                        <a href="export_analytics.php?format=excel" class="export-btn">
+                        <a href="export_analytics.php?format=excel" class="export-btn" data-bs-toggle="tooltip" data-bs-placement="top" title="Download analytics and statistics as Excel spreadsheet">
                             <i class="bi bi-bar-chart"></i>
                             Export Analytics (Excel)
                         </a>
@@ -1625,10 +1625,10 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 <div class="card-body">
                     <div class="barangay-management">
                         <div class="barangay-controls">
-                            <button type="button" class="btn-secondary" onclick="showAddBarangayForm()">
+                            <button type="button" class="btn-secondary" onclick="showAddBarangayForm()" data-bs-toggle="tooltip" data-bs-placement="top" title="Add a new barangay to the coordinate system">
                                 <i class="bi bi-plus-circle"></i> Add Barangay
                             </button>
-                            <button type="button" class="btn-outline" onclick="loadBarangayList()">
+                            <button type="button" class="btn-outline" onclick="loadBarangayList()" data-bs-toggle="tooltip" data-bs-placement="top" title="Reload the barangay list from the database">
                                 <i class="bi bi-arrow-clockwise"></i> Refresh
                             </button>
                         </div>
@@ -1657,8 +1657,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                             </div>
 
                             <div class="form-actions">
-                                <button type="button" class="btn-cancel" onclick="hideBarangayForm()">Cancel</button>
-                                <button type="button" class="btn-primary" onclick="saveBarangay()">Save Barangay</button>
+                                <button type="button" class="btn-cancel" onclick="hideBarangayForm()" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Close form without saving">Cancel</button>
+                                <button type="button" class="btn-primary" onclick="saveBarangay()" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Add barangay with coordinates to the system">Save Barangay</button>
                             </div>
                         </div>
 
@@ -1751,7 +1751,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
                     <?php if ($total_logs > 0): ?>
                     <div class="logs-footer">
-                        <a href="activity_logs.php" class="btn-view-all">
+                        <a href="activity_logs.php" class="btn-view-all" data-bs-toggle="tooltip" data-bs-placement="top" title="View complete system activity log">
                             <i class="bi bi-list-ul"></i>
                             View All Activity Logs (<?php echo $total_logs; ?>)
                         </a>

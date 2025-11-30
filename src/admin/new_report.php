@@ -67,169 +67,6 @@ try {
     // Optionally handle error
 }
 
-// Process form submission (admin)
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-  $formSubmitted = true;
-  try {
-    $pdo->beginTransaction();
-
-    // Determine patient: create new patient if requested
-    if (isset($_POST['patient_option']) && $_POST['patient_option'] === 'new' && !empty($_POST['new_first_name']) && !empty($_POST['new_last_name'])) {
-      $newPatientStmt = $pdo->prepare("\n                INSERT INTO patients (firstName, lastName, gender, dateOfBirth, contactNumber, address, barangay) \n                VALUES (?, ?, ?, ?, ?, ?, ?)\n            ");
-      $newPatientStmt->execute([
-        $_POST['new_first_name'],
-        $_POST['new_last_name'],
-        $_POST['new_gender'] ?? null,
-        !empty($_POST['new_dob']) ? $_POST['new_dob'] : null,
-        $_POST['new_contact'] ?? null,
-        $_POST['new_address'] ?? null,
-        $_POST['new_barangay'] ?? null
-      ]);
-      $patientId = $pdo->lastInsertId();
-    } else {
-      $patientId = !empty($_POST['patient_id']) ? $_POST['patient_id'] : null;
-    }
-
-    // Insert report (admin-created). Use NULL for staffId when created by admin.
-    // --- Automated classification: determine bite category and severity based on report data ---
-    // This logic uses bite location, multiple bites, animal ownership, vaccination status and patient age
-    function classifyIncident($pdo, $patientId, $input) {
-      $biteLocation = strtolower(trim($input['bite_location'] ?? ''));
-      $multiple = !empty($input['multiple_bites']);
-      $ownership = strtolower($input['animal_ownership'] ?? '');
-      $animalVaccinated = strtolower($input['animal_vaccinated'] ?? '');
-      $provoked = isset($input['provoked']) && $input['provoked'] !== '' ? $input['provoked'] : null;
-
-      // Determine patient age (if available)
-      $age = null;
-      if ($patientId) {
-        try {
-          $stmt = $pdo->prepare("SELECT dateOfBirth FROM patients WHERE patientId = ?");
-          $stmt->execute([$patientId]);
-          $row = $stmt->fetch(PDO::FETCH_ASSOC);
-          if (!empty($row['dateOfBirth'])) {
-            $dob = new DateTime($row['dateOfBirth']);
-            $now = new DateTime();
-            $age = (int)$now->diff($dob)->y;
-          }
-        } catch (PDOException $e) { /* ignore */ }
-      }
-
-      // Locations considered higher risk (face/head/neck/hands/mouth/eyes)
-      $highRiskLocations = ['face','head','neck','scalp','eyes','mouth','lips','nose','ear','hands','fingers'];
-      $isHighLocation = false;
-      foreach ($highRiskLocations as $frag) {
-        if ($frag !== '' && strpos($biteLocation, $frag) !== false) { $isHighLocation = true; break; }
-      }
-
-      // Scoring heuristic
-      $score = 0;
-      if ($isHighLocation) $score += 3;
-      if ($multiple) $score += 3;
-      if ($ownership === 'stray' || $ownership === 'unknown') $score += 2;
-      if ($animalVaccinated === 'no' || $animalVaccinated === 'unknown' || $animalVaccinated === '') $score += 2;
-      if ($provoked === '0' || $provoked === 'no' || $provoked === '') $score += 1; // unprovoked likely higher risk
-      if ($age !== null && $age <= 5) $score += 2; // young children are higher risk
-
-      // Map score to category and severity
-      if ($score >= 6) {
-        $category = 'Category III';
-        $severity = 'High';
-      } elseif ($score >= 3) {
-        $category = 'Category II';
-        $severity = 'Moderate';
-      } else {
-        $category = 'Category I';
-        $severity = 'Low';
-      }
-
-      // Rationale to store in notes for audit trail
-      $rationale = "Auto-classified as $category (Severity: $severity) — score=$score;";
-      $rationale .= $isHighLocation ? " location_high;" : " location_low;";
-      $rationale .= $multiple ? " multiple_bites;" : " single_bite;";
-      $rationale .= " ownership={$ownership}; vaccinated={$animalVaccinated};";
-      if ($age !== null) $rationale .= " age={$age};";
-
-      return [ 'biteType' => $category, 'severity' => $severity, 'rationale' => $rationale ];
-    }
-
-    $classification = classifyIncident($pdo, $patientId, $_POST);
-    // Allow admin override: if admin provided a manual override, respect it and record reason
-    if (isset($_POST['category_override']) && !empty($_POST['category_override'])) {
-      $overrideVal = $_POST['category_override'];
-      $overrideReason = !empty($_POST['override_reason']) ? $_POST['override_reason'] : 'No reason provided';
-      $classification['biteType'] = $overrideVal;
-      $classification['rationale'] .= " [OVERRIDE by admin: {$overrideVal}; reason={$overrideReason}]";
-    }
-
-    // Append rationale to notes so classification is auditable
-    $autoNotes = (!empty($_POST['notes']) ? $_POST['notes'] . "\n\n" : "") . "[Classification] " . $classification['rationale'];
-    $reportStmt = $pdo->prepare("\n            INSERT INTO reports (\n                patientId, \n                staffId, \n                biteDate,\n                animalType,\n                animalOtherType,\n                animalOwnership,\n                ownerName,\n                ownerContact,\n                animalStatus,\n                animalVaccinated,\n                biteLocation,\n                biteType,\n                multipleBites,\n                provoked,\n                washWithSoap,\n                rabiesVaccine,\n                rabiesVaccineDate,\n                antiTetanus,\n                antiTetanusDate,\n                antibiotics,\n                antibioticsDetails,\n                referredToHospital,\n                hospitalName,\n                followUpDate,\n                notes,\n                status\n            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)\n        ");
-
-    $reportStmt->execute([
-      $patientId,
-      null, // staffId (admin)
-      $_POST['bite_date'] ?? null,
-      $_POST['animal_type'] ?? null,
-      (isset($_POST['animal_type']) && $_POST['animal_type'] === 'Other') ? ($_POST['animal_other_type'] ?? null) : null,
-      $_POST['animal_ownership'] ?? null,
-      !empty($_POST['owner_name']) ? $_POST['owner_name'] : null,
-      !empty($_POST['owner_contact']) ? $_POST['owner_contact'] : null,
-      $_POST['animal_status'] ?? null,
-      $_POST['animal_vaccinated'] ?? null,
-      $_POST['bite_location'] ?? null,
-      $classification['biteType'], // automated classification
-      isset($_POST['multiple_bites']) ? 1 : 0,
-      $_POST['provoked'] ?? null,
-      isset($_POST['wash_with_soap']) ? 1 : 0,
-      isset($_POST['rabies_vaccine']) ? 1 : 0,
-      !empty($_POST['rabies_vaccine_date']) ? $_POST['rabies_vaccine_date'] : null,
-      isset($_POST['anti_tetanus']) ? 1 : 0,
-      !empty($_POST['anti_tetanus_date']) ? $_POST['anti_tetanus_date'] : null,
-      isset($_POST['antibiotics']) ? 1 : 0,
-      !empty($_POST['antibiotics_details']) ? $_POST['antibiotics_details'] : null,
-      isset($_POST['referred_to_hospital']) ? 1 : 0,
-      !empty($_POST['hospital_name']) ? $_POST['hospital_name'] : null,
-      !empty($_POST['followup_date']) ? $_POST['followup_date'] : null,
-      $autoNotes,
-      $_POST['status'] ?? 'pending'
-    ]);
-
-    $reportId = $pdo->lastInsertId();
-
-    // Sync rabies vaccine checkbox to vaccination_records: insert Dose 1 for PEP if checked and not exists
-    if (isset($_POST['rabies_vaccine']) && $patientId && $reportId) {
-      // Check if dose 1 for this report already exists
-      $checkStmt = $pdo->prepare("SELECT COUNT(*) as c FROM vaccination_records WHERE reportId = ? AND exposureType = 'PEP' AND doseNumber = 1");
-      $checkStmt->execute([$reportId]);
-      $row = $checkStmt->fetch(PDO::FETCH_ASSOC);
-      if ((int)$row['c'] === 0) {
-        $dateGiven = !empty($_POST['rabies_vaccine_date']) ? $_POST['rabies_vaccine_date'] : null;
-        $status = $dateGiven ? 'Completed' : 'Upcoming';
-        $insertVacc = $pdo->prepare("\n                    INSERT INTO vaccination_records (patientId, reportId, exposureType, doseNumber, dateGiven, nextScheduledDate, status, vaccineName, batchNumber, administeredBy, remarks, created_at) \n                    VALUES (?, ?, 'PEP', ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)\n                ");
-        $insertVacc->execute([
-          $patientId,
-          $reportId,
-          1,
-          $dateGiven,
-          null,
-          $status,
-          $dateGiven ? 'Rabies Vaccine' : null,
-          null,
-          null,
-          null
-        ]);
-      }
-    }
-
-    $pdo->commit();
-    $formSuccess = true;
-  } catch (PDOException $e) {
-    $pdo->rollBack();
-    $errorMessage = 'Error: ' . $e->getMessage();
-  }
-}
-
 ?>
 
 <!DOCTYPE html>
@@ -296,9 +133,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      width: 100%;
-      text-align: left;
-      border: none;
     }
     
     .section-header:hover {
@@ -306,8 +140,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
     
     .section-header i.bi-chevron-down {
-      transition: transform 0.2s ease;
-      display: inline-block;
+      transition: transform 0.2s;
     }
     
     .section-header[aria-expanded="false"] i.bi-chevron-down {
@@ -340,72 +173,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       margin-bottom: 1rem;
     }
     
-    /* Treatment section uses vertical flex layout */
-    .treatment-container {
-      display: flex;
-      flex-direction: column;
-      gap: 1rem;
-    }
-
-    .treatment-row {
-      display: flex;
-      flex-direction: column;
-      gap: 0.5rem;
-    }
-
-    .treatment-row.checkbox-row {
-      flex-direction: row;
-      gap: 1rem;
-      flex-wrap: wrap;
-    }
-
-    .treatment-row.checkbox-row .form-check {
-      flex: 1 1 calc(50% - 0.5rem);
-      min-width: 200px;
-    }
-
-    /* Conditional fields: smooth reveal without grid layout */
+    /* Simplified conditional fields */
     .conditional-field {
       display: none;
-      width: 100%;
-      overflow: hidden;
-      box-sizing: border-box;
+      transition: opacity 0.2s;
     }
-
+    
     .conditional-field.show {
       display: block;
-      animation: slideDown 0.3s ease forwards;
-    }
-
-    @keyframes slideDown {
-      from {
-        opacity: 0;
-        max-height: 0;
-      }
-      to {
-        opacity: 1;
-        max-height: 600px;
-      }
-    }
-
-    .conditional-field .form-group {
-      margin-bottom: 0;
-    }
-
-    .conditional-field .form-label {
-      margin-bottom: 0.5rem;
-      display: block;
-    }
-
-    .conditional-field .form-control,
-    .conditional-field .form-select {
-      width: 100%;
-    }
-
-    @media (max-width: 768px) {
-      .treatment-row.checkbox-row .form-check {
-        flex: 1 1 100%;
-      }
     }
     
     .category-info {
@@ -673,10 +448,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <form method="POST" action="new_report.php" enctype="multipart/form-data">
               <!-- Patient Information Section -->
               <div class="form-section">
-                <button type="button" class="section-header" data-bs-toggle="collapse" data-bs-target="#patientSection" aria-expanded="true">
+                <div class="section-header" data-bs-toggle="collapse" data-bs-target="#patientSection" aria-expanded="true">
                   <span><i class="bi bi-person me-2"></i>Patient Information</span>
                   <i class="bi bi-chevron-down"></i>
-                </button>
+                </div>
                 <div class="section-content collapse show" id="patientSection">
                 <div class="mb-3">
                   <label class="form-label d-block">Patient Selection</label>
@@ -763,10 +538,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
               
               <!-- Animal Bite Details Section -->
               <div class="form-section">
-                <button type="button" class="section-header" data-bs-toggle="collapse" data-bs-target="#biteDetailsSection" aria-expanded="true">
+                <div class="section-header" data-bs-toggle="collapse" data-bs-target="#biteDetailsSection" aria-expanded="true">
                   <span><i class="bi bi-exclamation-triangle me-2"></i>Animal Bite Details</span>
                   <i class="bi bi-chevron-down"></i>
-                </button>
+                </div>
                 <div class="section-content collapse show" id="biteDetailsSection">
                 <div class="row g-3">
                   <div class="col-md-6">
@@ -785,13 +560,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     </select>
                   </div>
                   
-                  <div class="conditional-field" id="otherAnimalSection">
-                    <div class="row g-3">
-                      <div class="col-md-6">
-                        <label for="animal_other_type" class="form-label required-field">Specify Animal</label>
-                        <input type="text" class="form-control" id="animal_other_type" name="animal_other_type">
-                      </div>
-                    </div>
+                  <div class="col-md-6 conditional-field" id="otherAnimalSection">
+                    <label for="animal_other_type" class="form-label required-field">Specify Animal</label>
+                    <input type="text" class="form-control" id="animal_other_type" name="animal_other_type">
                   </div>
                   
                   <div class="col-md-6">
@@ -806,22 +577,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     </select>
                   </div>
                   
-                  <div class="conditional-field" id="ownerSection">
-                    <div class="row g-3">
-                      <div class="col-md-6">
-                        <label for="owner_name" class="form-label">Owner's Name</label>
-                        <input type="text" class="form-control" id="owner_name" name="owner_name">
-                      </div>
-                    </div>
+                  <div class="col-md-6 conditional-field" id="ownerSection">
+                    <label for="owner_name" class="form-label">Owner's Name</label>
+                    <input type="text" class="form-control" id="owner_name" name="owner_name">
                   </div>
                   
-                  <div class="conditional-field" id="ownerContactSection">
-                    <div class="row g-3">
-                      <div class="col-md-6">
-                        <label for="owner_contact" class="form-label">Owner's Contact</label>
-                        <input type="text" class="form-control" id="owner_contact" name="owner_contact">
-                      </div>
-                    </div>
+                  <div class="col-md-6 conditional-field" id="ownerContactSection">
+                    <label for="owner_contact" class="form-label">Owner's Contact</label>
+                    <input type="text" class="form-control" id="owner_contact" name="owner_contact">
                   </div>
                   
                   <div class="col-md-6">
@@ -865,10 +628,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
               
               <!-- Bite Location and Classification -->
               <div class="form-section">
-                <button type="button" class="section-header" data-bs-toggle="collapse" data-bs-target="#biteLocationSection" aria-expanded="true">
+                <div class="section-header" data-bs-toggle="collapse" data-bs-target="#biteLocationSection" aria-expanded="true">
                   <span><i class="bi bi-bullseye me-2"></i>Bite Location & Classification</span>
                   <i class="bi bi-chevron-down"></i>
-                </button>
+                </div>
                 <div class="section-content collapse show" id="biteLocationSection">
                 <div class="row g-3">
                   <div class="col-md-12">
@@ -884,33 +647,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                       <option value="Category II">Category II</option>
                       <option value="Category III">Category III</option>
                     </select>
-
-                    <div id="autoClassification" style="margin-top:10px; padding:10px; border-radius:6px; background:#f8fafc; border:1px solid #e6eef9; display:none;">
-                      <strong>Auto-classification:</strong>
-                      <div id="autoCategory" style="margin-top:6px; font-size:1.05rem;"></div>
-                      <div id="autoRationale" style="margin-top:6px; font-size:0.9rem; color:#475569;"></div>
-                    </div>
-
-                    <div style="margin-top:10px;">
-                      <div class="form-check">
-                        <input class="form-check-input" type="checkbox" id="overrideCheckbox">
-                        <label class="form-check-label" for="overrideCheckbox">Override auto-classification</label>
-                      </div>
-                    </div>
-
-                    <div id="overrideSection" style="display:none; margin-top:10px;">
-                      <label class="form-label">Manual Category (if overriding)</label>
-                      <select class="form-select" id="category_override" name="category_override">
-                        <option value="">-- Select Override Category --</option>
-                        <option value="Category I">Category I</option>
-                        <option value="Category II">Category II</option>
-                        <option value="Category III">Category III</option>
-                      </select>
-                      <label class="form-label" style="margin-top:8px;">Override Reason</label>
-                      <textarea class="form-control" id="override_reason" name="override_reason" rows="2" placeholder="Explain why you are overriding the automated classification (required when overriding)"></textarea>
-                    </div>
-
-                    <div class="category-info" style="margin-top:12px;">
+                    
+                    <div class="category-info">
                       <h5>Bite Categories:</h5>
                       <p><strong>Category I:</strong> Touching or feeding of animals, licks on intact skin</p>
                       <p><strong>Category II:</strong> Nibbling of uncovered skin, minor scratches or abrasions without bleeding</p>
@@ -923,116 +661,101 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
               
               <!-- Treatment Information -->
               <div class="form-section">
-                <button type="button" class="section-header" data-bs-toggle="collapse" data-bs-target="#treatmentSection" aria-expanded="false">
+                <div class="section-header" data-bs-toggle="collapse" data-bs-target="#treatmentSection" aria-expanded="false">
                   <span><i class="bi bi-bandaid me-2"></i>Treatment Information</span>
                   <i class="bi bi-chevron-down"></i>
-                </button>
+                </div>
                 <div class="section-content collapse" id="treatmentSection">
-                  <div class="treatment-container">
-                    <!-- Wound washing and rabies vaccine row -->
-                    <div class="treatment-row checkbox-row">
-                      <div class="form-check">
-                        <input class="form-check-input" type="checkbox" id="wash_with_soap" name="wash_with_soap">
-                        <label class="form-check-label" for="wash_with_soap">
-                          Wound washed with soap and water
-                        </label>
-                      </div>
-                      <div class="form-check">
-                        <input class="form-check-input" type="checkbox" id="rabies_vaccine" name="rabies_vaccine">
-                        <label class="form-check-label" for="rabies_vaccine">
-                          Rabies vaccine administered
-                        </label>
-                      </div>
-                    </div>
-                    
-                    <!-- Rabies vaccine date (conditional) -->
-                    <div class="conditional-field" id="rabiesVaccineDateSection">
-                      <div class="form-group">
-                        <label for="rabies_vaccine_date" class="form-label">Date of Rabies Vaccine</label>
-                        <input type="date" class="form-control" id="rabies_vaccine_date" name="rabies_vaccine_date">
-                      </div>
-                    </div>
-                    
-                    <!-- Anti-tetanus row -->
-                    <div class="treatment-row">
-                      <div class="form-check">
-                        <input class="form-check-input" type="checkbox" id="anti_tetanus" name="anti_tetanus">
-                        <label class="form-check-label" for="anti_tetanus">
-                          Anti-tetanus administered
-                        </label>
-                      </div>
-                    </div>
-                    
-                    <!-- Anti-tetanus date (conditional) -->
-                    <div class="conditional-field" id="antiTetanusDateSection">
-                      <div class="form-group">
-                        <label for="anti_tetanus_date" class="form-label">Date of Anti-tetanus</label>
-                        <input type="date" class="form-control" id="anti_tetanus_date" name="anti_tetanus_date">
-                      </div>
-                    </div>
-                    
-                    <!-- Antibiotics row -->
-                    <div class="treatment-row">
-                      <div class="form-check">
-                        <input class="form-check-input" type="checkbox" id="antibiotics" name="antibiotics">
-                        <label class="form-check-label" for="antibiotics">
-                          Antibiotics prescribed
-                        </label>
-                      </div>
-                    </div>
-                    
-                    <!-- Antibiotics details (conditional) -->
-                    <div class="conditional-field" id="antibioticsDetailsSection">
-                      <div class="form-group">
-                        <label for="antibiotics_details" class="form-label">Antibiotics Details</label>
-                        <input type="text" class="form-control" id="antibiotics_details" name="antibiotics_details" placeholder="Type, dosage, etc.">
-                      </div>
-                    </div>
-                    
-                    <!-- Hospital referral row -->
-                    <div class="treatment-row">
-                      <div class="form-check">
-                        <input class="form-check-input" type="checkbox" id="referred_to_hospital" name="referred_to_hospital">
-                        <label class="form-check-label" for="referred_to_hospital">
-                          Referred to hospital
-                        </label>
-                      </div>
-                    </div>
-                    
-                    <!-- Hospital name (conditional) -->
-                    <div class="conditional-field" id="hospitalNameSection">
-                      <div class="form-group">
-                        <label for="hospital_name" class="form-label">Hospital Name</label>
-                        <input type="text" class="form-control" id="hospital_name" name="hospital_name">
-                      </div>
-                    </div>
-                    
-                    <!-- Follow-up and status row -->
-                    <div class="treatment-row checkbox-row">
-                      <div class="form-group" style="flex: 1 1 calc(50% - 0.5rem); min-width: 200px;">
-                        <label for="followup_date" class="form-label">Follow-up Date</label>
-                        <input type="date" class="form-control" id="followup_date" name="followup_date">
-                      </div>
-                      <div class="form-group" style="flex: 1 1 calc(50% - 0.5rem); min-width: 200px;">
-                        <label for="status" class="form-label required-field">Case Status</label>
-                        <select class="form-select" id="status" name="status" required>
-                          <option value="pending" selected>Pending</option>
-                          <option value="in_progress">In Progress</option>
-                          <option value="completed">Completed</option>
-                          <option value="referred">Referred</option>
-                        </select>
-                      </div>
+                <div class="row g-3">
+                  <div class="col-md-6">
+                    <div class="form-check">
+                      <input class="form-check-input" type="checkbox" id="wash_with_soap" name="wash_with_soap">
+                      <label class="form-check-label" for="wash_with_soap">
+                        Wound washed with soap and water
+                      </label>
                     </div>
                   </div>
+                  
+                  <div class="col-md-6">
+                    <div class="form-check">
+                      <input class="form-check-input" type="checkbox" id="rabies_vaccine" name="rabies_vaccine">
+                      <label class="form-check-label" for="rabies_vaccine">
+                        Rabies vaccine administered
+                      </label>
+                    </div>
+                  </div>
+                  
+                  <div class="col-md-6 conditional-field" id="rabiesVaccineDateSection">
+                    <label for="rabies_vaccine_date" class="form-label">Date of Rabies Vaccine</label>
+                    <input type="date" class="form-control" id="rabies_vaccine_date" name="rabies_vaccine_date">
+                  </div>
+                  
+                  <div class="col-md-6">
+                    <div class="form-check">
+                      <input class="form-check-input" type="checkbox" id="anti_tetanus" name="anti_tetanus">
+                      <label class="form-check-label" for="anti_tetanus">
+                        Anti-tetanus administered
+                      </label>
+                    </div>
+                  </div>
+                  
+                  <div class="col-md-6 conditional-field" id="antiTetanusDateSection">
+                    <label for="anti_tetanus_date" class="form-label">Date of Anti-tetanus</label>
+                    <input type="date" class="form-control" id="anti_tetanus_date" name="anti_tetanus_date">
+                  </div>
+                  
+                  <div class="col-md-6">
+                    <div class="form-check">
+                      <input class="form-check-input" type="checkbox" id="antibiotics" name="antibiotics">
+                      <label class="form-check-label" for="antibiotics">
+                        Antibiotics prescribed
+                      </label>
+                    </div>
+                  </div>
+                  
+                  <div class="col-md-6 conditional-field" id="antibioticsDetailsSection">
+                    <label for="antibiotics_details" class="form-label">Antibiotics Details</label>
+                    <input type="text" class="form-control" id="antibiotics_details" name="antibiotics_details" placeholder="Type, dosage, etc.">
+                  </div>
+                  
+                  <div class="col-md-6">
+                    <div class="form-check">
+                      <input class="form-check-input" type="checkbox" id="referred_to_hospital" name="referred_to_hospital">
+                      <label class="form-check-label" for="referred_to_hospital">
+                        Referred to hospital
+                      </label>
+                    </div>
+                  </div>
+                  
+                  <div class="col-md-6 conditional-field" id="hospitalNameSection">
+                    <label for="hospital_name" class="form-label">Hospital Name</label>
+                    <input type="text" class="form-control" id="hospital_name" name="hospital_name">
+                  </div>
+                  
+                  <div class="col-md-6">
+                    <label for="followup_date" class="form-label">Follow-up Date</label>
+                    <input type="date" class="form-control" id="followup_date" name="followup_date">
+                  </div>
+                  
+                  <div class="col-md-6">
+                    <label for="status" class="form-label required-field">Case Status</label>
+                    <select class="form-select" id="status" name="status" required>
+                      <option value="pending" selected>Pending</option>
+                      <option value="in_progress">In Progress</option>
+                      <option value="completed">Completed</option>
+                      <option value="referred">Referred</option>
+                    </select>
+                  </div>
+                </div>
                 </div>
               </div>
               
               <!-- Additional Notes Section -->
               <div class="form-section">
-                <button type="button" class="section-header" data-bs-toggle="collapse" data-bs-target="#notesSection" aria-expanded="false">
+                <div class="section-header" data-bs-toggle="collapse" data-bs-target="#notesSection" aria-expanded="false">
                   <span><i class="bi bi-journal me-2"></i>Additional Notes</span>
                   <i class="bi bi-chevron-down"></i>
-                </button>
+                </div>
                 <div class="section-content collapse" id="notesSection">
                 <div class="mb-3">
                   <label for="notes" class="form-label">Notes</label>
@@ -1150,16 +873,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       
       // Set initial state
       togglePatientSections();
-
-      // Initialize conditional fields visibility based on current values
-      toggleConditionalField(otherAnimalSection, animalTypeSelect.value === 'Other');
-      const ownershipVal = animalOwnershipSelect.value;
-      toggleConditionalField(ownerSection, ownershipVal === 'Owned by neighbor' || ownershipVal === 'Owned by unknown person');
-      toggleConditionalField(ownerContactSection, ownershipVal === 'Owned by neighbor' || ownershipVal === 'Owned by unknown person');
-      toggleConditionalField(rabiesVaccineDateSection, rabiesVaccineCheckbox.checked);
-      toggleConditionalField(antiTetanusDateSection, antiTetanusCheckbox.checked);
-      toggleConditionalField(antibioticsDetailsSection, antibioticsCheckbox.checked);
-      toggleConditionalField(hospitalNameSection, referredToHospitalCheckbox.checked);
 
       // Patient Autocomplete Functionality
       const patientSearchResults = document.getElementById('patient_search_results');
@@ -1336,79 +1049,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       selectedPatientName.textContent = selectedPatient.text;
       selectedPatientInfo.style.display = 'block';
       <?php endif; ?>
-
-      // --- Auto-classification: fetch and display ---
-      const biteLocationInput = document.getElementById('bite_location');
-      const animalOwnershipInput = document.getElementById('animal_ownership');
-      const animalVaccinatedInput = document.getElementById('animal_vaccinated');
-      const provokedInput = document.getElementById('provoked');
-      const multipleBitesInput = document.getElementById('multiple_bites');
-      const autoBox = document.getElementById('autoClassification');
-      const autoCategory = document.getElementById('autoCategory');
-      const autoRationale = document.getElementById('autoRationale');
-      const biteTypeSelect = document.getElementById('bite_type');
-      const overrideCheckbox = document.getElementById('overrideCheckbox');
-      const overrideSection = document.getElementById('overrideSection');
-      const categoryOverrideSelect = document.getElementById('category_override');
-      const overrideReasonInput = document.getElementById('override_reason');
-
-      let classifyTimeout = null;
-
-      function scheduleClassify() {
-        if (classifyTimeout) clearTimeout(classifyTimeout);
-        classifyTimeout = setTimeout(runClassify, 400);
-      }
-
-      function runClassify() {
-        const formData = new FormData();
-        formData.append('patient_id', patientIdInput.value || '');
-        formData.append('bite_location', biteLocationInput.value || '');
-        formData.append('animal_ownership', animalOwnershipInput ? animalOwnershipInput.value : '');
-        formData.append('animal_vaccinated', animalVaccinatedInput ? animalVaccinatedInput.value : '');
-        formData.append('provoked', provokedInput ? provokedInput.value : '');
-        formData.append('multiple_bites', multipleBitesInput && multipleBitesInput.checked ? '1' : '');
-
-        fetch('classify_incident.php', { method: 'POST', body: formData })
-          .then(resp => resp.json())
-          .then(json => {
-            if (json && json.success && json.data) {
-              const d = json.data;
-              autoBox.style.display = 'block';
-              autoCategory.textContent = d.biteType + ' (' + d.severity + ')';
-              autoRationale.textContent = d.rationale + ' Score: ' + d.score;
-              // Only update the visible select if override is not active
-              if (!overrideCheckbox.checked) {
-                biteTypeSelect.value = d.biteType;
-              }
-            }
-          }).catch(err => {
-            // ignore
-          });
-      }
-
-      [biteLocationInput, animalOwnershipInput, animalVaccinatedInput, provokedInput, multipleBitesInput].forEach(el => {
-        if (!el) return;
-        el.addEventListener('change', scheduleClassify);
-        el.addEventListener('input', scheduleClassify);
-      });
-
-      // Also re-run when patient selection changes
-      patientSearchInput.addEventListener('change', scheduleClassify);
-
-      overrideCheckbox.addEventListener('change', function() {
-        if (this.checked) {
-          overrideSection.style.display = 'block';
-        } else {
-          overrideSection.style.display = 'none';
-          categoryOverrideSelect.value = '';
-          overrideReasonInput.value = '';
-          // restore auto value
-          runClassify();
-        }
-      });
-
-      // Initial classify when form loads
-      setTimeout(runClassify, 600);
     });
   </script>
 </body>

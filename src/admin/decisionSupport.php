@@ -6,8 +6,6 @@ if (!isset($_SESSION['admin_id'])) {
 }
 
 require_once '../conn/conn.php';
-// Vaccination helper provides scheduling and status functions
-require_once 'includes/vaccination_helper_v2.php';
 
 // Get admin information
 try {
@@ -213,84 +211,6 @@ try {
     $vaccinationData = $vaccinationStmt->fetchAll(PDO::FETCH_ASSOC);
 } catch (PDOException $e) {
     $vaccinationData = [];
-}
-
-// --- Enhanced, schema-compatible analytics ---
-// Fetch reports in the selected range for per-report vaccination checks
-try {
-    $reportsWhere = " WHERE r.biteDate BETWEEN ? AND ?";
-    $reportsParams = [$dateFrom, $dateTo];
-    if (!empty($animalType)) { $reportsWhere .= " AND r.animalType = ?"; $reportsParams[] = $animalType; }
-    if (!empty($barangay)) { $reportsWhere .= " AND p.barangay = ?"; $reportsParams[] = $barangay; }
-
-    $reportsQuery = "SELECT r.reportId, r.patientId, r.biteType, r.multipleBites, p.firstName, p.lastName, p.barangay, r.biteDate FROM reports r JOIN patients p ON r.patientId = p.patientId " . $reportsWhere;
-    $reportsStmt = $pdo->prepare($reportsQuery);
-    $reportsStmt->execute($reportsParams);
-    $reportsList = $reportsStmt->fetchAll(PDO::FETCH_ASSOC);
-} catch (PDOException $e) {
-    $reportsList = [];
-}
-
-$highRiskCases = [];
-$overdueDoses = [];
-
-// Use vaccination helper to determine overdue/missed doses per report
-foreach ($reportsList as $r) {
-    // High-risk identification (Category III or multiple bites flagged)
-    if (isset($r['biteType']) && stripos($r['biteType'], 'Category III') !== false) {
-        $highRiskCases[] = $r;
-        continue;
-    }
-    if (!empty($r['multipleBites']) && $r['multipleBites']) {
-        $highRiskCases[] = $r;
-        continue;
-    }
-
-    // Organized vaccinations: helper returns PEP and PrEP structured info
-    $organized = getOrganizedVaccinations($pdo, $r['patientId'], $r['reportId']);
-    if (!empty($organized['pep']['vaccinations'])) {
-        foreach ($organized['pep']['vaccinations'] as $v) {
-            if (in_array($v['status'], ['Overdue', 'Missed'])) {
-                $overdueDoses[] = array_merge($v, [
-                    'reportId' => $r['reportId'],
-                    'patientId' => $r['patientId'],
-                    'firstName' => $r['firstName'],
-                    'lastName' => $r['lastName'],
-                    'barangay' => $r['barangay']
-                ]);
-            }
-        }
-    }
-}
-
-// Vaccination progress: counts from vaccination_records grouped by patient
-try {
-    $progressQuery = "SELECT patientId, COUNT(*) as totalDoses, SUM(CASE WHEN dateGiven IS NOT NULL THEN 1 ELSE 0 END) as completedDoses FROM vaccination_records WHERE dateGiven BETWEEN ? AND ? GROUP BY patientId";
-    $progressStmt = $pdo->prepare($progressQuery);
-    $progressStmt->execute([$dateFrom, $dateTo]);
-    $vaccinationProgress = $progressStmt->fetchAll(PDO::FETCH_ASSOC);
-} catch (PDOException $e) {
-    $vaccinationProgress = [];
-}
-
-// Staff activity: reports handled and doses administered (administeredBy in vaccination_records)
-try {
-    $staffQuery = "SELECT s.staffId, s.firstName, s.lastName, COUNT(DISTINCT r.reportId) as reportsHandled, COUNT(vr.vaccinationId) as dosesGiven FROM staff s LEFT JOIN reports r ON s.staffId = r.staffId LEFT JOIN vaccination_records vr ON vr.administeredBy = s.staffId GROUP BY s.staffId";
-    $staffStmt = $pdo->prepare($staffQuery);
-    $staffStmt->execute();
-    $staffActivity = $staffStmt->fetchAll(PDO::FETCH_ASSOC);
-} catch (PDOException $e) {
-    $staffActivity = [];
-}
-
-// Incident patterns: clusters by date and barangay (>2 cases)
-try {
-    $patternQuery = "SELECT DATE(r.biteDate) as date, p.barangay, COUNT(*) as count FROM reports r JOIN patients p ON r.patientId = p.patientId WHERE r.biteDate BETWEEN ? AND ? GROUP BY DATE(r.biteDate), p.barangay HAVING count > 2 ORDER BY count DESC";
-    $patternStmt = $pdo->prepare($patternQuery);
-    $patternStmt->execute([$dateFrom, $dateTo]);
-    $incidentPatterns = $patternStmt->fetchAll(PDO::FETCH_ASSOC);
-} catch (PDOException $e) {
-    $incidentPatterns = [];
 }
 
 // Get unique animal types for filter dropdown
@@ -1301,109 +1221,6 @@ function buildUrl($newParams = []) {
                 </div>
             </div>
             
-            <!-- Enhanced Decision Support Sections -->
-            <div class="charts-grid">
-                <div class="chart-card full-width">
-                    <div class="chart-header">
-                        <h3><i class="bi bi-exclamation-diamond"></i> High-Risk Cases</h3>
-                    </div>
-                    <div class="chart-body">
-                        <div class="insights">
-                            <h4>Cases with severe risk (Category III, multiple bites):</h4>
-                            <ul>
-                                <?php if (!empty($highRiskCases)): ?>
-                                    <?php foreach ($highRiskCases as $case): ?>
-                                        <li>Report #<?php echo $case['reportId']; ?>: <?php echo htmlspecialchars($case['firstName'].' '.$case['lastName']); ?> (<?php echo htmlspecialchars($case['barangay']); ?>) - <?php echo htmlspecialchars($case['biteType']); ?></li>
-                                    <?php endforeach; ?>
-                                <?php else: ?>
-                                    <li>No high-risk cases in selected period.</li>
-                                <?php endif; ?>
-                            </ul>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="chart-card full-width">
-                    <div class="chart-header">
-                        <h3><i class="bi bi-calendar-x"></i> Missed / Overdue Doses</h3>
-                    </div>
-                    <div class="chart-body">
-                        <div class="insights">
-                            <h4>Patients with overdue or missed PEP doses:</h4>
-                            <ul>
-                                <?php if (!empty($overdueDoses)): ?>
-                                    <?php foreach ($overdueDoses as $d): ?>
-                                        <li>Patient #<?php echo $d['patientId']; ?>: <?php echo htmlspecialchars($d['firstName'].' '.$d['lastName']); ?> (Report #<?php echo $d['reportId']; ?>) - Dose <?php echo htmlspecialchars($d['doseNumber']); ?> scheduled <?php echo htmlspecialchars($d['nextScheduledDate'] ?? $d['suggestedDate'] ?? 'N/A'); ?> [Status: <?php echo htmlspecialchars($d['status']); ?>]</li>
-                                    <?php endforeach; ?>
-                                <?php else: ?>
-                                    <li>No missed or overdue doses detected.</li>
-                                <?php endif; ?>
-                            </ul>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="chart-card full-width">
-                    <div class="chart-header">
-                        <h3><i class="bi bi-check2-circle"></i> Vaccination Progress</h3>
-                    </div>
-                    <div class="chart-body">
-                        <div class="insights">
-                            <h4>Summary of vaccination completion (patients with records in selected period):</h4>
-                            <ul>
-                                <?php if (!empty($vaccinationProgress)): ?>
-                                    <?php foreach ($vaccinationProgress as $p): ?>
-                                        <li>Patient #<?php echo $p['patientId']; ?>: <?php echo $p['completedDoses']; ?> of <?php echo $p['totalDoses']; ?> doses completed</li>
-                                    <?php endforeach; ?>
-                                <?php else: ?>
-                                    <li>No vaccination progress data for selected period.</li>
-                                <?php endif; ?>
-                            </ul>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="chart-card full-width">
-                    <div class="chart-header">
-                        <h3><i class="bi bi-person-workspace"></i> Staff Activity & Workload</h3>
-                    </div>
-                    <div class="chart-body">
-                        <div class="insights">
-                            <h4>Reports handled and doses administered by staff:</h4>
-                            <ul>
-                                <?php if (!empty($staffActivity)): ?>
-                                    <?php foreach ($staffActivity as $s): ?>
-                                        <li><?php echo htmlspecialchars($s['firstName'].' '.$s['lastName']); ?>: <?php echo $s['reportsHandled']; ?> reports, <?php echo $s['dosesGiven']; ?> doses given</li>
-                                    <?php endforeach; ?>
-                                <?php else: ?>
-                                    <li>No staff activity data available.</li>
-                                <?php endif; ?>
-                            </ul>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="chart-card full-width">
-                    <div class="chart-header">
-                        <h3><i class="bi bi-search"></i> Incident Patterns</h3>
-                    </div>
-                    <div class="chart-body">
-                        <div class="insights">
-                            <h4>Clusters of cases by date and barangay:</h4>
-                            <ul>
-                                <?php if (!empty($incidentPatterns)): ?>
-                                    <?php foreach ($incidentPatterns as $ip): ?>
-                                        <li><?php echo htmlspecialchars($ip['date']); ?> - <?php echo htmlspecialchars($ip['barangay']); ?>: <?php echo $ip['count']; ?> cases</li>
-                                    <?php endforeach; ?>
-                                <?php else: ?>
-                                    <li>No incident clusters detected.</li>
-                                <?php endif; ?>
-                            </ul>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
             <!-- Recommendations -->
             <div class="recommendations-card">
                 <h3><i class="bi bi-lightbulb"></i> Recommendations</h3>

@@ -21,8 +21,8 @@ $offset = ($page - 1) * $recordsPerPage;
 
 // Build the query
 $query = "
-        SELECT r.reportId, r.reportDate, r.biteDate, r.animalType, r.biteType, r.status, r.notes,
-            p.patientId, p.firstName, p.lastName, p.contactNumber, p.barangay
+    SELECT r.reportId, r.reportDate, r.biteDate, r.animalType, r.biteType, r.status,
+           p.patientId, p.firstName, p.lastName, p.contactNumber, p.barangay
     FROM reports r
     LEFT JOIN patients p ON r.patientId = p.patientId
     WHERE 1=1
@@ -89,21 +89,6 @@ try {
     $stmt = $pdo->prepare($query);
     $stmt->execute($params);
     $reports = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-        // Extract classification snippet from notes for each report (if present)
-        foreach ($reports as &$rep) {
-            $repNotes = $rep['notes'] ?? '';
-            $rep['classification_snippet'] = '';
-            if (!empty($repNotes)) {
-                if (preg_match_all('/\[Classification\](.*?)(?=\n\[|$)/s', $repNotes, $matches)) {
-                    $last = trim(end($matches[1]));
-                    // Keep a short snippet for list display
-                    $snippet = strip_tags($last);
-                    if (strlen($snippet) > 180) $snippet = substr($snippet, 0, 177) . '...';
-                    $rep['classification_snippet'] = $snippet;
-                }
-            }
-        }
 
     $barangaysStmt = $pdo->query("SELECT DISTINCT barangay FROM barangay_coordinates ORDER BY barangay");
     $barangays = $barangaysStmt->fetchAll(PDO::FETCH_COLUMN);
@@ -511,20 +496,12 @@ function getCategoryClass($category) {
                             <td><?php echo htmlspecialchars($r['barangay']); ?></td>
                             <td><?php echo htmlspecialchars($r['animalType']); ?></td>
                             <td><?php echo $r['biteDate'] ? date('M d, Y', strtotime($r['biteDate'])) : '<span style="color:#94a3b8">—</span>'; ?></td>
-                            <td>
-                                <span class="status-badge <?php echo getCategoryClass($r['biteType']); ?>" <?php if (!empty($r['classification_snippet'])): ?>title="<?php echo htmlspecialchars($r['classification_snippet']); ?>"<?php endif; ?>><?php echo htmlspecialchars($r['biteType']); ?></span>
-                                <?php if (!empty($r['classification_snippet'])): ?>
-                                    <span style="margin-left:6px; color:#475569;" title="<?php echo htmlspecialchars($r['classification_snippet']); ?>"><i class="bi bi-info-circle"></i></span>
-                                <?php endif; ?>
-                            </td>
+                            <td><span class="status-badge <?php echo getCategoryClass($r['biteType']); ?>"><?php echo htmlspecialchars($r['biteType']); ?></span></td>
                             <td><span class="status-badge <?php echo getStatusClass($r['status']); ?>"><?php echo ucfirst(str_replace('_', ' ', $r['status'])); ?></span></td>
                             <td><?php echo $r['reportDate'] ? date('M d, Y', strtotime($r['reportDate'])) : '<span style="color:#94a3b8">—</span>'; ?></td>
                             <td>
-                                <a href="view_report.php?id=<?php echo $r['reportId']; ?>" class="btn-view" title="View Report">
+                                <a href="view_report.php?id=<?php echo $r['reportId']; ?>" class="btn-view">
                                     <i class="bi bi-eye"></i> View
-                                </a>
-                                <a href="edit_report.php?id=<?php echo $r['reportId']; ?>" class="btn-view" style="margin-left:6px; background:#fff7ed; color:#9a3412;" title="Edit Report">
-                                    <i class="bi bi-pencil"></i> Edit
                                 </a>
                             </td>
                         </tr>

@@ -498,7 +498,7 @@ $highThreshold = max($lowThreshold + 1, (int)ceil($maxCount * 0.7));
             z-index: 1000;
             width: 260px;
             font-size: 0.85rem;
-            max-height: 380px;
+            max-height: 320px;
             overflow: hidden;
             display: flex;
             flex-direction: column;
@@ -885,21 +885,9 @@ $highThreshold = max($lowThreshold + 1, (int)ceil($maxCount * 0.7));
             }
             .sidebar-toggle {
                 right: 0;
-                top: 50%;
-                transform: translateY(-50%);
             }
             .sidebar-toggle:not(.collapsed) {
                 right: 340px;
-            }
-            .map-controls {
-                top: 15px;
-                left: 15px;
-            }
-            .map-legend {
-                bottom: 15px;
-                left: 15px;
-                width: 280px;
-                max-height: 350px;
             }
         }
         
@@ -935,54 +923,37 @@ $highThreshold = max($lowThreshold + 1, (int)ceil($maxCount * 0.7));
                 position: fixed;
                 width: 100% !important;
                 right: -100% !important;
-                top: auto !important;
-                bottom: 0 !important;
-                max-height: 85vh;
                 transition: right 0.3s ease;
-                border-radius: 12px 12px 0 0;
-                border-left: none;
-                border-bottom: none;
             }
             .data-sidebar:not(.collapsed) {
                 right: 0 !important;
             }
             .sidebar-toggle {
                 position: fixed;
-                right: 12px;
-                bottom: 12px;
-                width: 44px;
-                height: 44px;
-                top: auto !important;
-                transform: none !important;
-                border-radius: 50%;
-                border: 1px solid var(--gray-300);
-                background: white;
-                box-shadow: 0 2px 8px rgba(0,0,0,0.15);
-                z-index: 150;
+                right: 10px;
+                width: 40px;
+                height: 50px;
+                border-radius: 8px;
+                border: 1px solid var(--gray-200);
             }
             .sidebar-toggle.collapsed {
-                right: 12px;
-                bottom: 12px;
+                right: 10px;
             }
             .map-legend {
-                bottom: 70px;
-                left: 12px;
-                right: 12px;
-                width: auto;
-                max-width: none;
-                max-height: 35vh;
+                bottom: 60px;
+                left: 10px;
+                width: calc(100% - 20px);
+                max-width: 280px;
             }
             .map-controls {
-                top: 12px;
-                left: 12px;
-                right: 12px;
-                width: auto;
-                flex-direction: row;
-                gap: 0.4rem;
+                top: 10px;
+                left: 10px;
+                flex-direction: column;
+                gap: 0.3rem;
             }
             .map-control-btn {
-                flex: 1;
-                text-align: center;
+                padding: 0.4rem 0.7rem;
+                font-size: 0.75rem;
             }
             .data-table {
                 font-size: 0.75rem;
@@ -1029,7 +1000,6 @@ $highThreshold = max($lowThreshold + 1, (int)ceil($maxCount * 0.7));
             }
             .data-sidebar {
                 width: 100% !important;
-                max-height: 80vh;
             }
             .page-title {
                 font-size: 0.9rem !important;
@@ -1039,41 +1009,14 @@ $highThreshold = max($lowThreshold + 1, (int)ceil($maxCount * 0.7));
                 padding: 0.2rem 0.4rem;
             }
             .map-legend {
-                bottom: 60px;
-                left: 8px;
-                right: 8px;
-                max-height: 30vh;
-                width: auto;
-            }
-            .map-controls {
-                top: 8px;
-                left: 8px;
-                right: 8px;
-                width: calc(100% - 16px);
-                gap: 0.25rem;
-            }
-            .map-control-btn {
-                flex: 1;
-                font-size: 0.7rem;
-                padding: 0.35rem 0.5rem;
-            }
-            .sidebar-toggle {
-                right: 10px;
-                bottom: 10px;
-                width: 44px;
-                height: 44px;
+                width: calc(100% - 10px);
+                max-height: 40vh;
             }
             .stat-grid {
                 grid-template-columns: 1fr;
             }
             .legend-item-value {
                 font-size: 0.7rem;
-            }
-            .map-legend {
-                max-width: 100%;
-            }
-            .legend-body {
-                max-height: 25vh;
             }
         }
     </style>

@@ -89,6 +89,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       $patientId = $pdo->lastInsertId();
     } else {
       $patientId = !empty($_POST['patient_id']) ? $_POST['patient_id'] : null;
+      if (!$patientId) {
+        throw new Exception('Please select an existing patient or provide details for a new patient.');
+      }
+    }
+
+    // Validate that patient exists
+    if ($patientId) {
+      $checkPatient = $pdo->prepare("SELECT patientId FROM patients WHERE patientId = ?");
+      $checkPatient->execute([$patientId]);
+      if (!$checkPatient->fetch()) {
+        throw new Exception('Selected patient not found. Please try again.');
+      }
     }
 
     // Insert report (admin-created). Use NULL for staffId when created by admin.
@@ -560,11 +572,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       background: white;
       border: 1px solid #d1d5db;
       border-top: none;
-      border-radius: 0 0 6px 6px;
-      max-height: 300px;
+      border-radius: 0 0 8px 8px;
+      max-height: 250px;
       overflow-y: auto;
-      z-index: 1000;
-      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      z-index: 9999;
+      box-shadow: 0 8px 16px rgba(0, 0, 0, 0.15);
       display: none;
     }
     
@@ -573,24 +585,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
     
     .autocomplete-item {
-      padding: 0.75rem 1rem;
+      padding: 0.875rem 1rem;
       cursor: pointer;
-      border-bottom: 1px solid #f3f4f6;
+      border-bottom: 1px solid #e5e7eb;
+      transition: background-color 0.15s ease;
     }
-    
+
     .autocomplete-item:hover,
     .autocomplete-item.highlighted {
-      background: #f3f4f6;
+      background: #f8fafc;
+      border-left: 3px solid #3b82f6;
+      padding-left: 0.875rem;
     }
-    
+
+    .autocomplete-item:last-child {
+      border-bottom: none;
+    }
+
     .autocomplete-item .patient-name {
-      font-weight: 500;
+      font-weight: 600;
+      color: #1f2937;
+      font-size: 0.95rem;
     }
-    
+
     .autocomplete-item .patient-details {
-      font-size: 0.875rem;
+      font-size: 0.8rem;
       color: #6b7280;
       margin-top: 0.25rem;
+      line-height: 1.3;
+    }
+
+    .autocomplete-item .patient-details span {
+      display: inline-block;
+      margin-right: 1rem;
     }
     
     .selected-patient-info {
@@ -761,7 +788,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
           </div>
           <h3>Report Created Successfully!</h3>
           <p class="mb-4">The animal bite report has been added to the system.</p>
-          <div class="d-flex justify-content-center gap-3">
+          <div class="d-flex justify-content-center gap-3 flex-wrap">
+            <a href="view_report.php?id=<?php echo $reportId ?? 0; ?>" class="btn btn-success">
+              <i class="bi bi-eye me-2"></i>View Report
+            </a>
             <a href="admin_dashboard.php" class="btn btn-outline-primary">
               <i class="bi bi-house-door me-2"></i>Back to Dashboard
             </a>
@@ -786,7 +816,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             </div>
             <?php endif; ?>
             
-            <form method="POST" action="new_report.php" enctype="multipart/form-data">
+            <form method="POST" action="new_report.php" enctype="multipart/form-data" id="reportForm">
               <!-- Patient Information Section -->
               <div class="form-section">
                 <button type="button" class="section-header" data-bs-toggle="collapse" data-bs-target="#patientSection" aria-expanded="true">
@@ -858,7 +888,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                   </div>
                   <div class="col-md-6">
                     <label for="new_contact" class="form-label">Contact Number</label>
-                    <input type="text" class="form-control" id="new_contact" name="new_contact">
+                    <input type="text" class="form-control" id="new_contact" name="new_contact" maxlength="11" pattern="[0-9]{7,11}" placeholder="11-digit mobile number (e.g., 09123456789)">
                   </div>
                   <div class="col-md-6">
                     <label for="new_barangay" class="form-label">Barangay</label>
@@ -1054,7 +1084,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                       <div class="mb-3">
                         <label class="form-label fw-semibold">Override Reason <span class="text-danger">*</span></label>
                         <textarea class="form-control" id="override_reason" name="override_reason" rows="3"
-                                  placeholder="Please provide detailed reasoning for overriding the AI classification. This will be documented in the report for audit purposes." required></textarea>
+                                  placeholder="Please provide detailed reasoning for overriding the AI classification. This will be documented in the report for audit purposes."></textarea>
                         <div class="form-text">
                           <i class="bi bi-info-circle"></i> Override reasons are logged for quality assurance and audit purposes.
                         </div>
@@ -1300,6 +1330,120 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         toggleConditionalField(hospitalNameSection, this.checked);
       });
       
+      // Form validation before submission
+      const reportForm = document.getElementById('reportForm');
+      reportForm.addEventListener('submit', function(e) {
+        const patientIdInput = document.getElementById('patient_id');
+        const newFirstNameInput = document.getElementById('new_first_name');
+        const newLastNameInput = document.getElementById('new_last_name');
+
+        // Validate patient selection - simplified logic
+        const hasPatientSelected = patientIdInput.value.trim() ||
+                                  (newFirstNameInput.value.trim() && newLastNameInput.value.trim());
+
+        if (!hasPatientSelected) {
+          e.preventDefault();
+          alert('Please select an existing patient or provide new patient details (first and last name).');
+          if (!patientIdInput.value.trim()) {
+            // Focus on patient search if no patient selected
+            document.getElementById('patient_search').focus();
+          } else {
+            // Focus on first name if trying to create new patient
+            document.getElementById('new_first_name').focus();
+          }
+          return false;
+        }
+
+        // Additional validation for required fields
+        const biteDateInput = document.getElementById('bite_date');
+        const animalTypeInput = document.getElementById('animal_type');
+        const biteLocationInput = document.getElementById('bite_location');
+        const biteTypeInput = document.getElementById('bite_type');
+        const statusInput = document.getElementById('status');
+
+        if (!biteDateInput.value) {
+          e.preventDefault();
+          alert('Please select the date of the bite incident.');
+          biteDateInput.focus();
+          return false;
+        }
+
+        if (!animalTypeInput.value) {
+          e.preventDefault();
+          alert('Please select the animal type.');
+          animalTypeInput.focus();
+          return false;
+        }
+
+        if (!biteLocationInput.value.trim()) {
+          e.preventDefault();
+          alert('Please specify the bite location.');
+          biteLocationInput.focus();
+          return false;
+        }
+
+        if (!biteTypeInput.value) {
+          e.preventDefault();
+          alert('Please select the bite category.');
+          biteTypeInput.focus();
+          return false;
+        }
+
+        if (!statusInput.value) {
+          e.preventDefault();
+          alert('Please select the case status.');
+          statusInput.focus();
+          return false;
+        }
+
+        // Validate override section if override is selected
+        const overrideCheckbox = document.getElementById('overrideCheckbox');
+        if (overrideCheckbox && overrideCheckbox.checked) {
+          const categoryOverrideSelect = document.getElementById('category_override');
+          const overrideReasonInput = document.getElementById('override_reason');
+
+          if (!categoryOverrideSelect.value) {
+            e.preventDefault();
+            alert('Please select an override category.');
+            categoryOverrideSelect.focus();
+            return false;
+          }
+
+          if (!overrideReasonInput.value.trim()) {
+            e.preventDefault();
+            alert('Please provide a reason for overriding the AI classification.');
+            overrideReasonInput.focus();
+            return false;
+          }
+        }
+
+        // Show loading state
+        const submitBtn = document.querySelector('button[type="submit"]');
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<i class="bi bi-hourglass-split me-2"></i>Saving...';
+
+        console.log('Form validation passed, submitting form...');
+      });
+
+      // Contact number validation - only allow numbers
+      const contactInput = document.getElementById('new_contact');
+      if (contactInput) {
+        contactInput.addEventListener('input', function(e) {
+          // Remove any non-numeric characters
+          this.value = this.value.replace(/[^0-9]/g, '');
+        });
+
+        contactInput.addEventListener('keypress', function(e) {
+          // Only allow numeric keys, backspace, delete, tab, escape, enter
+          const charCode = e.which ? e.which : e.keyCode;
+          if (charCode > 31 && (charCode < 48 || charCode > 57)) {
+            e.preventDefault();
+            return false;
+          }
+          return true;
+        });
+      }
+
       // Set initial state
       togglePatientSections();
 

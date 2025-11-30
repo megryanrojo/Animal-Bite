@@ -8,6 +8,71 @@ if (!isset($_SESSION['admin_id'])) {
 require_once '../conn/conn.php';
 require_once 'includes/logging_helper.php';
 
+// Ensure barangay_coordinates table exists
+try {
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS barangay_coordinates (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            barangay VARCHAR(255) NOT NULL UNIQUE,
+            latitude DECIMAL(10, 6) NOT NULL,
+            longitude DECIMAL(10, 6) NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            INDEX idx_barangay (barangay),
+            INDEX idx_coordinates (latitude, longitude)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    ");
+} catch (PDOException $e) {
+    error_log('Error creating barangay_coordinates table: ' . $e->getMessage());
+}
+
+// Handle AJAX requests for barangay management
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
+    header('Content-Type: application/json');
+
+    try {
+        switch ($_POST['action']) {
+            case 'add':
+                $stmt = $pdo->prepare("INSERT INTO barangay_coordinates (barangay, latitude, longitude) VALUES (?, ?, ?)");
+                $stmt->execute([$_POST['barangay'], $_POST['latitude'], $_POST['longitude']]);
+                echo json_encode(['success' => true, 'message' => 'Barangay added successfully']);
+                break;
+
+            case 'update':
+                $stmt = $pdo->prepare("UPDATE barangay_coordinates SET barangay = ?, latitude = ?, longitude = ? WHERE barangay = ?");
+                $stmt->execute([$_POST['barangay'], $_POST['latitude'], $_POST['longitude'], $_POST['old_barangay']]);
+                echo json_encode(['success' => true, 'message' => 'Barangay updated successfully']);
+                break;
+
+            case 'delete':
+                $stmt = $pdo->prepare("DELETE FROM barangay_coordinates WHERE barangay = ?");
+                $stmt->execute([$_POST['barangay']]);
+                echo json_encode(['success' => true, 'message' => 'Barangay deleted successfully']);
+                break;
+
+            default:
+                echo json_encode(['success' => false, 'message' => 'Invalid action']);
+        }
+    } catch (PDOException $e) {
+        echo json_encode(['success' => false, 'message' => 'Database error: ' . $e->getMessage()]);
+    }
+    exit;
+}
+
+// Handle GET request for barangay list
+if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['action']) && $_GET['action'] === 'get_barangays') {
+    header('Content-Type: application/json');
+
+    try {
+        $stmt = $pdo->query("SELECT barangay, latitude, longitude FROM barangay_coordinates ORDER BY barangay");
+        $barangays = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        echo json_encode($barangays);
+    } catch (PDOException $e) {
+        echo json_encode(['error' => 'Database error: ' . $e->getMessage()]);
+    }
+    exit;
+}
+
 $admin_id = $_SESSION['admin_id'];
 $stmt = $pdo->prepare("SELECT name, email FROM admin WHERE adminId = ?");
 $stmt->execute([$admin_id]);
@@ -353,6 +418,142 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             background: var(--primary-dark);
         }
 
+        .btn-secondary {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 16px;
+            background: var(--success);
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            font-size: 0.875rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-secondary:hover {
+            background: #059669;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+        }
+
+        .btn-outline {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 16px;
+            background: transparent;
+            color: var(--text-secondary);
+            border: 2px solid var(--border);
+            border-radius: 8px;
+            font-size: 0.875rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-outline:hover {
+            background: var(--bg-light);
+            border-color: var(--primary);
+            color: var(--primary);
+            transform: translateY(-1px);
+        }
+
+        .btn-cancel {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 16px;
+            background: transparent;
+            color: var(--text-secondary);
+            border: 2px solid var(--border);
+            border-radius: 8px;
+            font-size: 0.875rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-cancel:hover {
+            background: var(--error-light);
+            border-color: var(--error);
+            color: var(--error);
+        }
+
+        /* Coordinate Tip */
+        .coordinate-tip {
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+            padding: 12px 16px;
+            background: var(--bg-light);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            margin-bottom: 16px;
+        }
+
+        .coordinate-tip i {
+            color: var(--primary);
+            font-size: 1rem;
+            margin-top: 1px;
+            flex-shrink: 0;
+        }
+
+        .coordinate-tip small {
+            color: var(--text-secondary);
+            line-height: 1.4;
+        }
+
+        /* Barangay Management Responsive */
+        @media (max-width: 768px) {
+            .barangay-controls {
+                flex-direction: column;
+                gap: 8px;
+                align-items: stretch;
+            }
+
+            .barangay-controls button {
+                justify-content: center;
+                width: 100%;
+            }
+
+            .form-grid {
+                grid-template-columns: 1fr !important;
+                gap: 12px !important;
+            }
+
+            .form-actions {
+                flex-direction: column;
+            }
+
+            .form-actions button {
+                width: 100%;
+            }
+
+            .table-header,
+            .barangay-row {
+                grid-template-columns: 2fr 1fr 1fr;
+            }
+
+            .barangay-row .barangay-actions {
+                grid-column: 1 / -1;
+                justify-content: center;
+                margin-top: 8px;
+            }
+
+            .coordinate-tip {
+                flex-direction: column;
+                text-align: center;
+                gap: 8px;
+            }
+
+            .coordinate-tip small {
+                text-align: left;
+            }
+        }
+
         /* System Info */
         .info-list {
             display: flex;
@@ -591,6 +792,206 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
         .logs-empty p {
             font-size: 0.9rem;
+        }
+
+        /* Barangay Management */
+        .barangay-management {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .barangay-controls {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .barangay-form {
+            background: var(--bg-light);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 20px;
+        }
+
+        .form-grid {
+            display: grid;
+            grid-template-columns: 2fr 1fr 1fr;
+            gap: 16px;
+            margin-bottom: 20px;
+        }
+
+        .barangay-form .form-group {
+            margin: 0;
+        }
+
+        .barangay-form label {
+            display: block;
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: var(--text-primary);
+            margin-bottom: 6px;
+        }
+
+        .barangay-form input {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            font-size: 0.875rem;
+            background: #fff;
+            transition: border-color 0.2s;
+        }
+
+        .barangay-form input:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.1);
+        }
+
+        .barangay-table {
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            overflow: hidden;
+        }
+
+        .table-header {
+            display: grid;
+            grid-template-columns: 2fr 1fr 1fr 120px;
+            gap: 16px;
+            padding: 14px 20px;
+            background: var(--bg-light);
+            border-bottom: 1px solid var(--border);
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .table-body {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .barangay-row {
+            display: grid;
+            grid-template-columns: 2fr 1fr 1fr 120px;
+            gap: 16px;
+            padding: 14px 20px;
+            border-bottom: 1px solid var(--border);
+            align-items: center;
+            transition: background 0.15s;
+        }
+
+        .barangay-row:last-child {
+            border-bottom: none;
+        }
+
+        .barangay-row:hover {
+            background: var(--bg-light);
+        }
+
+        .barangay-name {
+            font-weight: 500;
+            color: var(--text-primary);
+        }
+
+        .barangay-coords {
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            background: var(--bg-light);
+            padding: 4px 8px;
+            border-radius: 4px;
+        }
+
+        .barangay-actions {
+            display: flex;
+            gap: 6px;
+        }
+
+        .btn-edit, .btn-delete {
+            padding: 6px 10px;
+            border: none;
+            border-radius: 6px;
+            font-size: 0.8rem;
+            cursor: pointer;
+            transition: all 0.15s;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .btn-edit {
+            background: var(--primary);
+            color: white;
+        }
+
+        .btn-edit:hover {
+            background: var(--primary-dark);
+        }
+
+        .btn-delete {
+            background: var(--error);
+            color: white;
+        }
+
+        .btn-delete:hover {
+            background: #dc2626;
+        }
+
+        .loading-state {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            padding: 40px;
+            color: var(--text-secondary);
+        }
+
+        .loading-state i {
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: var(--text-secondary);
+        }
+
+        .empty-state i {
+            font-size: 2.5rem;
+            margin-bottom: 12px;
+            color: var(--border);
+        }
+
+        .empty-state p {
+            font-size: 0.9rem;
+            margin-bottom: 16px;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .form-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .table-header,
+            .barangay-row {
+                grid-template-columns: 2fr 1fr 1fr;
+            }
+
+            .barangay-row .barangay-actions {
+                grid-column: 1 / -1;
+                justify-content: center;
+                margin-top: 8px;
+            }
         }
 
         /* Responsive */
@@ -1210,6 +1611,76 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 </div>
             </div>
 
+            <!-- Barangay Coordinates Management -->
+            <div class="settings-card full-width">
+                <div class="card-header">
+                    <div class="card-icon">
+                        <i class="bi bi-geo-alt"></i>
+                    </div>
+                    <div class="card-header-text">
+                        <h3>Barangay Coordinates</h3>
+                        <p>Manage geographic coordinates for heatmap visualization</p>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="barangay-management">
+                        <div class="barangay-controls">
+                            <button type="button" class="btn-secondary" onclick="showAddBarangayForm()">
+                                <i class="bi bi-plus-circle"></i> Add Barangay
+                            </button>
+                            <button type="button" class="btn-outline" onclick="loadBarangayList()">
+                                <i class="bi bi-arrow-clockwise"></i> Refresh
+                            </button>
+                        </div>
+
+                        <!-- Add/Edit Barangay Form -->
+                        <div class="barangay-form" id="barangayForm" style="display: none;">
+                            <div class="form-grid">
+                                <div class="form-group">
+                                    <label for="barangayName">Barangay Name</label>
+                                    <input type="text" id="barangayName" placeholder="Enter barangay name" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="barangayLat">Latitude</label>
+                                    <input type="number" id="barangayLat" step="0.000001" placeholder="e.g., 10.735000" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="barangayLng">Longitude</label>
+                                    <input type="number" id="barangayLng" step="0.000001" placeholder="e.g., 122.966000" required>
+                                </div>
+                            </div>
+
+                            <!-- Google Maps Tip -->
+                            <div class="coordinate-tip">
+                                <i class="bi bi-info-circle"></i>
+                                <small><strong>Tip:</strong> To get coordinates, right-click on Google Maps at the desired location and select "What's here?" - the coordinates will appear at the bottom.</small>
+                            </div>
+
+                            <div class="form-actions">
+                                <button type="button" class="btn-cancel" onclick="hideBarangayForm()">Cancel</button>
+                                <button type="button" class="btn-primary" onclick="saveBarangay()">Save Barangay</button>
+                            </div>
+                        </div>
+
+                        <!-- Barangay List -->
+                        <div class="barangay-table">
+                            <div class="table-header">
+                                <span>Barangay</span>
+                                <span>Latitude</span>
+                                <span>Longitude</span>
+                                <span>Actions</span>
+                            </div>
+                            <div class="table-body" id="barangayListBody">
+                                <div class="loading-state">
+                                    <i class="bi bi-arrow-clockwise"></i>
+                                    <span>Loading barangays...</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Activity Logs -->
             <div class="settings-card full-width">
                 <div class="card-header">
@@ -1293,5 +1764,203 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Barangay management functions
+        let editingBarangay = null;
+
+        // Initialize barangay list on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            loadBarangayList();
+        });
+
+        function showAddBarangayForm() {
+            editingBarangay = null;
+            document.getElementById('barangayName').value = '';
+            document.getElementById('barangayLat').value = '';
+            document.getElementById('barangayLng').value = '';
+            document.getElementById('barangayForm').style.display = 'block';
+            document.getElementById('barangayName').focus();
+        }
+
+        function hideBarangayForm() {
+            document.getElementById('barangayForm').style.display = 'none';
+            editingBarangay = null;
+        }
+
+        function editBarangay(barangay) {
+            editingBarangay = barangay;
+            document.getElementById('barangayName').value = barangay.barangay;
+            document.getElementById('barangayLat').value = barangay.latitude;
+            document.getElementById('barangayLng').value = barangay.longitude;
+            document.getElementById('barangayForm').style.display = 'block';
+            document.getElementById('barangayName').focus();
+        }
+
+        async function saveBarangay() {
+            const name = document.getElementById('barangayName').value.trim();
+            const lat = parseFloat(document.getElementById('barangayLat').value);
+            const lng = parseFloat(document.getElementById('barangayLng').value);
+
+            // Validation
+            if (!name) {
+                showAlert('Please enter a barangay name.', 'error');
+                return;
+            }
+            if (isNaN(lat) || lat < -90 || lat > 90) {
+                showAlert('Please enter a valid latitude (-90 to 90).', 'error');
+                return;
+            }
+            if (isNaN(lng) || lng < -180 || lng > 180) {
+                showAlert('Please enter a valid longitude (-180 to 180).', 'error');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('action', editingBarangay ? 'update' : 'add');
+            formData.append('barangay', name);
+            formData.append('latitude', lat);
+            formData.append('longitude', lng);
+            if (editingBarangay) {
+                formData.append('old_barangay', editingBarangay.barangay);
+            }
+
+            try {
+                const response = await fetch('admin_settings.php', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    hideBarangayForm();
+                    loadBarangayList();
+                    showAlert(result.message, 'success');
+                } else {
+                    showAlert('Error: ' + result.message, 'error');
+                }
+            } catch (error) {
+                showAlert('An error occurred while saving the barangay.', 'error');
+                console.error('Save error:', error);
+            }
+        }
+
+        async function deleteBarangay(barangayName) {
+            if (!confirm(`Are you sure you want to delete "${barangayName}"? This action cannot be undone.`)) {
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('action', 'delete');
+            formData.append('barangay', barangayName);
+
+            try {
+                const response = await fetch('admin_settings.php', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    loadBarangayList();
+                    showAlert(result.message, 'success');
+                } else {
+                    showAlert('Error: ' + result.message, 'error');
+                }
+            } catch (error) {
+                showAlert('An error occurred while deleting the barangay.', 'error');
+                console.error('Delete error:', error);
+            }
+        }
+
+        async function loadBarangayList() {
+            const listBody = document.getElementById('barangayListBody');
+            listBody.innerHTML = `
+                <div class="loading-state">
+                    <i class="bi bi-arrow-clockwise"></i>
+                    <span>Loading barangays...</span>
+                </div>
+            `;
+
+            try {
+                const response = await fetch('admin_settings.php?action=get_barangays');
+                const barangays = await response.json();
+
+                if (barangays.length === 0) {
+                    listBody.innerHTML = `
+                        <div class="empty-state">
+                            <i class="bi bi-geo-alt"></i>
+                            <p>No barangays configured</p>
+                            <button type="button" class="btn-secondary" onclick="showAddBarangayForm()">
+                                <i class="bi bi-plus-circle"></i> Add First Barangay
+                            </button>
+                        </div>
+                    `;
+                    return;
+                }
+
+                listBody.innerHTML = '';
+                barangays.forEach(barangay => {
+                    const row = document.createElement('div');
+                    row.className = 'barangay-row';
+                    row.innerHTML = `
+                        <div class="barangay-name">${barangay.barangay}</div>
+                        <div class="barangay-coords">${parseFloat(barangay.latitude).toFixed(6)}</div>
+                        <div class="barangay-coords">${parseFloat(barangay.longitude).toFixed(6)}</div>
+                        <div class="barangay-actions">
+                            <button class="btn-edit" onclick="editBarangay(${JSON.stringify(barangay).replace(/"/g, '&quot;')})" title="Edit">
+                                <i class="bi bi-pencil"></i> Edit
+                            </button>
+                            <button class="btn-delete" onclick="deleteBarangay('${barangay.barangay.replace(/'/g, "\\'")}')" title="Delete">
+                                <i class="bi bi-trash"></i> Delete
+                            </button>
+                        </div>
+                    `;
+                    listBody.appendChild(row);
+                });
+            } catch (error) {
+                console.error('Error loading barangay list:', error);
+                listBody.innerHTML = `
+                    <div class="empty-state">
+                        <i class="bi bi-exclamation-triangle"></i>
+                        <p>Error loading barangays</p>
+                        <button type="button" class="btn-secondary" onclick="loadBarangayList()">
+                            <i class="bi bi-arrow-clockwise"></i> Try Again
+                        </button>
+                    </div>
+                `;
+            }
+        }
+
+        // Alert function for user feedback
+        function showAlert(message, type = 'info') {
+            // Remove existing alerts
+            const existingAlerts = document.querySelectorAll('.alert-temp');
+            existingAlerts.forEach(alert => alert.remove());
+
+            // Create new alert
+            const alertDiv = document.createElement('div');
+            alertDiv.className = `alert alert-${type} alert-temp`;
+            alertDiv.innerHTML = `
+                <i class="bi bi-${type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-triangle' : 'info-circle'}"></i>
+                <span>${message}</span>
+                <button class="alert-close" onclick="this.parentElement.remove()">
+                    <i class="bi bi-x"></i>
+                </button>
+            `;
+
+            // Insert at the top of main content
+            const mainContent = document.querySelector('.main-content');
+            mainContent.insertBefore(alertDiv, mainContent.firstChild);
+
+            // Auto-remove after 5 seconds
+            setTimeout(() => {
+                if (alertDiv.parentElement) {
+                    alertDiv.remove();
+                }
+            }, 5000);
+        }
+    </script>
 </body>
 </html>

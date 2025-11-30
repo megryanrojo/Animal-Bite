@@ -20,8 +20,6 @@ try {
 // Initialize filter variables
 $defaultDateTo = date('Y-m-d');
 $defaultDateFrom = date('Y-m-d', strtotime('-12 months', strtotime($defaultDateTo)));
-$defaultDateTo = date('Y-m-d');
-$defaultDateFrom = date('Y-m-d', strtotime('-12 months', strtotime($defaultDateTo)));
 $dateFrom = isset($_GET['date_from']) ? $_GET['date_from'] : '';
 $dateTo = isset($_GET['date_to']) ? $_GET['date_to'] : '';
 $animalType = isset($_GET['animal_type']) ? $_GET['animal_type'] : '';
@@ -40,27 +38,6 @@ if ($dateFrom === '' && $dateTo === '') {
 }
 
 if ($dateFrom !== '' && $dateTo !== '' && strtotime($dateFrom) > strtotime($dateTo)) {
-    $tmp = $dateFrom;
-    $dateFrom = $dateTo;
-    $dateTo = $tmp;
-}
-
-$dateRangeLabel = date('M d, Y', strtotime($dateFrom)) . ' – ' . date('M d, Y', strtotime($dateTo));
-$dateWindowMonths = max(1, round((strtotime($dateTo) - strtotime($dateFrom)) / (30 * 24 * 60 * 60)));
-
-$appliedDefaultRange = false;
-
-if ($dateFrom === '' && $dateTo === '') {
-    $dateFrom = $defaultDateFrom;
-    $dateTo = $defaultDateTo;
-    $appliedDefaultRange = true;
-} elseif ($dateFrom === '' && $dateTo !== '') {
-    $dateFrom = date('Y-m-d', strtotime('-12 months', strtotime($dateTo)));
-} elseif ($dateFrom !== '' && $dateTo === '') {
-    $dateTo = $defaultDateTo;
-}
-
-if (strtotime($dateFrom) > strtotime($dateTo)) {
     $tmp = $dateFrom;
     $dateFrom = $dateTo;
     $dateTo = $tmp;
@@ -260,8 +237,8 @@ unset($case);
 $centerLat = 10.735;
 $centerLng = 122.966;
 $mapBounds = [
-    'southWest' => ['lat' => 10.65, 'lng' => 122.90],
-    'northEast' => ['lat' => 10.84, 'lng' => 123.02]
+    'southWest' => ['lat' => 10.60, 'lng' => 122.85],
+    'northEast' => ['lat' => 10.90, 'lng' => 123.08]
 ];
 
 // Prepare heatmap data for JavaScript
@@ -299,10 +276,12 @@ $highThreshold = max($lowThreshold + 1, (int)ceil($maxCount * 0.7));
     <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
     
     <style>
+        /* Updated color scheme to light sky blue */
         :root {
-            --primary: #2563eb;
-            --primary-dark: #1d4ed8;
-            --accent: #0891b2;
+            --primary: #0ea5e9;
+            --primary-dark: #0284c7;
+            --primary-light: #38bdf8;
+            --accent: #06b6d4;
             --danger: #dc2626;
             --warning: #d97706;
             --success: #059669;
@@ -315,19 +294,17 @@ $highThreshold = max($lowThreshold + 1, (int)ceil($maxCount * 0.7));
             --gray-700: #374151;
             --gray-800: #1f2937;
             --gray-900: #111827;
-            --sidebar-width: 250px;
         }
         
         * { box-sizing: border-box; margin: 0; padding: 0; }
         
         html, body {
             height: 100%;
-            /* Increased base font size from 13px to 14px */
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             font-size: 14px;
             line-height: 1.5;
             color: var(--gray-800);
-            background: var(--gray-100);
+            background: #fff;
             overflow: hidden;
         }
         
@@ -336,7 +313,6 @@ $highThreshold = max($lowThreshold + 1, (int)ceil($maxCount * 0.7));
             flex-direction: column;
         }
         
-        /* Added wrapper to account for navbar */
         .page-wrapper {
             flex: 1;
             display: flex;
@@ -345,54 +321,29 @@ $highThreshold = max($lowThreshold + 1, (int)ceil($maxCount * 0.7));
             height: 100%;
         }
         
-        /* Main content area below navbar */
         .main-wrapper {
             flex: 1;
             display: flex;
             flex-direction: column;
             height: 100%;
             overflow: hidden;
-            margin-left: 0;
         }
         
-        /* Compact filters bar - single row */
+        /* Improved filters bar layout */
         .filters-bar {
             display: flex;
             align-items: center;
             gap: 1rem;
-            padding: 0.75rem 1rem;
+            padding: 0.75rem 1.25rem;
             background: white;
             border-bottom: 1px solid var(--gray-200);
             flex-shrink: 0;
             flex-wrap: wrap;
         }
-        .filters-meta {
-            flex-basis: 100%;
-            display: flex;
-            flex-direction: column;
-            gap: 4px;
-            font-size: 0.78rem;
-            color: var(--gray-500);
-        }
-        .range-pill {
-            display: inline-flex;
-            align-items: center;
-            gap: 0.4rem;
-            background: var(--gray-100);
-            border: 1px solid var(--gray-200);
-            border-radius: 999px;
-            padding: 0.15rem 0.75rem;
-            font-weight: 600;
-            color: var(--gray-600);
-            width: fit-content;
-        }
-        .range-note {
-            color: var(--gray-500);
-        }
         
         .filters-bar .page-title {
             font-weight: 600;
-            font-size: 1rem;
+            font-size: 1.1rem;
             color: var(--gray-800);
             display: flex;
             align-items: center;
@@ -404,10 +355,20 @@ $highThreshold = max($lowThreshold + 1, (int)ceil($maxCount * 0.7));
             color: var(--primary);
         }
         
+        .case-count-badge {
+            background: var(--primary-light);
+            color: white;
+            padding: 0.25rem 0.6rem;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 500;
+        }
+        
         .filter-group {
             display: flex;
             align-items: center;
             gap: 0.75rem;
+            flex-wrap: wrap;
         }
         
         .filter-item {
@@ -437,7 +398,7 @@ $highThreshold = max($lowThreshold + 1, (int)ceil($maxCount * 0.7));
         .filter-item select:focus {
             outline: none;
             border-color: var(--primary);
-            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+            box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.15);
         }
         
         .filter-btn {
@@ -468,14 +429,36 @@ $highThreshold = max($lowThreshold + 1, (int)ceil($maxCount * 0.7));
         
         .filter-btn-secondary:hover { background: var(--gray-200); }
         
-        /* Main content fills remaining space */
+        .filters-meta {
+            flex-basis: 100%;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            font-size: 0.78rem;
+            color: var(--gray-500);
+            margin-top: 0.25rem;
+        }
+        
+        .range-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            background: rgba(14, 165, 233, 0.1);
+            border: 1px solid rgba(14, 165, 233, 0.2);
+            border-radius: 999px;
+            padding: 0.15rem 0.75rem;
+            font-weight: 600;
+            color: var(--primary-dark);
+            width: fit-content;
+        }
+        
+        /* Main content area */
         .content-area {
             display: flex;
             flex: 1;
             overflow: hidden;
         }
         
-        /* Map takes all available space */
         .map-container {
             flex: 1;
             position: relative;
@@ -487,14 +470,14 @@ $highThreshold = max($lowThreshold + 1, (int)ceil($maxCount * 0.7));
             height: 100%;
         }
         
-        /* Improved floating legend - larger and more readable */
+        /* Map legend */
         .map-legend {
             position: absolute;
             bottom: 20px;
             left: 20px;
             background: white;
-            border-radius: 8px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            border-radius: 10px;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.12);
             z-index: 1000;
             width: 260px;
             font-size: 0.85rem;
@@ -502,6 +485,7 @@ $highThreshold = max($lowThreshold + 1, (int)ceil($maxCount * 0.7));
             overflow: hidden;
             display: flex;
             flex-direction: column;
+            border: 1px solid var(--gray-200);
         }
         
         .legend-header {
@@ -520,6 +504,10 @@ $highThreshold = max($lowThreshold + 1, (int)ceil($maxCount * 0.7));
             display: flex;
             align-items: center;
             gap: 0.4rem;
+        }
+        
+        .legend-title i {
+            color: var(--primary);
         }
         
         .legend-toggle {
@@ -551,49 +539,41 @@ $highThreshold = max($lowThreshold + 1, (int)ceil($maxCount * 0.7));
         .legend-section:last-child { margin-bottom: 0; }
         
         .legend-section-title {
-            font-size: 0.75rem;
+            font-size: 0.7rem;
             text-transform: uppercase;
             letter-spacing: 0.5px;
             color: var(--gray-500);
             margin-bottom: 0.5rem;
             font-weight: 600;
         }
-        .legend-note {
-            font-size: 0.75rem;
-            color: var(--gray-500);
-            margin-top: 0.25rem;
-        }
         
         .legend-gradient {
-            height: 20px;
+            height: 16px;
             border-radius: 4px;
-            background: linear-gradient(to right, #22c55e, #84cc16, #facc15, #f97316, #ef4444, #be123c, #7f1d1d);
+            background: linear-gradient(to right, #22c55e, #84cc16, #facc15, #f97316, #ef4444, #be123c);
             margin-bottom: 0.5rem;
-            box-shadow: inset 0 1px 3px rgba(0,0,0,0.1);
-            border: 1px solid rgba(0,0,0,0.1);
         }
         
         .legend-labels {
             display: flex;
             justify-content: space-between;
-            font-size: 0.75rem;
+            font-size: 0.7rem;
             color: var(--gray-600);
             font-weight: 500;
-            margin-bottom: 0.5rem;
         }
         
         .legend-item {
             display: flex;
             align-items: center;
             gap: 0.5rem;
-            padding: 0.35rem 0.5rem;
+            padding: 0.4rem 0.5rem;
             margin: 0 -0.5rem;
             cursor: pointer;
-            border-radius: 4px;
+            border-radius: 6px;
             transition: background 0.15s;
         }
         
-        .legend-item:hover { background: var(--gray-100); }
+        .legend-item:hover { background: rgba(14, 165, 233, 0.08); }
         
         .legend-dot {
             width: 10px;
@@ -608,188 +588,17 @@ $highThreshold = max($lowThreshold + 1, (int)ceil($maxCount * 0.7));
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
+            font-size: 0.8rem;
         }
         
         .legend-item-value {
             font-weight: 600;
             color: var(--gray-800);
             background: var(--gray-100);
-            padding: 0.1rem 0.4rem;
+            padding: 0.1rem 0.5rem;
             border-radius: 4px;
-            font-size: 0.8rem;
-        }
-        
-        /* Right sidebar - properly sized */
-        .data-sidebar {
-            width: 340px;
-            background: white;
-            border-left: 1px solid var(--gray-200);
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-            flex-shrink: 0;
-            transition: width 0.2s, opacity 0.2s;
-        }
-        
-        .data-sidebar.collapsed {
-            width: 0;
-            opacity: 0;
-            border-left: none;
-        }
-        
-        .sidebar-toggle {
-            position: absolute;
-            right: 340px;
-            top: 50%;
-            transform: translateY(-50%);
-            width: 24px;
-            height: 48px;
-            background: white;
-            border: 1px solid var(--gray-200);
-            border-right: none;
-            border-radius: 6px 0 0 6px;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: var(--gray-500);
-            z-index: 100;
-            transition: right 0.2s;
-        }
-        
-        .sidebar-toggle:hover { 
-            color: var(--primary); 
-            background: var(--gray-50); 
-        }
-        
-        .sidebar-toggle.collapsed {
-            right: 0;
-        }
-        
-        .data-section {
-            border-bottom: 1px solid var(--gray-200);
-        }
-        
-        .data-section:last-child { border-bottom: none; }
-        
-        .data-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 0.75rem 1rem;
-            background: var(--gray-50);
-            cursor: pointer;
-            user-select: none;
-        }
-        
-        .data-header:hover { background: var(--gray-100); }
-        
-        .data-header h6 {
-            font-size: 0.85rem;
-            font-weight: 600;
-            color: var(--gray-700);
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            margin: 0;
-        }
-        
-        .data-header i.toggle-icon {
-            font-size: 0.85rem;
-            color: var(--gray-400);
-            transition: transform 0.2s;
-        }
-        
-        .data-body {
-            padding: 0.5rem 0.75rem;
-            overflow-y: auto;
-            overflow-x: hidden;
-        }
-        
-        .data-body.collapsed { display: none; }
-        
-        /* Larger stat cards */
-        .stat-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 0.75rem;
-        }
-        
-        .stat-card {
-            background: var(--gray-50);
-            border-radius: 8px;
-            padding: 0.75rem;
-            text-align: center;
-        }
-        
-        .stat-value {
-            font-size: 1.5rem;
-            font-weight: 700;
-            color: var(--gray-800);
-        }
-        
-        .stat-label {
             font-size: 0.75rem;
-            color: var(--gray-500);
-            text-transform: uppercase;
-            letter-spacing: 0.3px;
-            margin-top: 0.25rem;
         }
-        
-        .stat-card.primary .stat-value { color: var(--primary); }
-        .stat-card.danger .stat-value { color: var(--danger); }
-        .stat-card.warning .stat-value { color: var(--warning); }
-        .stat-card.success .stat-value { color: var(--success); }
-        
-        /* Better table styling */
-        .data-table {
-            width: 100%;
-            font-size: 0.8rem;
-            border-collapse: collapse;
-            table-layout: fixed;
-        }
-        
-        .data-table th {
-            text-align: left;
-            font-weight: 600;
-            color: var(--gray-500);
-            padding: 0.4rem 0.4rem;
-            border-bottom: 2px solid var(--gray-200);
-            text-transform: uppercase;
-            font-size: 0.65rem;
-            letter-spacing: 0.5px;
-            word-break: break-word;
-        }
-        
-        .data-table td {
-            padding: 0.4rem 0.4rem;
-            border-bottom: 1px solid var(--gray-100);
-            color: var(--gray-700);
-            word-break: break-word;
-            overflow-wrap: break-word;
-        }
-        
-        .data-table tbody tr {
-            cursor: pointer;
-            transition: background 0.15s;
-        }
-        
-        .data-table tbody tr:hover td { background: var(--gray-50); }
-        
-        .badge {
-            padding: 0.15rem 0.35rem;
-            border-radius: 3px;
-            font-size: 0.65rem;
-            font-weight: 600;
-            text-transform: uppercase;
-            white-space: nowrap;
-            display: inline-block;
-        }
-        
-        .badge-critical { background: #fef2f2; color: #991b1b; }
-        .badge-high { background: #fff7ed; color: #9a3412; }
-        .badge-medium { background: #fefce8; color: #854d0e; }
-        .badge-low { background: #f0fdf4; color: #166534; }
         
         /* Map controls */
         .map-controls {
@@ -806,11 +615,11 @@ $highThreshold = max($lowThreshold + 1, (int)ceil($maxCount * 0.7));
             font-size: 0.85rem;
             font-weight: 500;
             border: none;
-            border-radius: 6px;
+            border-radius: 8px;
             cursor: pointer;
             background: white;
             color: var(--gray-700);
-            box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.12);
             display: flex;
             align-items: center;
             gap: 0.35rem;
@@ -822,119 +631,341 @@ $highThreshold = max($lowThreshold + 1, (int)ceil($maxCount * 0.7));
         .map-control-btn:disabled {
             opacity: 0.6;
             cursor: not-allowed;
-            pointer-events: none;
         }
         
-        /* Case count badge */
-        .case-count-badge {
-            background: var(--gray-100);
-            color: var(--gray-600);
-            padding: 0.25rem 0.6rem;
-            border-radius: 20px;
-            font-size: 0.8rem;
-            font-weight: 500;
+        /* Slideable sidebar panel */
+        .data-sidebar {
+            width: 320px;
+            background: white;
+            border-left: 1px solid var(--gray-200);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            flex-shrink: 0;
+            transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1), transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: -2px 0 8px rgba(0,0,0,0.1);
+        }
+
+        .data-sidebar.collapsed {
+            width: 0;
+            transform: translateX(20px);
+            opacity: 0;
+            border-left: none;
+            box-shadow: none;
         }
         
-        /* Focused location header in sidebar */
+        /* Focused location header - fixed positioning */
         .focused-location-header {
             padding: 0.75rem 1rem;
-            background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
             color: white;
-            border-bottom: 2px solid #1d4ed8;
-            display: flex;
+            display: none;
             justify-content: space-between;
             align-items: center;
+            flex-shrink: 0;
         }
         
-        .focused-location-header h5 {
-            margin: 0;
-            font-size: 0.95rem;
-            font-weight: 600;
+        .focused-location-header.active {
+            display: flex;
+        }
+        
+        .focused-indicator {
             display: flex;
             align-items: center;
             gap: 0.5rem;
         }
         
-        .focused-location-header button {
-            background: rgba(255,255,255,0.2);
-            border: 1px solid rgba(255,255,255,0.3);
-            color: white;
-            padding: 0.25rem 0.5rem;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 0.8rem;
-            transition: background 0.15s;
+        .focused-indicator i {
+            font-size: 1rem;
         }
         
-        .focused-location-header button:hover {
+        .focused-title {
+            font-size: 0.9rem;
+            font-weight: 600;
+        }
+        
+        .risk-badge {
+            padding: 0.15rem 0.5rem;
+            border-radius: 10px;
+            font-size: 0.65rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-left: 0.5rem;
+        }
+        
+        .clear-focus-btn {
+            background: rgba(255,255,255,0.2);
+            border: none;
+            color: white;
+            padding: 0.35rem 0.5rem;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            transition: all 0.15s;
+            display: flex;
+            align-items: center;
+        }
+        
+        .clear-focus-btn:hover {
             background: rgba(255,255,255,0.3);
         }
         
-        /* Responsive */
+        /* Sidebar sections container */
+        .sidebar-sections {
+            flex: 1;
+            overflow-y: auto;
+            overflow-x: hidden;
+        }
+        
+        .data-section {
+            border-bottom: 1px solid var(--gray-200);
+        }
+        
+        .data-section:last-child { border-bottom: none; }
+        
+        .data-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.75rem 1rem;
+            background: var(--gray-50);
+            cursor: pointer;
+            user-select: none;
+            transition: background 0.15s;
+        }
+        
+        .data-header:hover { background: var(--gray-100); }
+        
+        .data-header h6 {
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--gray-700);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin: 0;
+        }
+        
+        .data-header h6 i {
+            color: var(--primary);
+        }
+        
+        .data-header i.toggle-icon {
+            font-size: 0.85rem;
+            color: var(--gray-400);
+            transition: transform 0.2s;
+        }
+        
+        .data-body {
+            padding: 0.75rem;
+            overflow-y: auto;
+            overflow-x: hidden;
+        }
+        
+        .data-body.collapsed { display: none; }
+        
+        /* Fixed stat grid layout */
+        .stat-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 0.6rem;
+        }
+        
+        .stat-card {
+            background: var(--gray-50);
+            border-radius: 8px;
+            padding: 0.75rem;
+            text-align: center;
+            border: 1px solid var(--gray-100);
+        }
+        
+        .stat-value {
+            font-size: 1.4rem;
+            font-weight: 700;
+            color: var(--gray-800);
+            line-height: 1.2;
+        }
+        
+        .stat-label {
+            font-size: 0.7rem;
+            color: var(--gray-500);
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+            margin-top: 0.2rem;
+        }
+        
+        .stat-card.primary .stat-value { color: var(--primary); }
+        .stat-card.danger .stat-value { color: var(--danger); }
+        .stat-card.warning .stat-value { color: var(--warning); }
+        .stat-card.success .stat-value { color: var(--success); }
+        
+        /* Tables */
+        .data-table {
+            width: 100%;
+            font-size: 0.8rem;
+            border-collapse: collapse;
+        }
+        
+        .data-table th {
+            text-align: left;
+            font-weight: 600;
+            color: var(--gray-500);
+            padding: 0.5rem;
+            border-bottom: 2px solid var(--gray-200);
+            text-transform: uppercase;
+            font-size: 0.65rem;
+            letter-spacing: 0.5px;
+        }
+        
+        .data-table td {
+            padding: 0.5rem;
+            border-bottom: 1px solid var(--gray-100);
+            color: var(--gray-700);
+        }
+        
+        .data-table tbody tr {
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+        
+        .data-table tbody tr:hover td { background: rgba(14, 165, 233, 0.05); }
+        
+        .badge {
+            padding: 0.15rem 0.4rem;
+            border-radius: 4px;
+            font-size: 0.65rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            white-space: nowrap;
+            display: inline-block;
+        }
+        
+        .badge-critical { background: #fef2f2; color: #991b1b; }
+        .badge-high { background: #fff7ed; color: #9a3412; }
+        .badge-medium { background: #fefce8; color: #854d0e; }
+        .badge-low { background: #f0fdf4; color: #166534; }
+        
+        /* Sidebar toggle */
+        /* Enhanced sidebar toggle button */
+        .sidebar-toggle {
+            position: absolute;
+            right: 320px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 32px;
+            height: 56px;
+            background: white;
+            border: 2px solid var(--gray-200);
+            border-right: none;
+            border-radius: 8px 0 0 8px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--gray-600);
+            z-index: 100;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: -2px 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .sidebar-toggle:hover {
+            color: var(--primary);
+            background: var(--primary-light);
+            border-color: var(--primary);
+            transform: translateY(-50%) scale(1.05);
+        }
+
+        .sidebar-toggle:active {
+            transform: translateY(-50%) scale(0.95);
+        }
+
+        .sidebar-toggle.collapsed {
+            right: 0;
+            border-radius: 0 8px 8px 0;
+            border-right: 2px solid var(--gray-200);
+            border-left: none;
+        }
+
+        .sidebar-toggle i {
+            font-size: 1.1rem;
+            transition: transform 0.2s ease;
+        }
+
+        .sidebar-toggle:hover i {
+            transform: scale(1.1);
+        }
+        
+        /* Responsive sidebar behavior */
         @media (max-width: 1024px) {
-            .main-wrapper {
-                margin-left: 0;
-            }
             .data-sidebar {
                 position: absolute;
                 right: 0;
                 top: 0;
                 bottom: 0;
                 z-index: 200;
-                box-shadow: -4px 0 12px rgba(0,0,0,0.1);
+                box-shadow: -4px 0 12px rgba(0,0,0,0.15);
+                transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
             }
+
+            .data-sidebar.collapsed {
+                transform: translateX(340px);
+            }
+
             .sidebar-toggle {
-                right: 0;
+                position: fixed;
+                right: 10px;
+                top: 50%;
+                width: 40px;
+                height: 60px;
+                border-radius: 8px;
+                background: var(--primary);
+                color: white;
+                border: none;
+                box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+                z-index: 201;
             }
+
+            .sidebar-toggle:hover {
+                background: var(--primary-dark);
+                transform: translateY(-50%) scale(1.05);
+            }
+
+            .sidebar-toggle.collapsed {
+                right: 10px;
+            }
+
             .sidebar-toggle:not(.collapsed) {
-                right: 340px;
+                right: 330px;
+            }
+
+            .sidebar-toggle i {
+                font-size: 1.2rem;
             }
         }
         
         @media (max-width: 768px) {
             .filters-bar {
-                padding: 0.5rem;
-                gap: 0.3rem;
-                flex-wrap: wrap;
+                padding: 0.5rem 0.75rem;
+                gap: 0.5rem;
             }
             .page-title {
-                flex-basis: 100% !important;
-                font-size: 0.95rem !important;
+                flex-basis: 100%;
+                font-size: 1rem;
             }
             .filter-item label { display: none; }
             .filter-item input,
             .filter-item select {
-                min-width: 80px;
-                padding: 0.35rem 0.4rem;
+                min-width: 100px;
+                padding: 0.35rem 0.5rem;
                 font-size: 0.8rem;
             }
             .filter-btn {
                 padding: 0.35rem 0.6rem;
-                font-size: 0.75rem;
-            }
-            .filters-meta {
-                font-size: 0.7rem;
-                gap: 2px;
-            }
-            .range-note {
-                font-size: 0.65rem;
+                font-size: 0.8rem;
             }
             .data-sidebar {
-                position: fixed;
-                width: 100% !important;
-                right: -100% !important;
-                transition: right 0.3s ease;
-            }
-            .data-sidebar:not(.collapsed) {
-                right: 0 !important;
-            }
-            .sidebar-toggle {
-                position: fixed;
-                right: 10px;
-                width: 40px;
-                height: 50px;
-                border-radius: 8px;
-                border: 1px solid var(--gray-200);
+                width: 100%;
             }
             .sidebar-toggle.collapsed {
                 right: 10px;
@@ -948,321 +979,265 @@ $highThreshold = max($lowThreshold + 1, (int)ceil($maxCount * 0.7));
             .map-controls {
                 top: 10px;
                 left: 10px;
-                flex-direction: column;
-                gap: 0.3rem;
-            }
-            .map-control-btn {
-                padding: 0.4rem 0.7rem;
-                font-size: 0.75rem;
-            }
-            .data-table {
-                font-size: 0.75rem;
-            }
-            .data-table th {
-                font-size: 0.6rem;
-                padding: 0.3rem 0.3rem;
-            }
-            .data-table td {
-                padding: 0.3rem 0.3rem;
-            }
-            .stat-value {
-                font-size: 1.2rem;
-            }
-            .stat-label {
-                font-size: 0.65rem;
-            }
-            .data-header h6 {
-                font-size: 0.8rem;
-            }
-            .badge {
-                padding: 0.1rem 0.25rem;
-                font-size: 0.6rem;
-            }
-        }
-        
-        @media (max-width: 480px) {
-            .filters-bar {
-                padding: 0.4rem;
-                gap: 0.2rem;
-            }
-            .filter-group {
-                flex-direction: column;
-                width: 100%;
-                gap: 0.3rem;
-            }
-            .filter-item {
-                width: 100%;
-            }
-            .filter-item input,
-            .filter-item select {
-                width: 100%;
-                min-width: unset;
-            }
-            .data-sidebar {
-                width: 100% !important;
-            }
-            .page-title {
-                font-size: 0.9rem !important;
-            }
-            .case-count-badge {
-                font-size: 0.7rem;
-                padding: 0.2rem 0.4rem;
-            }
-            .map-legend {
-                width: calc(100% - 10px);
-                max-height: 40vh;
-            }
-            .stat-grid {
-                grid-template-columns: 1fr;
-            }
-            .legend-item-value {
-                font-size: 0.7rem;
             }
         }
     </style>
 </head>
 <body>
-    <!-- Navbar sits above the geomapping workspace -->
     <?php include 'includes/navbar.php'; ?>
     
     <div class="page-wrapper">
         <div class="main-wrapper">
-        <!-- Filters bar with title -->
-        <form method="GET" action="geomapping.php" class="filters-bar">
-            <div class="page-title">
-                <i class="bi bi-geo-alt-fill"></i>
-                Geomapping
-                <span class="case-count-badge"><?= number_format(count($cases)) ?> cases</span>
-            </div>
+            <!-- Filters bar -->
+            <form method="GET" action="geomapping.php" class="filters-bar">
+                <div class="page-title">
+                    <i class="bi bi-geo-alt-fill"></i>
+                    Geomapping
+                    <span class="case-count-badge"><?= number_format(count($cases)) ?> cases</span>
+                </div>
+                
+                <div class="filter-group">
+                    <div class="filter-item">
+                        <label>From</label>
+                        <input type="date" name="date_from" value="<?= htmlspecialchars($dateFrom) ?>">
+                    </div>
+                    <div class="filter-item">
+                        <label>To</label>
+                        <input type="date" name="date_to" value="<?= htmlspecialchars($dateTo) ?>">
+                    </div>
+                    <div class="filter-item">
+                        <label>Animal</label>
+                        <select name="animal_type">
+                            <option value="">All Animals</option>
+                            <?php foreach ($animalTypes as $type): ?>
+                                <option value="<?= htmlspecialchars($type) ?>" <?= $animalType === $type ? 'selected' : '' ?>>
+                                    <?= htmlspecialchars($type) ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div class="filter-item">
+                        <label>Category</label>
+                        <select name="bite_category">
+                            <option value="">All Categories</option>
+                            <option value="Category I" <?= $biteCategory === 'Category I' ? 'selected' : '' ?>>Category I</option>
+                            <option value="Category II" <?= $biteCategory === 'Category II' ? 'selected' : '' ?>>Category II</option>
+                            <option value="Category III" <?= $biteCategory === 'Category III' ? 'selected' : '' ?>>Category III</option>
+                        </select>
+                    </div>
+                    <div class="filter-item">
+                        <label>Status</label>
+                        <select name="status">
+                            <option value="">All Status</option>
+                            <option value="Active" <?= $status === 'Active' ? 'selected' : '' ?>>Active</option>
+                            <option value="Completed" <?= $status === 'Completed' ? 'selected' : '' ?>>Completed</option>
+                            <option value="Pending" <?= $status === 'Pending' ? 'selected' : '' ?>>Pending</option>
+                        </select>
+                    </div>
+                    <button type="submit" class="filter-btn filter-btn-primary">
+                        <i class="bi bi-search"></i> Apply
+                    </button>
+                    <a href="geomapping.php" class="filter-btn filter-btn-secondary">
+                        <i class="bi bi-x-lg"></i> Clear
+                    </a>
+                </div>
+                <div class="filters-meta">
+                    <span class="range-pill">
+                        <i class="bi bi-calendar3"></i> <?= $dateRangeLabel; ?>
+                    </span>
+                </div>
+            </form>
             
-            <div class="filter-group">
-                <div class="filter-item">
-                    <label>From</label>
-                    <input type="date" name="date_from" value="<?= htmlspecialchars($dateFrom) ?>">
-                </div>
-                <div class="filter-item">
-                    <label>To</label>
-                    <input type="date" name="date_to" value="<?= htmlspecialchars($dateTo) ?>">
-                </div>
-                <div class="filter-item">
-                    <label>Animal</label>
-                    <select name="animal_type">
-                        <option value="">All Animals</option>
-                        <?php foreach ($animalTypes as $type): ?>
-                            <option value="<?= htmlspecialchars($type) ?>" <?= $animalType === $type ? 'selected' : '' ?>>
-                                <?= htmlspecialchars($type) ?>
-                            </option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
-                <div class="filter-item">
-                    <label>Category</label>
-                    <select name="bite_category">
-                        <option value="">All Categories</option>
-                        <option value="Category I" <?= $biteCategory === 'Category I' ? 'selected' : '' ?>>Category I</option>
-                        <option value="Category II" <?= $biteCategory === 'Category II' ? 'selected' : '' ?>>Category II</option>
-                        <option value="Category III" <?= $biteCategory === 'Category III' ? 'selected' : '' ?>>Category III</option>
-                    </select>
-                </div>
-                <div class="filter-item">
-                    <label>Status</label>
-                    <select name="status">
-                        <option value="">All Status</option>
-                        <option value="Active" <?= $status === 'Active' ? 'selected' : '' ?>>Active</option>
-                        <option value="Completed" <?= $status === 'Completed' ? 'selected' : '' ?>>Completed</option>
-                        <option value="Pending" <?= $status === 'Pending' ? 'selected' : '' ?>>Pending</option>
-                    </select>
-                </div>
-                <button type="submit" class="filter-btn filter-btn-primary">
-                    <i class="bi bi-search"></i> Apply
-                </button>
-                <a href="geomapping.php" class="filter-btn filter-btn-secondary">
-                    <i class="bi bi-x-lg"></i> Clear
-                </a>
-            </div>
-            <div class="filters-meta">
-                <span class="range-pill">
-                    Showing <?= $dateRangeLabel; ?>
-                </span>
-                <span class="range-note">
-                    Heatmap focuses on approximately <?= $dateWindowMonths; ?> month<?= $dateWindowMonths > 1 ? 's' : ''; ?> of cases<?php if ($appliedDefaultRange): ?> by default<?php endif; ?>.
-                    Adjust the date range to review multi-year totals.
-                </span>
-            </div>
-        </form>
-        
-        <!-- Main content area -->
-        <div class="content-area">
-            <!-- Map container -->
-            <div class="map-container">
-                <div id="map"></div>
-                
-                <!-- Map controls -->
-                <div class="map-controls">
-                    <button type="button" class="map-control-btn active" id="heatmapBtn" onclick="showHeatmap()">
-                        <i class="bi bi-fire"></i> Heatmap
-                    </button>
-                    <button type="button" class="map-control-btn" id="markersBtn" onclick="showMarkers()">
-                        <i class="bi bi-geo-alt"></i> Markers
-                    </button>
-                </div>
-                
-                <!-- Legend -->
-                <div class="map-legend" id="mapLegend">
-                    <div class="legend-header">
-                        <div class="legend-title">
-                            <i class="bi bi-layers-fill"></i> Heat Legend
-                        </div>
-                        <button type="button" class="legend-toggle" onclick="toggleLegend()">
-                            <i class="bi bi-chevron-down" id="legendToggleIcon"></i>
+            <!-- Main content area -->
+            <div class="content-area">
+                <!-- Map container -->
+                <div class="map-container">
+                    <div id="map"></div>
+                    
+                    <!-- Map controls -->
+                    <div class="map-controls">
+                        <button type="button" class="map-control-btn active" id="heatmapBtn" onclick="showHeatmap()">
+                            <i class="bi bi-fire"></i> Heatmap
+                        </button>
+                        <button type="button" class="map-control-btn" id="markersBtn" onclick="showMarkers()">
+                            <i class="bi bi-geo-alt"></i> Markers
                         </button>
                     </div>
-                    <div class="legend-body" id="legendBody">
-                        <div class="legend-section">
-                            <div class="legend-section-title">Intensity Scale</div>
-                            <div class="legend-gradient"></div>
-                            <div class="legend-labels">
-                                <span>Low (1–<?= $lowThreshold ?>)</span>
-                                <span>High (<?= $highThreshold ?>+)</span>
+                    
+                    <!-- Legend -->
+                    <div class="map-legend" id="mapLegend">
+                        <div class="legend-header">
+                            <div class="legend-title">
+                                <i class="bi bi-layers-fill"></i> Legend
                             </div>
-                            <div class="legend-note">
-                                Map highlights roughly <?= $dateWindowMonths; ?> month<?= $dateWindowMonths > 1 ? 's' : ''; ?> of data for clearer hotspot shading.
-                            </div>
+                            <button type="button" class="legend-toggle" onclick="toggleLegend()">
+                                <i class="bi bi-chevron-down" id="legendToggleIcon"></i>
+                            </button>
                         </div>
-                        <div class="legend-section">
-                            <div class="legend-section-title">Top Affected Areas</div>
-                            <?php 
-                            $topAreas = array_slice($barangayCounts, 0, 5);
-                            foreach ($topAreas as $area): 
-                                $ratio = $maxCount > 0 ? $area['count'] / $maxCount : 0;
-                                if ($ratio >= 0.75) { $color = '#dc2626'; }
-                                elseif ($ratio >= 0.5) { $color = '#f97316'; }
-                                elseif ($ratio >= 0.25) { $color = '#facc15'; }
-                                else { $color = '#22c55e'; }
-                            ?>
-                            <div class="legend-item" onclick="focusLocation('<?= htmlspecialchars($area['barangay']) ?>')">
-                                <div class="legend-dot" style="background: <?= $color ?>"></div>
-                                <span class="legend-item-label"><?= htmlspecialchars($area['barangay']) ?></span>
-                                <span class="legend-item-value"><?= $area['count'] ?></span>
+                        <div class="legend-body" id="legendBody">
+                            <div class="legend-section">
+                                <div class="legend-section-title">Intensity Scale</div>
+                                <div class="legend-gradient"></div>
+                                <div class="legend-labels">
+                                    <span>Low (1–<?= $lowThreshold ?>)</span>
+                                    <span>High (<?= $highThreshold ?>+)</span>
+                                </div>
                             </div>
-                            <?php endforeach; ?>
-                            <?php if (empty($topAreas)): ?>
-                            <div style="color: var(--gray-500); font-size: 0.8rem; padding: 0.5rem 0;">No data available</div>
-                            <?php endif; ?>
+                            <div class="legend-section">
+                                <div class="legend-section-title">Top Affected Areas</div>
+                                <?php 
+                                $topAreas = array_slice($barangayCounts, 0, 5);
+                                foreach ($topAreas as $area): 
+                                    $ratio = $maxCount > 0 ? $area['count'] / $maxCount : 0;
+                                    if ($ratio >= 0.75) { $color = '#dc2626'; }
+                                    elseif ($ratio >= 0.5) { $color = '#f97316'; }
+                                    elseif ($ratio >= 0.25) { $color = '#facc15'; }
+                                    else { $color = '#22c55e'; }
+                                ?>
+                                <div class="legend-item" onclick="focusLocation('<?= htmlspecialchars($area['barangay']) ?>')">
+                                    <div class="legend-dot" style="background: <?= $color ?>"></div>
+                                    <span class="legend-item-label"><?= htmlspecialchars($area['barangay']) ?></span>
+                                    <span class="legend-item-value"><?= $area['count'] ?></span>
+                                </div>
+                                <?php endforeach; ?>
+                                <?php if (empty($topAreas)): ?>
+                                <div style="color: var(--gray-500); font-size: 0.8rem; padding: 0.5rem 0;">No data available</div>
+                                <?php endif; ?>
+                            </div>
                         </div>
                     </div>
-                </div>
-                
-                <!-- Sidebar toggle button -->
-                <button type="button" class="sidebar-toggle" id="sidebarToggle" onclick="toggleSidebar()">
+                    
+                <!-- Enhanced sidebar toggle button -->
+                <button type="button"
+                        class="sidebar-toggle"
+                        id="sidebarToggle"
+                        onclick="toggleSidebar()"
+                        aria-expanded="true"
+                        aria-label="Hide sidebar"
+                        title="Toggle sidebar visibility">
                     <i class="bi bi-chevron-right" id="sidebarToggleIcon"></i>
                 </button>
-            </div>
-            
-            <!-- Data sidebar -->
-            <div class="data-sidebar" id="dataSidebar">
-                <!-- Stats Section -->
-                <div class="data-section">
-                    <div class="data-header" onclick="toggleSection(this)">
-                        <h6><i class="bi bi-bar-chart-fill"></i> Statistics</h6>
-                        <i class="bi bi-chevron-down toggle-icon"></i>
+                </div>
+                
+                <!-- Data sidebar -->
+                <div class="data-sidebar" id="dataSidebar">
+                    <!-- Focused location header (hidden by default) -->
+                    <div class="focused-location-header" id="focusedHeader">
+                        <div class="focused-indicator">
+                            <i class="bi bi-geo-alt-fill"></i>
+                            <span class="focused-title" id="focusedTitle">Focused Area</span>
+                            <span class="risk-badge" id="focusedRisk">Low</span>
+                        </div>
+                        <button onclick="clearFocusedLocation()" class="clear-focus-btn" title="Clear focus">
+                            <i class="bi bi-x-lg"></i>
+                        </button>
                     </div>
-                    <div class="data-body">
-                        <div class="stat-grid">
-                            <div class="stat-card primary">
-                                <div class="stat-value"><?= number_format(count($cases)) ?></div>
-                                <div class="stat-label">Total Cases</div>
+                    
+                    <!-- Scrollable sections container -->
+                    <div class="sidebar-sections">
+                        <!-- Stats Section -->
+                        <div class="data-section">
+                            <div class="data-header" onclick="toggleSection(this)">
+                                <h6><i class="bi bi-bar-chart-fill"></i> Statistics</h6>
+                                <i class="bi bi-chevron-down toggle-icon"></i>
                             </div>
-                            <div class="stat-card danger">
-                                <div class="stat-value"><?= count($barangayCounts) ?></div>
-                                <div class="stat-label">Hotspots</div>
-                            </div>
-                            <div class="stat-card warning">
-                                <div class="stat-value"><?= $maxCount ?></div>
-                                <div class="stat-label">Highest Count</div>
-                            </div>
-                            <div class="stat-card success">
-                                <div class="stat-value"><?= count($animalTypes) ?></div>
-                                <div class="stat-label">Animal Types</div>
+                            <div class="data-body" id="statsBody">
+                                <div class="stat-grid">
+                                    <div class="stat-card primary">
+                                        <div class="stat-value"><?= number_format(count($cases)) ?></div>
+                                        <div class="stat-label">Total Cases</div>
+                                    </div>
+                                    <div class="stat-card danger">
+                                        <div class="stat-value"><?= count($barangayCounts) ?></div>
+                                        <div class="stat-label">Hotspots</div>
+                                    </div>
+                                    <div class="stat-card warning">
+                                        <div class="stat-value"><?= $maxCount ?></div>
+                                        <div class="stat-label">Highest Count</div>
+                                    </div>
+                                    <div class="stat-card success">
+                                        <div class="stat-value"><?= count($animalTypes) ?></div>
+                                        <div class="stat-label">Animal Types</div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
-                    </div>
-                </div>
-                
-                <!-- Affected Areas -->
-                <div class="data-section" style="flex: 1; overflow: hidden; display: flex; flex-direction: column;">
-                    <div class="data-header" onclick="toggleSection(this)">
-                        <h6><i class="bi bi-geo-fill"></i> Affected Areas</h6>
-                        <i class="bi bi-chevron-down toggle-icon"></i>
-                    </div>
-                    <div class="data-body" style="flex: 1; overflow-y: auto;">
-                        <table class="data-table">
-                            <thead>
-                                <tr>
-                                    <th>Barangay</th>
-                                    <th>Cases</th>
-                                    <th>Risk</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <?php foreach ($barangayCounts as $area): 
-                                    $ratio = $maxCount > 0 ? $area['count'] / $maxCount : 0;
-                                    if ($ratio >= 0.75) { $risk = 'critical'; $riskLabel = 'Critical'; }
-                                    elseif ($ratio >= 0.5) { $risk = 'high'; $riskLabel = 'High'; }
-                                    elseif ($ratio >= 0.25) { $risk = 'medium'; $riskLabel = 'Medium'; }
-                                    else { $risk = 'low'; $riskLabel = 'Low'; }
-                                ?>
-                                <tr onclick="focusLocation('<?= htmlspecialchars($area['barangay']) ?>')">
-                                    <td><?= htmlspecialchars($area['barangay']) ?></td>
-                                    <td><strong><?= $area['count'] ?></strong></td>
-                                    <td><span class="badge badge-<?= $risk ?>"><?= $riskLabel ?></span></td>
-                                </tr>
-                                <?php endforeach; ?>
-                                <?php if (empty($barangayCounts)): ?>
-                                <tr><td colspan="3" style="text-align: center; color: var(--gray-500);">No data</td></tr>
-                                <?php endif; ?>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-                
-                <!-- Recent Cases -->
-                <div class="data-section" style="max-height: 220px; display: flex; flex-direction: column;">
-                    <div class="data-header" onclick="toggleSection(this)">
-                        <h6><i class="bi bi-clock-history"></i> Recent Cases</h6>
-                        <i class="bi bi-chevron-down toggle-icon"></i>
-                    </div>
-                    <div class="data-body" style="flex: 1; overflow-y: auto;">
-                        <table class="data-table">
-                            <thead>
-                                <tr>
-                                    <th>Date</th>
-                                    <th>Location</th>
-                                    <th>Animal</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <?php foreach ($recentCases as $case): ?>
-                                <tr>
-                                    <td><?= date('M j', strtotime($case['biteDate'])) ?></td>
-                                    <td><?= htmlspecialchars($case['barangay'] ?? 'N/A') ?></td>
-                                    <td><?= htmlspecialchars($case['animalType'] ?? 'N/A') ?></td>
-                                </tr>
-                                <?php endforeach; ?>
-                                <?php if (empty($recentCases)): ?>
-                                <tr><td colspan="3" style="text-align: center; color: var(--gray-500);">No recent cases</td></tr>
-                                <?php endif; ?>
-                            </tbody>
-                        </table>
+                        
+                        <!-- Affected Areas -->
+                        <div class="data-section">
+                            <div class="data-header" onclick="toggleSection(this)">
+                                <h6><i class="bi bi-geo-fill"></i> Affected Areas</h6>
+                                <i class="bi bi-chevron-down toggle-icon"></i>
+                            </div>
+                            <div class="data-body" id="areasBody" style="max-height: 250px;">
+                                <table class="data-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Barangay</th>
+                                            <th>Cases</th>
+                                            <th>Risk</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <?php foreach ($barangayCounts as $area): 
+                                            $ratio = $maxCount > 0 ? $area['count'] / $maxCount : 0;
+                                            if ($ratio >= 0.75) { $risk = 'critical'; $riskLabel = 'Critical'; }
+                                            elseif ($ratio >= 0.5) { $risk = 'high'; $riskLabel = 'High'; }
+                                            elseif ($ratio >= 0.25) { $risk = 'medium'; $riskLabel = 'Medium'; }
+                                            else { $risk = 'low'; $riskLabel = 'Low'; }
+                                        ?>
+                                        <tr onclick="focusLocation('<?= htmlspecialchars($area['barangay']) ?>')">
+                                            <td><?= htmlspecialchars($area['barangay']) ?></td>
+                                            <td><strong><?= $area['count'] ?></strong></td>
+                                            <td><span class="badge badge-<?= $risk ?>"><?= $riskLabel ?></span></td>
+                                        </tr>
+                                        <?php endforeach; ?>
+                                        <?php if (empty($barangayCounts)): ?>
+                                        <tr><td colspan="3" style="text-align: center; color: var(--gray-500);">No data</td></tr>
+                                        <?php endif; ?>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        
+                        <!-- Recent Cases -->
+                        <div class="data-section">
+                            <div class="data-header" onclick="toggleSection(this)">
+                                <h6><i class="bi bi-clock-history"></i> Recent Cases</h6>
+                                <i class="bi bi-chevron-down toggle-icon"></i>
+                            </div>
+                            <div class="data-body" id="recentBody" style="max-height: 200px;">
+                                <table class="data-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Date</th>
+                                            <th>Location</th>
+                                            <th>Animal</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <?php foreach ($recentCases as $case): ?>
+                                        <tr>
+                                            <td><?= date('M j', strtotime($case['biteDate'])) ?></td>
+                                            <td><?= htmlspecialchars($case['barangay'] ?? 'N/A') ?></td>
+                                            <td><?= htmlspecialchars($case['animalType'] ?? 'N/A') ?></td>
+                                        </tr>
+                                        <?php endforeach; ?>
+                                        <?php if (empty($recentCases)): ?>
+                                        <tr><td colspan="3" style="text-align: center; color: var(--gray-500);">No recent cases</td></tr>
+                                        <?php endif; ?>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
     </div>
-</div>
 
-<script>
-        // Initialize map with center coordinates from PHP
+    <script>
+        // Initialize map
         const centerLat = <?= $centerLat ?>;
         const centerLng = <?= $centerLng ?>;
         const talisayBounds = L.latLngBounds(
@@ -1276,6 +1251,7 @@ $highThreshold = max($lowThreshold + 1, (int)ceil($maxCount * 0.7));
             maxZoom: 18
         }).setView([centerLat, centerLng], 13);
         map.fitBounds(talisayBounds);
+        
         const heatmapBtnEl = document.getElementById('heatmapBtn');
         const markersBtnEl = document.getElementById('markersBtn');
         
@@ -1288,6 +1264,8 @@ $highThreshold = max($lowThreshold + 1, (int)ceil($maxCount * 0.7));
         const heatmapData = <?= json_encode($jsHeatmapData) ?>;
         const barangayCoords = <?= json_encode($barangayCoordinates) ?>;
         const maxCount = <?= (int)$maxCount ?> || 1;
+        const originalBarangayCounts = <?= json_encode($barangayCounts) ?>;
+        const originalRecentCases = <?= json_encode($recentCases) ?>;
         
         // Build barangay case data for quick lookup
         const barangayCaseData = {};
@@ -1299,7 +1277,6 @@ $highThreshold = max($lowThreshold + 1, (int)ceil($maxCount * 0.7));
             barangayCaseData[barangay].push(c);
         });
         
-        // Track focused location
         let focusedLocation = null;
         
         // Layers
@@ -1307,26 +1284,22 @@ $highThreshold = max($lowThreshold + 1, (int)ceil($maxCount * 0.7));
         let markersLayer = L.layerGroup();
         const markerPoints = [];
         
-        // Create heatmap from case coordinates with improved intensity
+        // Create heatmap
         const heatPoints = heatmapData
             .filter(point => point.lat && point.lng)
             .map(point => {
                 const lat = parseFloat(point.lat);
                 const lng = parseFloat(point.lng);
-                // Enhanced normalization for better visibility
                 let intensity = 0;
                 if (maxCount > 0) {
-                    // Use power function for better distribution
                     const normalized = point.count / maxCount;
-                    intensity = Math.pow(normalized, 0.5); // Square root for better spread
-                    intensity = Math.min(Math.max(intensity * 1.8, 0.3), 1); // Boost and clamp
+                    intensity = Math.pow(normalized, 0.5);
+                    intensity = Math.min(Math.max(intensity * 1.8, 0.3), 1);
                 } else {
                     intensity = 0.5;
                 }
                 return [lat, lng, intensity];
             });
-        
-        let dataBounds = null;
         
         if (heatPoints.length > 0) {
             heatLayer = L.heatLayer(heatPoints, {
@@ -1346,8 +1319,6 @@ $highThreshold = max($lowThreshold + 1, (int)ceil($maxCount * 0.7));
                     1.0: '#7f1d1d'
                 }
             }).addTo(map);
-            
-            dataBounds = L.latLngBounds(heatPoints.map(p => [p[0], p[1]]));
         }
         
         // Create markers
@@ -1357,8 +1328,8 @@ $highThreshold = max($lowThreshold + 1, (int)ceil($maxCount * 0.7));
                 const lng = parseFloat(c.longitude);
                 const marker = L.circleMarker([lat, lng], {
                     radius: 7,
-                    fillColor: '#2563eb',
-                    color: '#1d4ed8',
+                    fillColor: '#0ea5e9',
+                    color: '#0284c7',
                     weight: 2,
                     opacity: 1,
                     fillOpacity: 0.7
@@ -1376,24 +1347,13 @@ $highThreshold = max($lowThreshold + 1, (int)ceil($maxCount * 0.7));
             }
         });
         
-        if (!dataBounds && markerPoints.length > 0) {
-            dataBounds = L.latLngBounds(markerPoints.map(p => [p[0], p[1]]));
-        }
-        
         if (!heatLayer && markerPoints.length > 0) {
             showMarkers();
             heatmapBtnEl.disabled = true;
-            heatmapBtnEl.title = 'No heatmap data available for current filters';
-        } else {
-            heatmapBtnEl.disabled = false;
-            heatmapBtnEl.title = '';
         }
         
-        // View toggle functions
         function showHeatmap() {
-            if (!heatLayer) {
-                return;
-            }
+            if (!heatLayer) return;
             heatLayer.addTo(map);
             map.removeLayer(markersLayer);
             heatmapBtnEl.classList.add('active');
@@ -1407,7 +1367,6 @@ $highThreshold = max($lowThreshold + 1, (int)ceil($maxCount * 0.7));
             heatmapBtnEl.classList.remove('active');
         }
         
-        // UI toggle functions
         function toggleLegend() {
             const body = document.getElementById('legendBody');
             const icon = document.getElementById('legendToggleIcon');
@@ -1419,10 +1378,26 @@ $highThreshold = max($lowThreshold + 1, (int)ceil($maxCount * 0.7));
             const sidebar = document.getElementById('dataSidebar');
             const toggle = document.getElementById('sidebarToggle');
             const icon = document.getElementById('sidebarToggleIcon');
+
+            const isCollapsed = sidebar.classList.contains('collapsed');
+            const willCollapse = !isCollapsed;
+
             sidebar.classList.toggle('collapsed');
             toggle.classList.toggle('collapsed');
-            icon.className = sidebar.classList.contains('collapsed') ? 'bi bi-chevron-left' : 'bi bi-chevron-right';
-            setTimeout(() => map.invalidateSize(), 250);
+
+            // Update icon with animation
+            icon.style.transform = 'scale(0.8)';
+            setTimeout(() => {
+                icon.className = willCollapse ? 'bi bi-chevron-left' : 'bi bi-chevron-right';
+                icon.style.transform = 'scale(1)';
+            }, 75);
+
+            // Update accessibility
+            toggle.setAttribute('aria-expanded', willCollapse ? 'false' : 'true');
+            toggle.setAttribute('aria-label', willCollapse ? 'Show sidebar' : 'Hide sidebar');
+
+            // Invalidate map size with longer delay for smooth animation
+            setTimeout(() => map.invalidateSize(), 350);
         }
         
         function toggleSection(header) {
@@ -1431,66 +1406,67 @@ $highThreshold = max($lowThreshold + 1, (int)ceil($maxCount * 0.7));
             body.classList.toggle('collapsed');
             icon.style.transform = body.classList.contains('collapsed') ? 'rotate(-90deg)' : '';
         }
+
+        // Keyboard accessibility for sidebar
+        document.addEventListener('keydown', function(e) {
+            // Toggle sidebar with Ctrl/Cmd + B
+            if ((e.ctrlKey || e.metaKey) && e.key === 'b') {
+                e.preventDefault();
+                toggleSidebar();
+            }
+
+            // Close sidebar with Escape when open
+            if (e.key === 'Escape') {
+                const sidebar = document.getElementById('dataSidebar');
+                if (!sidebar.classList.contains('collapsed')) {
+                    toggleSidebar();
+                }
+            }
+        });
         
         function focusLocation(barangay) {
-            // First try barangay coordinates
+            // Pan to location
             if (barangayCoords[barangay]) {
                 map.setView([barangayCoords[barangay].lat, barangayCoords[barangay].lng], 15);
             } else {
-                // Fallback to first case in that barangay
                 const location = cases.find(c => c.barangay === barangay && c.latitude && c.longitude);
                 if (location) {
                     map.setView([parseFloat(location.latitude), parseFloat(location.longitude)], 15);
                 }
             }
             
-            // Update focused location and display data
             focusedLocation = barangay;
-            displayFocusedLocationData(barangay);
-        }
-        
-        function displayFocusedLocationData(barangay) {
             const casesForBarangay = barangayCaseData[barangay] || [];
-            const sidebar = document.getElementById('dataSidebar');
-            
-            // Create focused header if it doesn't exist
-            let focusedHeader = sidebar.querySelector('.focused-location-header');
-            if (!focusedHeader) {
-                focusedHeader = document.createElement('div');
-                focusedHeader.className = 'focused-location-header';
-                sidebar.insertBefore(focusedHeader, sidebar.firstChild);
-            }
-            
-            // Calculate risk level
             const caseCount = casesForBarangay.length;
             const ratio = maxCount > 0 ? caseCount / maxCount : 0;
-            let riskLevel = 'Low';
-            let riskColor = '#22c55e';
+            
+            let riskLevel = 'Low', riskColor = '#22c55e';
             if (ratio >= 0.75) { riskLevel = 'Critical'; riskColor = '#dc2626'; }
             else if (ratio >= 0.5) { riskLevel = 'High'; riskColor = '#f97316'; }
             else if (ratio >= 0.25) { riskLevel = 'Medium'; riskColor = '#facc15'; }
             
-            focusedHeader.innerHTML = `
-                <h5><i class="bi bi-pin-fill" style="color: ${riskColor}"></i> ${barangay}</h5>
-                <button onclick="clearFocusedLocation()"><i class="bi bi-x-lg"></i></button>
-            `;
-            focusedHeader.style.display = 'flex';
+            // Update focused header
+            const focusedHeader = document.getElementById('focusedHeader');
+            const focusedTitle = document.getElementById('focusedTitle');
+            const focusedRisk = document.getElementById('focusedRisk');
             
-            // Update stats for focused location
-            const statsSection = sidebar.querySelector('.data-section');
-            const statsBody = statsSection.querySelector('.data-body');
+            focusedHeader.classList.add('active');
+            focusedTitle.textContent = barangay;
+            focusedRisk.textContent = riskLevel;
+            focusedRisk.style.background = riskColor;
             
-            // Count animal types for this barangay
+            // Update stats
             const animalTypesSet = new Set(casesForBarangay.map(c => c.animalType).filter(Boolean));
+            const completedCount = casesForBarangay.filter(c => c.status === 'Completed').length;
             
-            statsBody.innerHTML = `
+            document.getElementById('statsBody').innerHTML = `
                 <div class="stat-grid">
                     <div class="stat-card primary">
                         <div class="stat-value">${caseCount}</div>
                         <div class="stat-label">Cases</div>
                     </div>
-                    <div class="stat-card" style="background: linear-gradient(135deg, rgba(220, 38, 38, 0.1), rgba(239, 68, 68, 0.1));">
-                        <div class="stat-value" style="color: ${riskColor}; font-size: 1.1rem;">${riskLevel}</div>
+                    <div class="stat-card" style="border-color: ${riskColor}20;">
+                        <div class="stat-value" style="color: ${riskColor}; font-size: 1rem;">${riskLevel}</div>
                         <div class="stat-label">Risk Level</div>
                     </div>
                     <div class="stat-card warning">
@@ -1498,17 +1474,20 @@ $highThreshold = max($lowThreshold + 1, (int)ceil($maxCount * 0.7));
                         <div class="stat-label">Animal Types</div>
                     </div>
                     <div class="stat-card success">
-                        <div class="stat-value">${casesForBarangay.filter(c => c.status === 'Completed').length}</div>
+                        <div class="stat-value">${completedCount}</div>
                         <div class="stat-label">Completed</div>
                     </div>
                 </div>
             `;
             
-            // Update affected areas table to show only this barangay
-            const affectedAreasSection = sidebar.querySelectorAll('.data-section')[1];
-            const affectedAreasBody = affectedAreasSection.querySelector('.data-body');
+            // Update areas table to show animal breakdown
+            const animalCounts = {};
+            casesForBarangay.forEach(c => {
+                const animal = c.animalType || 'Unknown';
+                animalCounts[animal] = (animalCounts[animal] || 0) + 1;
+            });
             
-            affectedAreasBody.innerHTML = `
+            let areasHtml = `
                 <table class="data-table">
                     <thead>
                         <tr>
@@ -1520,18 +1499,11 @@ $highThreshold = max($lowThreshold + 1, (int)ceil($maxCount * 0.7));
                     <tbody>
             `;
             
-            // Count animals by type
-            const animalCounts = {};
-            casesForBarangay.forEach(c => {
-                const animal = c.animalType || 'Unknown';
-                animalCounts[animal] = (animalCounts[animal] || 0) + 1;
-            });
-            
             Object.entries(animalCounts)
                 .sort((a, b) => b[1] - a[1])
                 .forEach(([animal, count]) => {
                     const pct = caseCount > 0 ? ((count / caseCount) * 100).toFixed(1) : 0;
-                    affectedAreasBody.innerHTML += `
+                    areasHtml += `
                         <tr>
                             <td>${animal}</td>
                             <td><strong>${count}</strong></td>
@@ -1540,20 +1512,15 @@ $highThreshold = max($lowThreshold + 1, (int)ceil($maxCount * 0.7));
                     `;
                 });
             
-            affectedAreasBody.innerHTML += `
-                    </tbody>
-                </table>
-            `;
+            areasHtml += '</tbody></table>';
+            document.getElementById('areasBody').innerHTML = areasHtml;
             
-            // Update recent cases to show recent from this barangay
-            const recentCasesSection = sidebar.querySelectorAll('.data-section')[2];
-            const recentCasesBody = recentCasesSection.querySelector('.data-body');
-            
+            // Update recent cases
             const recentBarangayCases = casesForBarangay
                 .sort((a, b) => new Date(b.biteDate) - new Date(a.biteDate))
                 .slice(0, 10);
             
-            recentCasesBody.innerHTML = `
+            let recentHtml = `
                 <table class="data-table">
                     <thead>
                         <tr>
@@ -1567,7 +1534,7 @@ $highThreshold = max($lowThreshold + 1, (int)ceil($maxCount * 0.7));
             
             recentBarangayCases.forEach(c => {
                 const dateStr = new Date(c.biteDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-                recentCasesBody.innerHTML += `
+                recentHtml += `
                     <tr>
                         <td>${dateStr}</td>
                         <td>${c.animalType || 'N/A'}</td>
@@ -1577,26 +1544,104 @@ $highThreshold = max($lowThreshold + 1, (int)ceil($maxCount * 0.7));
             });
             
             if (recentBarangayCases.length === 0) {
-                recentCasesBody.innerHTML += `
-                    <tr><td colspan="3" style="text-align: center; color: var(--gray-500);">No cases</td></tr>
-                `;
+                recentHtml += '<tr><td colspan="3" style="text-align: center; color: var(--gray-500);">No cases</td></tr>';
             }
             
-            recentCasesBody.innerHTML += `
-                    </tbody>
-                </table>
-            `;
+            recentHtml += '</tbody></table>';
+            document.getElementById('recentBody').innerHTML = recentHtml;
         }
         
         function clearFocusedLocation() {
             focusedLocation = null;
-            const sidebar = document.getElementById('dataSidebar');
-            const focusedHeader = sidebar.querySelector('.focused-location-header');
-            if (focusedHeader) {
-                focusedHeader.style.display = 'none';
+            document.getElementById('focusedHeader').classList.remove('active');
+            
+            // Reset stats
+            document.getElementById('statsBody').innerHTML = `
+                <div class="stat-grid">
+                    <div class="stat-card primary">
+                        <div class="stat-value">${cases.length.toLocaleString()}</div>
+                        <div class="stat-label">Total Cases</div>
+                    </div>
+                    <div class="stat-card danger">
+                        <div class="stat-value">${Object.keys(barangayCaseData).length}</div>
+                        <div class="stat-label">Hotspots</div>
+                    </div>
+                    <div class="stat-card warning">
+                        <div class="stat-value">${maxCount}</div>
+                        <div class="stat-label">Highest Count</div>
+                    </div>
+                    <div class="stat-card success">
+                        <div class="stat-value">${Object.keys(cases.reduce((acc, c) => { if (c.animalType) acc[c.animalType] = true; return acc; }, {})).length}</div>
+                        <div class="stat-label">Animal Types</div>
+                    </div>
+                </div>
+            `;
+            
+            // Reset areas table
+            let areasHtml = `
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Barangay</th>
+                            <th>Cases</th>
+                            <th>Risk</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+            
+            originalBarangayCounts.forEach(area => {
+                const ratio = maxCount > 0 ? area.count / maxCount : 0;
+                let risk = 'low', riskLabel = 'Low';
+                if (ratio >= 0.75) { risk = 'critical'; riskLabel = 'Critical'; }
+                else if (ratio >= 0.5) { risk = 'high'; riskLabel = 'High'; }
+                else if (ratio >= 0.25) { risk = 'medium'; riskLabel = 'Medium'; }
+                
+                areasHtml += `
+                    <tr onclick="focusLocation('${area.barangay.replace(/'/g, "\\'")}')">
+                        <td>${area.barangay}</td>
+                        <td><strong>${area.count}</strong></td>
+                        <td><span class="badge badge-${risk}">${riskLabel}</span></td>
+                    </tr>
+                `;
+            });
+            
+            areasHtml += '</tbody></table>';
+            document.getElementById('areasBody').innerHTML = areasHtml;
+            
+            // Reset recent cases
+            let recentHtml = `
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Location</th>
+                            <th>Animal</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+            
+            originalRecentCases.forEach(c => {
+                const dateStr = new Date(c.biteDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                recentHtml += `
+                    <tr>
+                        <td>${dateStr}</td>
+                        <td>${c.barangay || 'N/A'}</td>
+                        <td>${c.animalType || 'N/A'}</td>
+                    </tr>
+                `;
+            });
+            
+            if (originalRecentCases.length === 0) {
+                recentHtml += '<tr><td colspan="3" style="text-align: center; color: var(--gray-500);">No recent cases</td></tr>';
             }
-            // Reset display to show all data
-            location.reload();
+            
+            recentHtml += '</tbody></table>';
+            document.getElementById('recentBody').innerHTML = recentHtml;
+            
+            // Reset map view
+            map.fitBounds(talisayBounds);
         }
     </script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>

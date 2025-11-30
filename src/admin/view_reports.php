@@ -563,23 +563,38 @@ function getCategoryClass($category) {
 
         // Determine if we are printing all or filtered
         const hasFilters =
+            currentParams.get('search') ||
             currentParams.get('status') ||
             currentParams.get('animal_type') ||
             currentParams.get('bite_type') ||
-            currentParams.get('barangay');
+            currentParams.get('barangay') ||
+            currentParams.get('page') > 1;
 
         const printParams = new URLSearchParams();
         printParams.set('type', hasFilters ? 'filtered' : 'all');
 
-        // Pass through supported filter parameters
-        ['date_from', 'date_to', 'animal_type', 'bite_type', 'barangay', 'status'].forEach(key => {
+        // Pass through all available filter parameters
+        ['search', 'status', 'animal_type', 'bite_type', 'barangay', 'page'].forEach(key => {
             const value = currentParams.get(key);
-            if (value) {
+            if (value && value !== '1') { // Don't include page=1
                 printParams.set(key, value);
             }
         });
 
+        // Show loading indicator
+        const printBtn = document.querySelector('.btn-print');
+        const originalText = printBtn.innerHTML;
+        printBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> Generating...';
+        printBtn.disabled = true;
+
+        // Open print window
         window.open('print_reports.php?' + printParams.toString(), '_blank');
+
+        // Reset button after a delay
+        setTimeout(() => {
+            printBtn.innerHTML = originalText;
+            printBtn.disabled = false;
+        }, 2000);
     }
 </script>
 </body>

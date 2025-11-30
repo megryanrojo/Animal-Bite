@@ -17,15 +17,10 @@ $account_updated = false;
 $password_updated = false;
 $error = "";
 
-// Activity logs
-$page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
-$limit = 20;
-$offset = ($page - 1) * $limit;
-
-// Get activity logs with pagination
-$logs = getActivityLogs($pdo, [], $limit, $offset);
+// Activity logs - Show only recent logs (no pagination)
+$recent_limit = 50; // Show only the 50 most recent logs
+$logs = getActivityLogs($pdo, [], $recent_limit, 0);
 $total_logs = getActivityLogCount($pdo, []);
-$total_pages = ceil($total_logs / $limit);
 
 // Handle form submissions
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
@@ -54,7 +49,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                     $admin['name'] = $name;
                     $admin['email'] = $email;
 
-                    // Log account update
                     logActivity($pdo, 'UPDATE', 'admin', $admin_id, $admin_id, "Updated account information: name='$name', email='$email'");
                 } catch (PDOException $e) {
                     $error = "Error updating account: " . $e->getMessage();
@@ -89,7 +83,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                     $stmt->execute([$hashed_password, $admin_id]);
                     $password_updated = true;
 
-                    // Log password change
                     logActivity($pdo, 'UPDATE', 'admin', $admin_id, $admin_id, "Password changed");
                 } catch (PDOException $e) {
                     $error = "Error updating password: " . $e->getMessage();
@@ -104,191 +97,92 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Admin Settings | Animal Bite Center</title>
+    <title>Settings | Animal Bite Center</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         :root {
-            --sidebar-width: 250px;
-            --primary-color: #4361ee;
-            --primary-hover: #3a56d4;
-            --bg-color: #f0f2f5;
-            --card-bg: #ffffff;
-            --text-primary: #1a1a2e;
-            --text-secondary: #6c757d;
-            --border-color: #e0e0e0;
-            --success-color: #10b981;
-            --error-color: #ef4444;
+            --primary: #0ea5e9;
+            --primary-light: #e0f2fe;
+            --primary-dark: #0284c7;
+            --text-primary: #1e293b;
+            --text-secondary: #64748b;
+            --border: #e2e8f0;
+            --bg-light: #f8fafc;
+            --success: #10b981;
+            --success-light: #d1fae5;
+            --error: #ef4444;
+            --error-light: #fee2e2;
+            --warning-light: #fef3c7;
+            --warning: #f59e0b;
         }
 
         * {
             box-sizing: border-box;
+            margin: 0;
+            padding: 0;
         }
 
         body {
-            margin: 0;
-            padding: 0;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: #fff;
+            color: var(--text-primary);
             font-size: 14px;
-            background-color: var(--bg-color);
+            line-height: 1.5;
+            overflow-x: hidden; /* Prevent horizontal scrolling */
+        }
+
+        /* Page Header */
+        .page-header {
+            background: #fff;
+            border-bottom: 1px solid var(--border);
+            padding: 24px 32px;
+        }
+
+        .page-header h1 {
+            font-size: 1.5rem;
+            font-weight: 700;
             color: var(--text-primary);
+            margin-bottom: 4px;
         }
 
-        .main-content {
-            margin-left: 0;
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-        }
-
-        .top-bar {
-            background: var(--card-bg);
-            padding: 16px 24px;
-            border-bottom: 1px solid var(--border-color);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .top-bar h1 {
-            font-size: 1.25rem;
-            font-weight: 600;
-            margin: 0;
-            color: var(--text-primary);
-        }
-
-        .top-bar .subtitle {
-            font-size: 0.85rem;
+        .page-header p {
             color: var(--text-secondary);
-            margin: 0;
+            font-size: 0.875rem;
         }
 
-        .content-area {
-            padding: 24px;
-            flex: 1;
+        /* Main Content */
+        .main-content {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 32px;
+            width: 100%;
+            box-sizing: border-box;
         }
 
-        .settings-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
-            gap: 24px;
-        }
-
-        .settings-card {
-            background: var(--card-bg);
-            border-radius: 10px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.08);
-            overflow: hidden;
-        }
-
-        .settings-card-header {
-            padding: 16px 20px;
-            border-bottom: 1px solid var(--border-color);
+        /* Alert Messages */
+        .alert {
             display: flex;
             align-items: center;
             gap: 12px;
-        }
-
-        .settings-card-header .icon {
-            width: 40px;
-            height: 40px;
-            background: linear-gradient(135deg, var(--primary-color), #6366f1);
+            padding: 14px 18px;
             border-radius: 10px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-size: 1.1rem;
-        }
-
-        .settings-card-header h3 {
-            font-size: 1rem;
-            font-weight: 600;
-            margin: 0;
-            color: var(--text-primary);
-        }
-
-        .settings-card-header p {
-            font-size: 0.8rem;
-            color: var(--text-secondary);
-            margin: 0;
-        }
-
-        .settings-card-body {
-            padding: 20px;
-        }
-
-        .form-group {
-            margin-bottom: 16px;
-        }
-
-        .form-group:last-of-type {
-            margin-bottom: 20px;
-        }
-
-        .form-group label {
-            display: block;
-            font-size: 0.85rem;
+            margin-bottom: 24px;
+            font-size: 0.875rem;
             font-weight: 500;
-            color: var(--text-primary);
-            margin-bottom: 6px;
-        }
-
-        .form-group input {
-            width: 100%;
-            padding: 10px 14px;
-            font-size: 0.9rem;
-            border: 1px solid var(--border-color);
-            border-radius: 8px;
-            transition: border-color 0.2s, box-shadow 0.2s;
-            background: #fafafa;
-        }
-
-        .form-group input:focus {
-            outline: none;
-            border-color: var(--primary-color);
-            box-shadow: 0 0 0 3px rgba(67, 97, 238, 0.1);
-            background: white;
-        }
-
-        .btn-save {
-            background: var(--primary-color);
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            font-size: 0.9rem;
-            font-weight: 500;
-            border-radius: 8px;
-            cursor: pointer;
-            transition: background 0.2s;
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .btn-save:hover {
-            background: var(--primary-hover);
-        }
-
-        .alert {
-            padding: 12px 16px;
-            border-radius: 8px;
-            margin-bottom: 20px;
-            font-size: 0.9rem;
-            display: flex;
-            align-items: center;
-            gap: 10px;
         }
 
         .alert-success {
-            background: #ecfdf5;
+            background: var(--success-light);
             color: #065f46;
             border: 1px solid #a7f3d0;
         }
 
         .alert-error {
-            background: #fef2f2;
+            background: var(--error-light);
             color: #991b1b;
             border: 1px solid #fecaca;
         }
@@ -301,33 +195,180 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             margin-left: auto;
             background: none;
             border: none;
-            font-size: 1.2rem;
+            font-size: 1.25rem;
             cursor: pointer;
             color: inherit;
-            opacity: 0.7;
+            opacity: 0.6;
+            transition: opacity 0.2s;
         }
 
         .alert-close:hover {
             opacity: 1;
         }
 
-        /* System Info Section */
-        .system-info {
-            background: #f8f9fa;
-            border-radius: 8px;
-            padding: 16px;
-            margin-top: 16px;
+        @media (max-width: 480px) {
+            .alert {
+                padding: 12px 14px;
+                margin-bottom: 16px;
+                font-size: 0.8rem;
+                gap: 10px;
+            }
+
+            .alert i {
+                font-size: 1rem;
+                flex-shrink: 0;
+            }
         }
 
-        .info-row {
+        /* Settings Grid */
+        .settings-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 24px;
+        }
+
+        @media (max-width: 1024px) {
+            .settings-grid {
+                grid-template-columns: 1fr;
+                gap: 20px;
+            }
+        }
+
+        @media (max-width: 640px) {
+            .settings-grid {
+                gap: 16px;
+            }
+
+            .settings-card {
+                border-radius: 10px;
+            }
+
+            .card-header {
+                padding: 14px 16px;
+                border-radius: 10px 10px 0 0;
+            }
+
+            .card-body {
+                padding: 14px 16px;
+            }
+        }
+
+        /* Settings Card */
+        .settings-card {
+            background: #fff;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            overflow: hidden;
+        }
+
+        .settings-card.full-width {
+            grid-column: 1 / -1;
+        }
+
+        .card-header {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 20px 24px;
+            border-bottom: 1px solid var(--border);
+            background: var(--bg-light);
+        }
+
+        .card-icon {
+            width: 44px;
+            height: 44px;
+            background: var(--primary-light);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--primary);
+            font-size: 1.25rem;
+        }
+
+        .card-header-text h3 {
+            font-size: 1rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 2px;
+        }
+
+        .card-header-text p {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+        }
+
+        .card-body {
+            padding: 24px;
+        }
+
+        /* Form Styles */
+        .form-group {
+            margin-bottom: 18px;
+        }
+
+        .form-group label {
+            display: block;
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.025em;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 12px 16px;
+            font-size: 0.9rem;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: #fff;
+            color: var(--text-primary);
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.15);
+        }
+
+        .btn-primary {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 12px 20px;
+            background: var(--primary);
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            font-size: 0.875rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .btn-primary:hover {
+            background: var(--primary-dark);
+        }
+
+        /* System Info */
+        .info-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0;
+        }
+
+        .info-item {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 8px 0;
-            border-bottom: 1px solid var(--border-color);
+            padding: 14px 0;
+            border-bottom: 1px solid var(--border);
         }
 
-        .info-row:last-child {
+        .info-item:last-child {
             border-bottom: none;
         }
 
@@ -338,170 +379,669 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
         .info-value {
             color: var(--text-secondary);
+            font-size: 0.875rem;
         }
 
-        /* Export buttons */
-        .export-section {
-            margin-top: 20px;
-        }
-
-        .export-buttons {
-            display: grid;
+        /* Export Buttons */
+        .export-grid {
+            display: flex;
+            flex-direction: column;
             gap: 10px;
         }
 
         .export-btn {
-            display: inline-flex;
+            display: flex;
             align-items: center;
-            gap: 8px;
-            padding: 10px 16px;
-            background: var(--card-bg);
-            border: 1px solid var(--border-color);
-            border-radius: 6px;
+            gap: 12px;
+            padding: 14px 18px;
+            background: #fff;
+            border: 1px solid var(--border);
+            border-radius: 8px;
             color: var(--text-primary);
             text-decoration: none;
-            font-size: 0.9rem;
+            font-size: 0.875rem;
+            font-weight: 500;
             transition: all 0.2s;
         }
 
         .export-btn:hover {
-            background: var(--bg-color);
-            border-color: var(--primary-color);
-            color: var(--primary-color);
+            border-color: var(--primary);
+            background: var(--primary-light);
+            color: var(--primary-dark);
         }
 
-        /* Logs Table Styles */
-        .logs-table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 0.85rem;
+        .export-btn i {
+            font-size: 1.1rem;
+            color: var(--primary);
         }
 
-        .logs-table thead th {
-            background: var(--bg-color);
-            padding: 12px 8px;
-            text-align: left;
-            font-weight: 600;
-            color: var(--text-primary);
-            border-bottom: 2px solid var(--border-color);
+        .export-note {
+            margin-top: 16px;
+            padding: 12px 16px;
+            background: var(--bg-light);
+            border-radius: 8px;
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
         }
 
-        .logs-table tbody td {
-            padding: 12px 8px;
-            border-bottom: 1px solid var(--border-color);
-            vertical-align: top;
+        /* Compact Activity Logs */
+        .logs-compact {
+            max-height: 500px;
+            overflow-y: auto;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: #fff;
         }
 
-        .logs-table tbody tr:hover {
-            background: var(--bg-color);
+        .log-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            padding: 14px 16px;
+            border-bottom: 1px solid var(--border);
+            transition: background 0.2s;
+        }
+
+        .log-item:hover {
+            background: var(--bg-light);
+        }
+
+        .log-item:last-child {
+            border-bottom: none;
+        }
+
+        .log-icon {
+            flex-shrink: 0;
+            margin-top: 2px;
         }
 
         .log-action {
-            display: inline-block;
-            padding: 4px 8px;
-            border-radius: 4px;
-            font-size: 0.75rem;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 32px;
+            height: 32px;
+            border-radius: 6px;
+            font-size: 0.8rem;
             font-weight: 600;
-            text-transform: uppercase;
         }
 
-        .log-action-create { background: #ecfdf5; color: #065f46; }
-        .log-action-update { background: #fef3c7; color: #92400e; }
-        .log-action-delete { background: #fef2f2; color: #991b1b; }
-        .log-action-view { background: #eff6ff; color: #1e40af; }
-        .log-action-login { background: #f0fdf4; color: #166534; }
+        .log-action-create { background: var(--success-light); color: var(--success); }
+        .log-action-update { background: var(--warning-light); color: var(--warning); }
+        .log-action-delete { background: var(--error-light); color: var(--error); }
+        .log-action-view { background: var(--primary-light); color: var(--primary); }
+        .log-action-login { background: #d1fae5; color: #16a34a; }
+
+        .log-content {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .log-primary {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 4px;
+        }
+
+        .log-primary strong {
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
 
         .log-entity {
-            color: var(--text-secondary);
             font-size: 0.8rem;
+            color: var(--text-secondary);
+            background: var(--bg-light);
+            padding: 2px 6px;
+            border-radius: 4px;
+        }
+
+        .log-entity small {
+            font-weight: 500;
+            opacity: 0.8;
+        }
+
+        .log-secondary {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            margin-bottom: 2px;
+        }
+
+        .log-user {
+            font-weight: 500;
+        }
+
+        .log-time {
+            white-space: nowrap;
         }
 
         .log-details {
-            color: var(--text-secondary);
             font-size: 0.8rem;
-            max-width: 200px;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
+            color: var(--text-secondary);
+            line-height: 1.4;
+            word-break: break-word;
         }
 
-        .log-timestamp {
-            color: var(--text-secondary);
-            font-size: 0.8rem;
-            white-space: nowrap;
+        .logs-summary {
+            margin-top: 8px;
         }
 
-        .pagination {
-            display: flex;
-            justify-content: center;
+            .logs-footer {
+                margin-top: 16px;
+                padding-top: 16px;
+                border-top: 1px solid var(--border);
+                text-align: center;
+            }
+
+            /* Info items mobile stack */
+            .info-item {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 4px;
+            }
+
+            .info-label {
+                font-size: 0.8rem;
+            }
+
+            .info-value {
+                font-size: 0.75rem;
+                align-self: flex-start;
+            }
+
+        .btn-view-all {
+            display: inline-flex;
             align-items: center;
             gap: 8px;
-            margin-top: 16px;
-        }
-
-        .pagination a, .pagination span {
-            display: inline-block;
-            padding: 6px 12px;
-            border: 1px solid var(--border-color);
-            border-radius: 4px;
+            padding: 10px 16px;
+            background: var(--primary);
+            color: #fff;
             text-decoration: none;
-            color: var(--text-primary);
-            font-size: 0.85rem;
+            border-radius: 6px;
+            font-size: 0.875rem;
+            font-weight: 500;
+            transition: background 0.2s;
         }
 
-        .pagination a:hover {
-            background: var(--primary-color);
-            color: white;
-            border-color: var(--primary-color);
-        }
-
-        .pagination .current {
-            background: var(--primary-color);
-            color: white;
-            border-color: var(--primary-color);
+        .btn-view-all:hover {
+            background: var(--primary-dark);
+            color: #fff;
+            text-decoration: none;
         }
 
         .logs-empty {
             text-align: center;
-            padding: 40px 20px;
+            padding: 48px 24px;
             color: var(--text-secondary);
         }
 
-        /* Mobile Responsive */
-        @media (max-width: 1024px) {
-            .main-content {
-                margin-left: 0;
-            }
+        .logs-empty i {
+            font-size: 2.5rem;
+            margin-bottom: 12px;
+            color: var(--border);
+        }
 
+        .logs-empty p {
+            font-size: 0.9rem;
+        }
+
+        /* Responsive */
+        @media (max-width: 1024px) {
             .settings-grid {
                 grid-template-columns: 1fr;
+                gap: 20px;
+            }
+
+            .main-content {
+                padding: 24px;
+            }
+
+            .page-header {
+                padding: 20px 24px;
             }
         }
 
         @media (max-width: 768px) {
-            .top-bar {
-                padding: 14px 16px;
+            body {
+                font-size: 13px;
             }
 
-            .content-area {
+            .page-header {
+                padding: 16px 20px;
+                margin-bottom: 20px;
+            }
+
+            .page-header h1 {
+                font-size: 1.25rem;
+                margin-bottom: 4px;
+            }
+
+            .page-header p {
+                font-size: 0.8rem;
+            }
+
+            .main-content {
                 padding: 16px;
+                max-width: none;
             }
 
-            .settings-card-header {
-                padding: 14px 16px;
+            .settings-grid {
+                gap: 16px;
             }
 
-            .settings-card-body {
-                padding: 16px;
+            .card-header {
+                padding: 16px 20px;
+                gap: 12px;
             }
 
-            .form-group input {
+            .card-icon {
+                width: 36px;
+                height: 36px;
+                font-size: 1rem;
+            }
+
+            .card-header-text h3 {
+                font-size: 0.9rem;
+            }
+
+            .card-header-text p {
+                font-size: 0.75rem;
+            }
+
+            .card-body {
+                padding: 16px 20px;
+            }
+
+            /* Form improvements */
+            .form-group {
+                margin-bottom: 16px;
+            }
+
+            .form-group label {
+                font-size: 0.75rem;
+                margin-bottom: 6px;
+            }
+
+            .form-group input,
+            .form-group select {
+                padding: 10px 14px;
+                font-size: 0.875rem;
+            }
+
+            .btn-primary {
+                width: 100%;
+                padding: 12px 16px;
+                font-size: 0.875rem;
+                justify-content: center;
+            }
+
+            /* Alert messages */
+            .alert {
+                padding: 12px 16px;
+                font-size: 0.8rem;
+            }
+
+            .alert i {
+                font-size: 1rem;
+            }
+
+            /* System info */
+            .info-list {
+                gap: 12px;
+            }
+
+            .info-item {
+                padding: 12px 0;
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 4px;
+            }
+
+            .info-label {
+                font-size: 0.75rem;
+                opacity: 0.8;
+            }
+
+            .info-value {
+                font-size: 0.85rem;
+                font-weight: 600;
+            }
+
+            /* Export buttons */
+            .export-grid {
+                gap: 12px;
+            }
+
+            .export-btn {
+                padding: 12px 16px;
+                font-size: 0.8rem;
+            }
+
+            .export-btn i {
+                font-size: 1rem;
+            }
+
+            .export-note {
+                font-size: 0.75rem;
+                padding: 10px 14px;
+            }
+
+            /* Activity logs */
+            .logs-compact {
+                max-height: 400px;
+                font-size: 0.8rem;
+            }
+
+            .log-item {
                 padding: 12px 14px;
+                gap: 10px;
+                flex-direction: column;
+                align-items: flex-start;
             }
 
-            .btn-save {
+            .log-icon {
+                align-self: flex-start;
+                margin-top: 0;
+            }
+
+            .log-content {
+                width: 100%;
+            }
+
+            .log-action {
+                width: 28px;
+                height: 28px;
+                font-size: 0.7rem;
+            }
+
+            .log-primary {
+                gap: 6px;
+                width: 100%;
+                justify-content: space-between;
+                align-items: flex-start;
+            }
+
+            .log-primary strong {
+                font-size: 0.8rem;
+                flex: 1;
+            }
+
+            .log-entity {
+                font-size: 0.7rem;
+                padding: 2px 4px;
+                white-space: nowrap;
+            }
+
+            .log-secondary {
+                width: 100%;
+                flex-direction: row;
+                justify-content: space-between;
+                align-items: center;
+                font-size: 0.7rem;
+                margin-top: 4px;
+            }
+
+            .log-user {
+                flex: 1;
+                text-align: left;
+            }
+
+            .log-time {
+                text-align: right;
+                opacity: 0.8;
+            }
+
+            .log-details {
+                font-size: 0.75rem;
+                margin-top: 6px;
+                width: 100%;
+                padding: 6px 8px;
+                background: var(--bg-light);
+                border-radius: 4px;
+                word-break: break-word;
+            }
+
+            .logs-footer {
+                margin-top: 12px;
+                padding-top: 12px;
+            }
+
+            .btn-view-all {
+                padding: 8px 14px;
+                font-size: 0.8rem;
+            }
+
+            .logs-summary {
+                padding: 12px;
+                font-size: 0.8rem;
+            }
+
+            /* Activity logs header */
+            .card-header-text {
+                flex: 1;
+            }
+
+            .logs-summary {
+                margin-top: 6px;
+                opacity: 0.8;
+            }
+        }
+
+        @media (max-width: 768px) {
+            /* Additional tablet styles */
+            .logs-compact {
+                max-height: 400px;
+            }
+
+            .log-item {
+                padding: 12px 14px;
+                gap: 10px;
+            }
+
+            .log-primary {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 4px;
+                margin-bottom: 6px;
+            }
+
+            .log-entity {
+                font-size: 0.75rem;
+            }
+
+            .log-details {
+                font-size: 0.75rem;
+                line-height: 1.3;
+                word-break: break-word;
+            }
+        }
+
+        @media (max-width: 640px) {
+            /* Small tablet adjustments */
+            .main-content {
+                padding: 16px;
+            }
+
+            .page-header {
+                padding: 16px 20px;
+                margin-bottom: 20px;
+            }
+
+            .page-header h1 {
+                font-size: 1.2rem;
+            }
+        }
+
+        @media (max-width: 480px) {
+            body {
+                overflow-x: hidden;
+            }
+
+            .main-content {
+                padding: 12px;
+                margin: 0;
+                max-width: none;
+            }
+
+            .page-header {
+                padding: 12px 16px;
+            }
+
+            .page-header h1 {
+                font-size: 1.1rem;
+            }
+
+            .card-body {
+                padding: 12px 16px;
+            }
+
+            .card-header {
+                padding: 12px 16px;
+            }
+
+            .settings-grid {
+                gap: 12px;
+            }
+
+            /* Activity logs mobile optimization */
+            .logs-compact {
+                max-height: 300px;
+                border-radius: 6px;
+            }
+
+            .log-item {
+                flex-direction: column;
+                align-items: flex-start;
+                padding: 10px 12px;
+                gap: 8px;
+            }
+
+            .log-icon {
+                align-self: flex-start;
+            }
+
+            .log-primary {
+                width: 100%;
+                flex-direction: row;
+                justify-content: space-between;
+                align-items: flex-start;
+                gap: 8px;
+            }
+
+            .log-primary strong {
+                font-size: 0.8rem;
+                flex: 1;
+            }
+
+            .log-entity {
+                font-size: 0.7rem;
+                flex-shrink: 0;
+                margin-bottom: 0;
+            }
+
+            .log-secondary {
+                width: 100%;
+                justify-content: space-between;
+                font-size: 0.7rem;
+            }
+
+            .log-user,
+            .log-time {
+                font-size: 0.7rem;
+            }
+
+            .log-details {
+                font-size: 0.7rem;
+                line-height: 1.3;
+                margin-top: 4px;
+                padding-top: 4px;
+                border-top: 1px solid rgba(0,0,0,0.05);
+                width: 100%;
+                word-break: break-word;
+                overflow-wrap: break-word;
+            }
+
+            .info-item {
+                padding: 10px 0;
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 4px;
+            }
+
+            .info-label {
+                font-size: 0.8rem;
+            }
+
+            .info-value {
+                font-size: 0.75rem;
+                align-self: flex-end;
+            }
+
+            .export-btn {
+                padding: 10px 12px;
+                font-size: 0.75rem;
+                justify-content: center;
+            }
+
+            .export-btn i {
+                font-size: 1rem;
+            }
+
+            .btn-primary {
+                padding: 10px 14px;
+                font-size: 0.8rem;
+                justify-content: center;
+            }
+
+            .btn-view-all {
+                font-size: 0.75rem;
+                padding: 8px 12px;
+            }
+
+            /* Form elements mobile optimization */
+            .form-group {
+                margin-bottom: 14px;
+            }
+
+            .form-group label {
+                font-size: 0.75rem;
+                margin-bottom: 5px;
+            }
+
+            .form-group input,
+            .form-group select {
+                width: 100%;
+                padding: 10px 12px;
+                font-size: 0.8rem;
+                height: 40px;
+            }
+
+            .btn-primary {
+                width: 100%;
+                padding: 12px 16px;
+                font-size: 0.85rem;
+                margin-top: 8px;
+            }
+
+            /* Export buttons stack on mobile */
+            .export-grid {
+                flex-direction: column;
+                gap: 8px;
+            }
+
+            .export-btn {
                 width: 100%;
                 justify-content: center;
+                padding: 12px 16px;
+                font-size: 0.8rem;
             }
         }
     </style>
@@ -509,248 +1049,244 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 <body>
     <?php include 'includes/navbar.php'; ?>
 
+    <div class="page-header">
+        <h1>Settings</h1>
+        <p>Manage your account and system preferences</p>
+    </div>
+
     <div class="main-content">
-        <div class="top-bar">
-            <div>
-                <h1>Settings</h1>
-                <p class="subtitle">Manage your account and system preferences</p>
-            </div>
+        <?php if (!empty($error)): ?>
+        <div class="alert alert-error">
+            <i class="bi bi-exclamation-circle"></i>
+            <span><?php echo $error; ?></span>
+            <button class="alert-close" onclick="this.parentElement.remove()">&times;</button>
         </div>
+        <?php endif; ?>
 
-        <div class="content-area">
-            <?php if (!empty($error)): ?>
-            <div class="alert alert-error">
-                <i class="bi bi-exclamation-circle"></i>
-                <span><?php echo $error; ?></span>
-                <button class="alert-close" onclick="this.parentElement.remove()">&times;</button>
+        <?php if ($account_updated): ?>
+        <div class="alert alert-success">
+            <i class="bi bi-check-circle"></i>
+            <span>Account information updated successfully!</span>
+            <button class="alert-close" onclick="this.parentElement.remove()">&times;</button>
+        </div>
+        <?php endif; ?>
+
+        <?php if ($password_updated): ?>
+        <div class="alert alert-success">
+            <i class="bi bi-check-circle"></i>
+            <span>Password updated successfully!</span>
+            <button class="alert-close" onclick="this.parentElement.remove()">&times;</button>
+        </div>
+        <?php endif; ?>
+
+        <div class="settings-grid">
+            <!-- Account Settings -->
+            <div class="settings-card">
+                <div class="card-header">
+                    <div class="card-icon">
+                        <i class="bi bi-person"></i>
+                    </div>
+                    <div class="card-header-text">
+                        <h3>Account Settings</h3>
+                        <p>Update your profile information</p>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <form method="POST" action="">
+                        <div class="form-group">
+                            <label for="name">Full Name</label>
+                            <input type="text" id="name" name="name" value="<?php echo htmlspecialchars($admin['name']); ?>" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="email">Email Address</label>
+                            <input type="email" id="email" name="email" value="<?php echo htmlspecialchars($admin['email']); ?>" required>
+                        </div>
+                        <button type="submit" name="update_account" class="btn-primary">
+                            <i class="bi bi-check2"></i> Save Changes
+                        </button>
+                    </form>
+                </div>
             </div>
-            <?php endif; ?>
 
-            <?php if ($account_updated): ?>
-            <div class="alert alert-success">
-                <i class="bi bi-check-circle"></i>
-                <span>Account information updated successfully!</span>
-                <button class="alert-close" onclick="this.parentElement.remove()">&times;</button>
+            <!-- Change Password -->
+            <div class="settings-card">
+                <div class="card-header">
+                    <div class="card-icon">
+                        <i class="bi bi-shield-lock"></i>
+                    </div>
+                    <div class="card-header-text">
+                        <h3>Change Password</h3>
+                        <p>Update your security credentials</p>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <form method="POST" action="">
+                        <div class="form-group">
+                            <label for="currentPassword">Current Password</label>
+                            <input type="password" id="currentPassword" name="currentPassword" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="newPassword">New Password</label>
+                            <input type="password" id="newPassword" name="newPassword" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="confirmPassword">Confirm Password</label>
+                            <input type="password" id="confirmPassword" name="confirmPassword" required>
+                        </div>
+                        <button type="submit" name="update_password" class="btn-primary">
+                            <i class="bi bi-shield-check"></i> Update Password
+                        </button>
+                    </form>
+                </div>
             </div>
-            <?php endif; ?>
 
-            <?php if ($password_updated): ?>
-            <div class="alert alert-success">
-                <i class="bi bi-check-circle"></i>
-                <span>Password updated successfully!</span>
-                <button class="alert-close" onclick="this.parentElement.remove()">&times;</button>
+            <!-- System Information -->
+            <div class="settings-card">
+                <div class="card-header">
+                    <div class="card-icon">
+                        <i class="bi bi-info-circle"></i>
+                    </div>
+                    <div class="card-header-text">
+                        <h3>System Information</h3>
+                        <p>Current system status and details</p>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="info-list">
+                        <div class="info-item">
+                            <span class="info-label">System Version</span>
+                            <span class="info-value">Animal Bite Center v2.1</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">PHP Version</span>
+                            <span class="info-value"><?php echo phpversion(); ?></span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Database</span>
+                            <span class="info-value">MySQL <?php echo $pdo->getAttribute(PDO::ATTR_SERVER_VERSION); ?></span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Server Time</span>
+                            <span class="info-value"><?php echo date('M d, Y H:i T'); ?></span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Admin Account</span>
+                            <span class="info-value"><?php echo htmlspecialchars($admin['name']); ?></span>
+                        </div>
+                    </div>
+                </div>
             </div>
-            <?php endif; ?>
 
-            <div class="settings-grid">
-                <!-- Account Settings -->
-                <div class="settings-card">
-                    <div class="settings-card-header">
-                        <div class="icon">
-                            <i class="bi bi-person"></i>
-                        </div>
-                        <div>
-                            <h3>Account Settings</h3>
-                            <p>Update your profile information</p>
-                        </div>
+            <!-- Data Export -->
+            <div class="settings-card">
+                <div class="card-header">
+                    <div class="card-icon">
+                        <i class="bi bi-download"></i>
                     </div>
-                    <div class="settings-card-body">
-                        <form method="POST" action="">
-                            <div class="form-group">
-                                <label for="name">Full Name</label>
-                                <input type="text" id="name" name="name" value="<?php echo htmlspecialchars($admin['name']); ?>" required>
-                            </div>
-                            <div class="form-group">
-                                <label for="email">Email Address</label>
-                                <input type="email" id="email" name="email" value="<?php echo htmlspecialchars($admin['email']); ?>" required>
-                            </div>
-                            <button type="submit" name="update_account" class="btn-save">
-                                <i class="bi bi-check2"></i> Save Changes
-                            </button>
-                        </form>
+                    <div class="card-header-text">
+                        <h3>Data Export</h3>
+                        <p>Download system data for backup</p>
                     </div>
                 </div>
-
-                <!-- Change Password -->
-                <div class="settings-card">
-                    <div class="settings-card-header">
-                        <div class="icon">
-                            <i class="bi bi-key"></i>
-                        </div>
-                        <div>
-                            <h3>Change Password</h3>
-                            <p>Update your security credentials</p>
-                        </div>
+                <div class="card-body">
+                    <div class="export-grid">
+                        <a href="export_reports.php?format=excel" class="export-btn">
+                            <i class="bi bi-file-earmark-excel"></i>
+                            Export Reports (Excel)
+                        </a>
+                        <a href="export_reports.php?format=csv" class="export-btn">
+                            <i class="bi bi-file-earmark-text"></i>
+                            Export Reports (CSV)
+                        </a>
+                        <a href="export_analytics.php?format=excel" class="export-btn">
+                            <i class="bi bi-bar-chart"></i>
+                            Export Analytics (Excel)
+                        </a>
                     </div>
-                    <div class="settings-card-body">
-                        <form method="POST" action="">
-                            <div class="form-group">
-                                <label for="currentPassword">Current Password</label>
-                                <input type="password" id="currentPassword" name="currentPassword" required>
-                            </div>
-                            <div class="form-group">
-                                <label for="newPassword">New Password</label>
-                                <input type="password" id="newPassword" name="newPassword" required>
-                            </div>
-                            <div class="form-group">
-                                <label for="confirmPassword">Confirm New Password</label>
-                                <input type="password" id="confirmPassword" name="confirmPassword" required>
-                            </div>
-                            <button type="submit" name="update_password" class="btn-save">
-                                <i class="bi bi-shield-check"></i> Update Password
-                            </button>
-                        </form>
+                    <div class="export-note">
+                        <i class="bi bi-info-circle"></i>
+                        <span>Data exports include all current records. Large datasets may take time to process.</span>
                     </div>
                 </div>
+            </div>
 
-                <!-- System Information -->
-                <div class="settings-card">
-                    <div class="settings-card-header">
-                        <div class="icon">
-                            <i class="bi bi-info-circle"></i>
-                        </div>
-                        <div>
-                            <h3>System Information</h3>
-                            <p>Current system status and details</p>
-                        </div>
+            <!-- Activity Logs -->
+            <div class="settings-card full-width">
+                <div class="card-header">
+                    <div class="card-icon">
+                        <i class="bi bi-journal-text"></i>
                     </div>
-                    <div class="settings-card-body">
-                        <div class="system-info">
-                            <div class="info-row">
-                                <span class="info-label">System Version</span>
-                                <span class="info-value">Animal Bite Center v2.1</span>
-                            </div>
-                            <div class="info-row">
-                                <span class="info-label">PHP Version</span>
-                                <span class="info-value"><?php echo phpversion(); ?></span>
-                            </div>
-                            <div class="info-row">
-                                <span class="info-label">Database</span>
-                                <span class="info-value">MySQL <?php echo $pdo->getAttribute(PDO::ATTR_SERVER_VERSION); ?></span>
-                            </div>
-                            <div class="info-row">
-                                <span class="info-label">Server Time</span>
-                                <span class="info-value"><?php echo date('M d, Y H:i T'); ?></span>
-                            </div>
-                            <div class="info-row">
-                                <span class="info-label">Admin Account</span>
-                                <span class="info-value"><?php echo htmlspecialchars($admin['name']); ?></span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Data Export -->
-                <div class="settings-card">
-                    <div class="settings-card-header">
-                        <div class="icon">
-                            <i class="bi bi-download"></i>
-                        </div>
-                        <div>
-                            <h3>Data Export</h3>
-                            <p>Download system data for backup</p>
-                        </div>
-                    </div>
-                    <div class="settings-card-body">
-                        <div class="export-section">
-                            <div class="export-buttons">
-                                <a href="export_reports.php?format=excel" class="export-btn">
-                                    <i class="bi bi-file-earcel"></i> Export Reports (Excel)
-                                </a>
-                                <a href="export_reports.php?format=csv" class="export-btn">
-                                    <i class="bi bi-file-csv"></i> Export Reports (CSV)
-                                </a>
-                                <a href="export_analytics.php?format=excel" class="export-btn">
-                                    <i class="bi bi-bar-chart"></i> Export Analytics (Excel)
-                                </a>
-                            </div>
-                            <p style="margin-top: 16px; font-size: 0.8rem; color: var(--text-secondary);">
-                                <i class="bi bi-info-circle"></i> Data exports include all current records. Large datasets may take time to process.
-                            </p>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Activity Logs -->
-                <div class="settings-card">
-                    <div class="settings-card-header">
-                        <div class="icon">
-                            <i class="bi bi-journal-text"></i>
-                        </div>
-                        <div>
-                            <h3>Activity Logs</h3>
-                            <p>Recent system activity and audit trail</p>
-                        </div>
-                    </div>
-                    <div class="settings-card-body">
-                        <?php if (empty($logs)): ?>
-                        <div class="logs-empty">
-                            <i class="bi bi-journal-x" style="font-size: 2rem; color: var(--text-secondary);"></i>
-                            <p>No activity logs found</p>
-                        </div>
-                        <?php else: ?>
-                        <div style="overflow-x: auto;">
-                            <table class="logs-table">
-                                <thead>
-                                    <tr>
-                                        <th>Action</th>
-                                        <th>Entity</th>
-                                        <th>User</th>
-                                        <th>Details</th>
-                                        <th>Timestamp</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <?php foreach ($logs as $log): ?>
-                                    <tr>
-                                        <td>
-                                            <span class="log-action log-action-<?php echo strtolower($log['action']); ?>">
-                                                <?php echo htmlspecialchars($log['action']); ?>
-                                            </span>
-                                        </td>
-                                        <td>
-                                            <div><?php echo htmlspecialchars($log['entity_type']); ?></div>
-                                            <?php if ($log['entity_id']): ?>
-                                            <div class="log-entity">ID: <?php echo htmlspecialchars($log['entity_id']); ?></div>
-                                            <?php endif; ?>
-                                        </td>
-                                        <td><?php echo htmlspecialchars(getUserName($pdo, $log['user_id'])); ?></td>
-                                        <td>
-                                            <div class="log-details" title="<?php echo htmlspecialchars($log['details'] ?? ''); ?>">
-                                                <?php echo htmlspecialchars($log['details'] ?? ''); ?>
-                                            </div>
-                                        </td>
-                                        <td>
-                                            <div class="log-timestamp"><?php echo date('M d, H:i', strtotime($log['timestamp'])); ?></div>
-                                            <div class="log-entity"><?php echo date('Y', strtotime($log['timestamp'])); ?></div>
-                                        </td>
-                                    </tr>
-                                    <?php endforeach; ?>
-                                </tbody>
-                            </table>
-                        </div>
-
-                        <?php if ($total_pages > 1): ?>
-                        <div class="pagination">
-                            <?php if ($page > 1): ?>
-                            <a href="?page=<?php echo $page - 1; ?>">&laquo; Previous</a>
-                            <?php endif; ?>
-
-                            <?php for ($i = max(1, $page - 2); $i <= min($total_pages, $page + 2); $i++): ?>
-                            <a href="?page=<?php echo $i; ?>" class="<?php echo $i === $page ? 'current' : ''; ?>" style="pointer-events: <?php echo $i === $page ? 'none' : 'auto'; ?>;"><?php echo $i; ?></a>
-                            <?php endfor; ?>
-
-                            <?php if ($page < $total_pages): ?>
-                            <a href="?page=<?php echo $page + 1; ?>">Next &raquo;</a>
-                            <?php endif; ?>
-                        </div>
-                        <?php endif; ?>
-
-                        <div style="margin-top: 16px; font-size: 0.8rem; color: var(--text-secondary);">
-                            <i class="bi bi-info-circle"></i> Showing <?php echo count($logs); ?> of <?php echo $total_logs; ?> total activities
+                    <div class="card-header-text">
+                        <h3>Recent Activity</h3>
+                        <p>Latest system activities and changes</p>
+                        <?php if ($total_logs > $recent_limit): ?>
+                        <div class="logs-summary">
+                            <small class="text-muted">
+                                <i class="bi bi-info-circle"></i>
+                                Showing <?php echo count($logs); ?> of <?php echo $total_logs; ?> total activities
+                            </small>
                         </div>
                         <?php endif; ?>
                     </div>
+                </div>
+                <div class="card-body">
+                    <?php if (empty($logs)): ?>
+                    <div class="logs-empty">
+                        <i class="bi bi-journal-x"></i>
+                        <p>No recent activity found</p>
+                    </div>
+                    <?php else: ?>
+                    <div class="logs-compact">
+                        <?php foreach ($logs as $log): ?>
+                        <div class="log-item">
+                            <div class="log-icon">
+                                <span class="log-action log-action-<?php echo strtolower($log['action']); ?>">
+                                    <?php
+                                    $action_icon = match(strtolower($log['action'])) {
+                                        'login' => 'bi-box-arrow-in-right',
+                                        'logout' => 'bi-box-arrow-right',
+                                        'create' => 'bi-plus-circle',
+                                        'update' => 'bi-pencil',
+                                        'delete' => 'bi-trash',
+                                        'view' => 'bi-eye',
+                                        default => 'bi-circle'
+                                    };
+                                    ?>
+                                    <i class="bi <?php echo $action_icon; ?>"></i>
+                                </span>
+                            </div>
+                            <div class="log-content">
+                                <div class="log-primary">
+                                    <strong><?php echo htmlspecialchars($log['action']); ?></strong>
+                                    <span class="log-entity"><?php echo htmlspecialchars($log['entity_type']); ?>
+                                        <?php if ($log['entity_id']): ?>
+                                        <small class="text-muted">#<?php echo htmlspecialchars($log['entity_id']); ?></small>
+                                        <?php endif; ?>
+                                    </span>
+                                </div>
+                                <div class="log-secondary">
+                                    <span class="log-user"><?php echo htmlspecialchars(getUserName($pdo, $log['user_id'])); ?></span>
+                                    <span class="log-time"><?php echo date('M d, H:i', strtotime($log['timestamp'])); ?></span>
+                                </div>
+                                <?php if (!empty($log['details'])): ?>
+                                <div class="log-details">
+                                    <?php echo htmlspecialchars($log['details']); ?>
+                                </div>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                        <?php endforeach; ?>
+                    </div>
+
+                    <?php if ($total_logs > 0): ?>
+                    <div class="logs-footer">
+                        <a href="activity_logs.php" class="btn-view-all">
+                            <i class="bi bi-list-ul"></i>
+                            View All Activity Logs (<?php echo $total_logs; ?>)
+                        </a>
+                    </div>
+                    <?php endif; ?>
+                    <?php endif; ?>
                 </div>
             </div>
         </div>

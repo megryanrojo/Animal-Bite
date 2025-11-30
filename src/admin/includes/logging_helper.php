@@ -103,9 +103,7 @@ function getActivityLogs($pdo, $filters = [], $limit = 100, $offset = 0) {
             $params[] = $filters['date_to'];
         }
 
-        $query .= " ORDER BY timestamp DESC LIMIT ? OFFSET ?";
-        $params[] = $limit;
-        $params[] = $offset;
+        $query .= " ORDER BY timestamp DESC LIMIT $limit OFFSET $offset";
 
         $stmt = $pdo->prepare($query);
         $stmt->execute($params);

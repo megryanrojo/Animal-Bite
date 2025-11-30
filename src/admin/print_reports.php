@@ -8,25 +8,25 @@ if (!isset($_SESSION['admin_id'])) {
 require_once '../conn/conn.php';
 
 $type = $_GET['type'] ?? 'all';
-$dateFrom = $_GET['date_from'] ?? '';
-$dateTo = $_GET['date_to'] ?? '';
+$search = $_GET['search'] ?? '';
+$status = $_GET['status'] ?? '';
 $animalType = $_GET['animal_type'] ?? '';
 $biteType = $_GET['bite_type'] ?? '';
 $barangay = $_GET['barangay'] ?? '';
-$status = $_GET['status'] ?? '';
 
 $whereConditions = [];
 $params = [];
 
 if ($type === 'filtered') {
-    if (!empty($dateFrom)) {
-        $whereConditions[] = "r.reportDate >= ?";
-        $params[] = $dateFrom . ' 00:00:00';
+    if (!empty($search)) {
+        $searchTerm = "%$search%";
+        $whereConditions[] = "(p.firstName LIKE ? OR p.lastName LIKE ? OR p.contactNumber LIKE ? OR CONCAT(p.firstName, ' ', p.lastName) LIKE ?)";
+        $params = array_merge($params, [$searchTerm, $searchTerm, $searchTerm, $searchTerm]);
     }
 
-    if (!empty($dateTo)) {
-        $whereConditions[] = "r.reportDate <= ?";
-        $params[] = $dateTo . ' 23:59:59';
+    if (!empty($status)) {
+        $whereConditions[] = "r.status = ?";
+        $params[] = $status;
     }
 
     if (!empty($animalType)) {
@@ -42,11 +42,6 @@ if ($type === 'filtered') {
     if (!empty($barangay)) {
         $whereConditions[] = "p.barangay = ?";
         $params[] = $barangay;
-    }
-
-    if (!empty($status)) {
-        $whereConditions[] = "r.status = ?";
-        $params[] = $status;
     }
 }
 
@@ -353,10 +348,39 @@ try {
                 padding: 2px 5px;
             }
 
-            .footer {
-                margin-top: 16px;
-                font-size: 10pt;
-            }
+        .summary {
+            margin: 16px 0;
+            padding: 12px 16px;
+            background: var(--primary-soft);
+            border-radius: 8px;
+            border-left: 4px solid var(--primary);
+        }
+
+        .summary-text {
+            font-size: 12pt;
+            color: var(--text-main);
+            margin: 0;
+        }
+
+        .summary {
+            margin: 12px 0;
+            padding: 8px 12px;
+            background: #f8f9fa;
+            border-radius: 4px;
+            border-left: 3px solid #0f766e;
+        }
+
+        .summary-text {
+            font-size: 10pt;
+            color: #333;
+            margin: 0;
+            font-weight: normal;
+        }
+
+        .footer {
+            margin-top: 16px;
+            font-size: 10pt;
+        }
         }
     </style>
 </head>
@@ -384,43 +408,54 @@ try {
         <div class="filters">
             <div class="filters-title">Applied filters</div>
             <div class="filters-row">
+                <?php if (!empty($search)): ?>
                 <div>
-                    <span class="filter-pill-label">Date range:</span>
-                    <span class="filter-pill-value">
-                        <?php 
-                            if ($dateFrom && $dateTo) {
-                                echo date('F d, Y', strtotime($dateFrom)) . " - " . date('F d, Y', strtotime($dateTo));
-                            } elseif ($dateFrom) {
-                                echo "From " . date('F d, Y', strtotime($dateFrom));
-                            } elseif ($dateTo) {
-                                echo "Until " . date('F d, Y', strtotime($dateTo));
-                            } else {
-                                echo "All dates";
-                            }
-                        ?>
-                    </span>
+                    <span class="filter-pill-label">Search:</span>
+                    <span class="filter-pill-value">"<?= htmlspecialchars($search); ?>"</span>
                 </div>
-                <div>
-                    <span class="filter-pill-label">Animal type:</span>
-                    <span class="filter-pill-value"><?= $animalType ?: 'All'; ?></span>
-                </div>
-                <div>
-                    <span class="filter-pill-label">Bite category:</span>
-                    <span class="filter-pill-value"><?= $biteType ?: 'All'; ?></span>
-                </div>
-                <div>
-                    <span class="filter-pill-label">Barangay:</span>
-                    <span class="filter-pill-value"><?= $barangay ?: 'All'; ?></span>
-                </div>
+                <?php endif; ?>
+                <?php if (!empty($status)): ?>
                 <div>
                     <span class="filter-pill-label">Status:</span>
-                    <span class="filter-pill-value">
-                        <?= $status ? ucfirst(str_replace('_',' ',$status)) : 'All'; ?>
-                    </span>
+                    <span class="filter-pill-value"><?= ucfirst(str_replace('_',' ',htmlspecialchars($status))); ?></span>
                 </div>
+                <?php endif; ?>
+                <?php if (!empty($animalType)): ?>
+                <div>
+                    <span class="filter-pill-label">Animal type:</span>
+                    <span class="filter-pill-value"><?= htmlspecialchars($animalType); ?></span>
+                </div>
+                <?php endif; ?>
+                <?php if (!empty($biteType)): ?>
+                <div>
+                    <span class="filter-pill-label">Bite category:</span>
+                    <span class="filter-pill-value"><?= htmlspecialchars($biteType); ?></span>
+                </div>
+                <?php endif; ?>
+                <?php if (!empty($barangay)): ?>
+                <div>
+                    <span class="filter-pill-label">Barangay:</span>
+                    <span class="filter-pill-value"><?= htmlspecialchars($barangay); ?></span>
+                </div>
+                <?php endif; ?>
+                <?php if (empty($search) && empty($status) && empty($animalType) && empty($biteType) && empty($barangay)): ?>
+                <div>
+                    <span class="filter-pill-label">Filters:</span>
+                    <span class="filter-pill-value">No specific filters applied</span>
+                </div>
+                <?php endif; ?>
             </div>
         </div>
         <?php endif; ?>
+
+        <div class="summary">
+            <div class="summary-text">
+                Total records: <strong><?php echo count($reports); ?></strong>
+                <?php if ($type === 'filtered'): ?>
+                (filtered results)
+                <?php endif; ?>
+            </div>
+        </div>
 
         <table>
             <thead>

@@ -2,6 +2,7 @@
 session_start();
 
 require_once '../conn/conn.php';
+require_once 'includes/logging_helper.php';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     try {
@@ -28,6 +29,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'email' => $email,
             'password' => $hashedPassword
         ]);
+
+        $staffId = $pdo->lastInsertId();
+
+        // Log staff creation
+        logActivity($pdo, 'CREATE', 'staff', $staffId, null, "Added new staff: {$firstName} {$lastName}");
 
         $_SESSION['message'] = "Staff added successfully!";
         header("Location: add_staff_page.php?success=1");

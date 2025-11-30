@@ -18,8 +18,7 @@ if (!isset($_SESSION['admin_id']) || empty($_SESSION['admin_id'])) {
 
 // Include database connection
 require_once '../conn/conn.php';
-
-// Admin info is not required here; skip fetching profile
+require_once 'includes/logging_helper.php';
 
 // Check if report ID is provided
 if (!isset($_GET['id']) || !is_numeric($_GET['id'])) {
@@ -56,7 +55,7 @@ try {
     $error = "Database error: " . $e->getMessage();
 }
 
-// Server-side classification helper (same heuristic used elsewhere)
+// Server-side classification helper
 function classifyIncidentServer($pdo, $patientId, $input) {
     $biteLocation = strtolower(trim($input['bite_location'] ?? $input['biteLocation'] ?? ''));
     $multiple = !empty($input['multiple_bites']) || (!empty($input['multipleBites']));
@@ -111,7 +110,6 @@ function classifyIncidentServer($pdo, $patientId, $input) {
 
 // Process form submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    // Collect form data
     $biteDate = isset($_POST['bite_date']) ? trim($_POST['bite_date']) : '';
     $animalType = isset($_POST['animal_type']) ? trim($_POST['animal_type']) : '';
     $animalOtherType = isset($_POST['animal_other_type']) ? trim($_POST['animal_other_type']) : null;
@@ -137,7 +135,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $status = isset($_POST['status']) ? trim($_POST['status']) : '';
     $notes = isset($_POST['notes']) ? trim($_POST['notes']) : '';
     
-    // Validate required fields
     $requiredFields = [
         'bite_date' => $biteDate,
         'animal_type' => $animalType,
@@ -146,7 +143,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     ];
     $missingFields = [];
     
-    // (classification helper is defined above to avoid duplicate function declarations)
     foreach ($requiredFields as $label => $value) {
         if (empty($value)) {
             $missingFields[] = ucfirst(str_replace('_', ' ', $label));
@@ -157,7 +153,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $error = 'Please fill in the following required fields: ' . implode(', ', $missingFields);
     } else {
         try {
-            // Determine automated classification (unless override provided)
             $classification = classifyIncidentServer($pdo, $report['patientId'], $_POST);
             if (isset($_POST['category_override']) && !empty($_POST['category_override'])) {
                 $overrideVal = $_POST['category_override'];
@@ -166,73 +161,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $classification['rationale'] .= " [OVERRIDE by admin: {$overrideVal}; reason={$overrideReason}]";
             }
 
-            // Append classification rationale to notes for audit trail
             $notes = trim(($notes ? $notes . "\n\n" : "") . "[Classification] " . $classification['rationale']);
-
-            // Use classification['biteType'] as the biteType to store
             $biteType = $classification['biteType'];
 
-            // Update report information
             $updateStmt = $pdo->prepare("
                 UPDATE reports SET
-                    biteDate = ?,
-                    animalType = ?,
-                    animalOtherType = ?,
-                    animalOwnership = ?,
-                    ownerName = ?,
-                    ownerContact = ?,
-                    animalStatus = ?,
-                    animalVaccinated = ?,
-                    provoked = ?,
-                    multipleBites = ?,
-                    biteLocation = ?,
-                    biteType = ?,
-                    washWithSoap = ?,
-                    rabiesVaccine = ?,
-                    rabiesVaccineDate = ?,
-                    antiTetanus = ?,
-                    antiTetanusDate = ?,
-                    antibiotics = ?,
-                    antibioticsDetails = ?,
-                    referredToHospital = ?,
-                    hospitalName = ?,
-                    followUpDate = ?,
-                    status = ?,
-                    notes = ?
+                    biteDate = ?, animalType = ?, animalOtherType = ?, animalOwnership = ?,
+                    ownerName = ?, ownerContact = ?, animalStatus = ?, animalVaccinated = ?,
+                    provoked = ?, multipleBites = ?, biteLocation = ?, biteType = ?,
+                    washWithSoap = ?, rabiesVaccine = ?, rabiesVaccineDate = ?,
+                    antiTetanus = ?, antiTetanusDate = ?, antibiotics = ?, antibioticsDetails = ?,
+                    referredToHospital = ?, hospitalName = ?, followUpDate = ?, status = ?, notes = ?
                 WHERE reportId = ?
             ");
             
             $updateStmt->execute([
-                $biteDate,
-                $animalType,
-                $animalOtherType,
-                $animalOwnership,
-                $ownerName,
-                $ownerContact,
-                $animalStatus,
-                $animalVaccinated,
-                $provoked,
-                $multipleBites,
-                $biteLocation,
-                $biteType,
-                $washWithSoap,
-                $rabiesVaccine,
-                $rabiesVaccineDate,
-                $antiTetanus,
-                $antiTetanusDate,
-                $antibiotics,
-                $antibioticsDetails,
-                $referredToHospital,
-                $hospitalName,
-                $followUpDate,
-                $status,
-                $notes,
+                $biteDate, $animalType, $animalOtherType, $animalOwnership,
+                $ownerName, $ownerContact, $animalStatus, $animalVaccinated,
+                $provoked, $multipleBites, $biteLocation, $biteType,
+                $washWithSoap, $rabiesVaccine, $rabiesVaccineDate,
+                $antiTetanus, $antiTetanusDate, $antibiotics, $antibioticsDetails,
+                $referredToHospital, $hospitalName, $followUpDate, $status, $notes,
                 $reportId
             ]);
-            
+
             $success = true;
+            logActivity($pdo, 'UPDATE', 'report', $reportId, null, "Updated report details");
             
-            // Refresh report data
             $reportStmt = $pdo->prepare("
                 SELECT r.*, p.firstName, p.lastName, p.dateOfBirth, p.gender, p.barangay, p.contactNumber, p.address
                 FROM reports r
@@ -256,211 +211,535 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         :root {
-            --bs-primary: #0d6efd;
-            --bs-primary-rgb: 13, 110, 253;
-            --bs-secondary: #f8f9fa;
-            --bs-secondary-rgb: 248, 249, 250;
+            --primary: #0ea5e9;
+            --primary-light: #38bdf8;
+            --primary-dark: #0284c7;
+            --bg-color: #f8fafc;
+            --card-bg: #ffffff;
+            --text-primary: #1e293b;
+            --text-secondary: #64748b;
+            --border-color: #e2e8f0;
+            --success: #10b981;
+            --error: #ef4444;
+            --warning: #f59e0b;
         }
-        
+
+        * { box-sizing: border-box; }
+
         body {
-            background-color: #f8f9fa;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 0;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            font-size: 14px;
+            background: var(--bg-color);
+            color: var(--text-primary);
+        }
+
+        .main-content {
             min-height: 100vh;
             display: flex;
             flex-direction: column;
         }
-        
-        .navbar {
-            background-color: white;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+
+        /* Header */
+        .page-header {
+            background: white;
+            border-bottom: 1px solid var(--border-color);
+            padding: 20px 32px;
         }
-        
-        .navbar-brand {
+
+        /* Fixed header layout - simple left-aligned with back button and title */
+        .header-content {
+            max-width: 1200px;
+            margin: 0 auto;
             display: flex;
             align-items: center;
+            gap: 20px;
         }
-        
-        .navbar-brand i {
-            color: var(--bs-primary);
-            margin-right: 0.5rem;
-            font-size: 1.5rem;
-        }
-        
-        .nav-link.active {
-            color: var(--bs-primary) !important;
+
+        .back-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 36px;
+            height: 36px;
+            color: var(--text-secondary);
+            text-decoration: none;
             font-weight: 500;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            transition: all 0.2s;
         }
-        
-        .btn-primary {
-            background-color: var(--bs-primary);
-            border-color: var(--bs-primary);
+
+        .back-btn:hover {
+            background: var(--bg-color);
+            color: var(--primary);
+            border-color: var(--primary-light);
         }
-        
-        .btn-primary:hover {
-            background-color: #0b5ed7;
-            border-color: #0a58ca;
+
+        .header-title {
+            display: flex;
+            align-items: center;
+            gap: 12px;
         }
-        
-        .btn-outline-primary {
-            color: var(--bs-primary);
-            border-color: var(--bs-primary);
-        }
-        
-        .btn-outline-primary:hover {
-            background-color: var(--bs-primary);
-            border-color: var(--bs-primary);
-        }
-        
-        .report-container {
-            max-width: 1000px;
-            margin: 0 auto;
-            padding: 2rem 1rem;
-            flex-grow: 1;
-        }
-        
-        .form-card {
-            background-color: white;
+
+        .header-icon {
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, var(--primary-light), var(--primary));
             border-radius: 10px;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
-            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 1.1rem;
         }
-        
-        .form-header {
-            padding: 1.5rem;
-            border-bottom: 1px solid rgba(0, 0, 0, 0.05);
-            background-color: rgba(var(--bs-primary-rgb), 0.03);
-        }
-        
-        .form-body {
-            padding: 1.5rem;
-        }
-        
-        .form-section {
-            margin-bottom: 2rem;
-            padding-bottom: 1rem;
-            border-bottom: 1px solid rgba(0, 0, 0, 0.05);
-        }
-        
-        .form-section:last-child {
-            margin-bottom: 0;
-            padding-bottom: 0;
-            border-bottom: none;
-        }
-        
-        .section-title {
+
+        .header-title h1 {
             font-size: 1.25rem;
             font-weight: 600;
-            margin-bottom: 1.5rem;
-            color: var(--bs-primary);
+            margin: 0;
+            color: var(--text-primary);
+        }
+
+        .header-title p {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            margin: 2px 0 0 0;
+        }
+
+        /* Content Area */
+        .content-area {
+            flex: 1;
+            padding: 32px;
+            max-width: 1200px;
+            margin: 0 auto;
+            width: 100%;
+        }
+
+        /* Alerts */
+        .alert {
+            padding: 14px 18px;
+            border-radius: 10px;
+            margin-bottom: 24px;
             display: flex;
             align-items: center;
+            gap: 12px;
+            font-size: 0.9rem;
         }
-        
-        .section-title i {
-            margin-right: 0.5rem;
+
+        .alert-success {
+            background: #ecfdf5;
+            color: #065f46;
+            border: 1px solid #a7f3d0;
         }
-        
-        .required-field::after {
-            content: "*";
-            color: #dc3545;
-            margin-left: 4px;
+
+        .alert-error {
+            background: #fef2f2;
+            color: #991b1b;
+            border: 1px solid #fecaca;
         }
-        
-        .footer {
-            background-color: white;
-            padding: 1rem 0;
-            margin-top: auto;
-            border-top: 1px solid rgba(0, 0, 0, 0.05);
+
+        /* Patient Card */
+        .patient-card {
+            background: white;
+            border-radius: 12px;
+            border: 1px solid var(--border-color);
+            padding: 20px 24px;
+            margin-bottom: 24px;
+            display: flex;
+            align-items: center;
+            gap: 16px;
         }
-        
+
+        .patient-avatar {
+            width: 50px;
+            height: 50px;
+            background: linear-gradient(135deg, var(--primary-light), var(--primary));
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 1.2rem;
+        }
+
+        .patient-info h3 {
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin: 0 0 4px 0;
+        }
+
+        .patient-meta {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }
+
+        /* Form Card */
+        .form-card {
+            background: white;
+            border-radius: 12px;
+            border: 1px solid var(--border-color);
+            overflow: hidden;
+            margin-bottom: 24px;
+        }
+
+        .form-card-header {
+            padding: 18px 24px;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .form-card-header i {
+            color: var(--primary);
+            font-size: 1.1rem;
+        }
+
+        .form-card-header h2 {
+            font-size: 1rem;
+            font-weight: 600;
+            margin: 0;
+        }
+
+        .form-card-body {
+            padding: 24px;
+        }
+
+        /* Form Grid */
+        .form-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 20px;
+        }
+
+        .form-grid.single {
+            grid-template-columns: 1fr;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .form-group.full-width {
+            grid-column: 1 / -1;
+        }
+
+        .form-group label {
+            font-size: 0.8rem;
+            font-weight: 500;
+            color: var(--text-primary);
+            margin-bottom: 6px;
+        }
+
+        .form-group label.required::after {
+            content: " *";
+            color: var(--error);
+        }
+
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            padding: 10px 14px;
+            font-size: 0.9rem;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            background: white;
+            transition: all 0.2s;
+            font-family: inherit;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.1);
+        }
+
+        .form-group textarea {
+            resize: vertical;
+            min-height: 100px;
+        }
+
+        /* Checkbox Group */
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 12px 0;
+        }
+
+        .checkbox-group input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            accent-color: var(--primary);
+            cursor: pointer;
+        }
+
+        .checkbox-group label {
+            font-size: 0.9rem;
+            margin: 0;
+            cursor: pointer;
+        }
+
+        /* AI Classification Box */
+        .ai-classification {
+            background: linear-gradient(135deg, #f0f9ff, #e0f2fe);
+            border: 1px solid #bae6fd;
+            border-radius: 10px;
+            padding: 18px;
+            margin-top: 16px;
+            display: none;
+        }
+
+        .ai-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+
+        .ai-header i {
+            color: var(--primary);
+        }
+
+        .ai-header span {
+            font-weight: 600;
+            color: var(--primary-dark);
+            font-size: 0.9rem;
+        }
+
+        .ai-result {
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin-bottom: 12px;
+        }
+
+        .ai-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 10px;
+            margin-bottom: 12px;
+        }
+
+        .ai-item {
+            background: white;
+            padding: 10px;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+        }
+
+        .ai-item-label {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            margin-bottom: 2px;
+        }
+
+        .ai-item-value {
+            font-weight: 600;
+            font-size: 0.9rem;
+        }
+
+        .risk-badges {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+
+        .risk-badge {
+            background: #fef3c7;
+            color: #92400e;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 500;
+        }
+
+        /* Override Section */
+        .override-section {
+            background: #fffbeb;
+            border: 1px solid #fcd34d;
+            border-radius: 10px;
+            padding: 18px;
+            margin-top: 16px;
+            display: none;
+        }
+
+        .override-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 12px;
+            color: #b45309;
+            font-weight: 600;
+        }
+
+        /* Category Info */
+        .category-info {
+            background: var(--bg-color);
+            border-radius: 8px;
+            padding: 16px;
+            margin-top: 16px;
+        }
+
+        .category-info h4 {
+            font-size: 0.85rem;
+            font-weight: 600;
+            margin: 0 0 10px 0;
+        }
+
+        .category-info p {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            margin: 6px 0;
+        }
+
+        .category-info strong {
+            color: var(--text-primary);
+        }
+
+        /* Action Buttons */
+        .form-actions {
+            display: flex;
+            justify-content: flex-end; /* Changed to flex-end since we removed left back button */
+            align-items: center;
+            padding-top: 20px;
+            border-top: 1px solid var(--border-color);
+            margin-top: 24px;
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 20px;
+            font-size: 0.9rem;
+            font-weight: 500;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-decoration: none;
+            border: none;
+            font-family: inherit;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary-light), var(--primary));
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            transform: translateY(-1px);
+        }
+
+        .btn-secondary {
+            background: white;
+            color: var(--text-secondary);
+            border: 1px solid var(--border-color);
+        }
+
+        .btn-secondary:hover {
+            border-color: var(--primary);
+            color: var(--primary);
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 10px;
+        }
+
+        /* Responsive */
         @media (max-width: 768px) {
-            .report-container {
-                padding: 1rem;
-            }
-            
-            .form-header, .form-body {
-                padding: 1rem;
-            }
+            .page-header { padding: 16px 20px; }
+            .header-content { flex-direction: column; gap: 16px; align-items: flex-start; }
+            .content-area { padding: 20px; }
+            .form-grid { grid-template-columns: 1fr; }
+            .patient-card { flex-direction: column; text-align: center; }
+            .form-actions { flex-direction: column; gap: 12px; justify-content: center; } /* Adjusted for mobile */
+            .btn-group { width: 100%; }
+            .btn-group .btn { flex: 1; justify-content: center; }
         }
     </style>
 </head>
 <body>
-    <?php $activePage = 'reports'; include 'includes/navbar.php'; ?>
+    <?php include 'includes/navbar.php'; ?>
 
-    <div class="report-container">
-        <!-- Success Alert -->
-        <?php if ($success): ?>
-        <div class="alert alert-success alert-dismissible fade show mb-4" role="alert">
-            <i class="bi bi-check-circle-fill me-2"></i>
-            <strong>Success!</strong> Report has been updated successfully.
-            <div class="mt-2">
-                <a href="view_report.php?id=<?php echo $reportId; ?>" class="btn btn-sm btn-success me-2">
-                    <i class="bi bi-eye me-1"></i> View Report
+    <div class="main-content">
+        <!-- Page Header -->
+        <div class="page-header">
+            <div class="header-content">
+                <!-- Single back button on left, title next to it, removed duplicate view button -->
+                <a href="view_reports.php" class="back-btn" title="Back to Reports">
+                    <i class="bi bi-arrow-left"></i>
                 </a>
-                <a href="view_reports.php" class="btn btn-sm btn-outline-success">
-                    <i class="bi bi-file-text me-1"></i> View All Reports
-                </a>
-            </div>
-            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-        </div>
-        <?php endif; ?>
-        
-        <!-- Error Alert -->
-        <?php if (!empty($error)): ?>
-        <div class="alert alert-danger alert-dismissible fade show mb-4" role="alert">
-            <i class="bi bi-exclamation-triangle-fill me-2"></i>
-            <strong>Error!</strong> <?php echo $error; ?>
-            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-        </div>
-        <?php endif; ?>
-        
-        <div class="form-card">
-            <div class="form-header">
-                <div class="d-flex justify-content-between align-items-center">
-                    <h2 class="mb-0"><i class="bi bi-pencil-square me-2"></i>Edit Report</h2>
-                </div>
-                <p class="text-muted mb-0 mt-2">Fields marked with <span class="text-danger">*</span> are required</p>
-            </div>
-            
-            <div class="form-body">
-                <form method="POST" action="<?php echo htmlspecialchars($_SERVER['PHP_SELF'] . '?id=' . $reportId); ?>">
-                    <!-- Patient Information Section -->
-                    <div class="form-section">
-                        <h3 class="section-title"><i class="bi bi-person"></i> Patient Information</h3>
-                        <div class="row g-3">
-                            <div class="col-md-6">
-                                <label class="form-label">Patient Name</label>
-                                <input type="text" class="form-control" value="<?php echo htmlspecialchars($report['firstName'] . ' ' . $report['lastName']); ?>" readonly>
-                            </div>
-                            <div class="col-md-6">
-                                <label class="form-label">Contact Number</label>
-                                <input type="text" class="form-control" value="<?php echo htmlspecialchars($report['contactNumber'] ?? ''); ?>" readonly>
-                            </div>
-                            <div class="col-md-6">
-                                <label class="form-label">Barangay</label>
-                                <input type="text" class="form-control" value="<?php echo htmlspecialchars($report['barangay']); ?>" readonly>
-                            </div>
-                            <div class="col-md-6">
-                                <label class="form-label">Address</label>
-                                <input type="text" class="form-control" value="<?php echo htmlspecialchars($report['address'] ?? ''); ?>" readonly>
-                            </div>
-                        </div>
+                <div class="header-title">
+                    <div class="header-icon">
+                        <i class="bi bi-pencil-square"></i>
                     </div>
+                    <div>
+                        <h1>Edit Report #<?php echo $reportId; ?></h1>
+                        <p>Modify animal bite incident details</p>
+                    </div>
+                </div>
+            </div>
+        </div>
 
-                    <!-- Animal Bite Details Section -->
-                    <div class="form-section">
-                        <h3 class="section-title"><i class="bi bi-exclamation-triangle"></i> Animal Bite Details</h3>
-                        <div class="row g-3">
-                            <div class="col-md-6">
-                                <label for="bite_date" class="form-label required-field">Date of Bite</label>
-                                <input type="date" class="form-control" id="bite_date" name="bite_date" value="<?php echo htmlspecialchars($report['biteDate']); ?>" required>
+        <div class="content-area">
+            <!-- Alerts -->
+            <?php if ($success): ?>
+            <div class="alert alert-success">
+                <i class="bi bi-check-circle"></i>
+                <span>Report updated successfully!</span>
+            </div>
+            <?php endif; ?>
+
+            <?php if (!empty($error)): ?>
+            <div class="alert alert-error">
+                <i class="bi bi-exclamation-circle"></i>
+                <span><?php echo htmlspecialchars($error); ?></span>
+            </div>
+            <?php endif; ?>
+
+            <!-- Patient Card -->
+            <div class="patient-card">
+                <div class="patient-avatar">
+                    <i class="bi bi-person"></i>
+                </div>
+                <div class="patient-info">
+                    <h3><?php echo htmlspecialchars($report['firstName'] . ' ' . $report['lastName']); ?></h3>
+                    <div class="patient-meta">
+                        <i class="bi bi-telephone"></i> <?php echo htmlspecialchars($report['contactNumber'] ?? 'No contact'); ?> &nbsp;|&nbsp;
+                        <i class="bi bi-geo-alt"></i> <?php echo htmlspecialchars($report['barangay']); ?>
+                        <?php if (!empty($report['address'])): ?>, <?php echo htmlspecialchars($report['address']); ?><?php endif; ?>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Edit Form -->
+            <form method="POST" action="<?php echo htmlspecialchars($_SERVER['PHP_SELF'] . '?id=' . $reportId); ?>">
+                
+                <!-- Animal Bite Details -->
+                <div class="form-card">
+                    <div class="form-card-header">
+                        <i class="bi bi-exclamation-triangle"></i>
+                        <h2>Animal Bite Details</h2>
+                    </div>
+                    <div class="form-card-body">
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label class="required">Date of Bite</label>
+                                <input type="date" name="bite_date" value="<?php echo htmlspecialchars($report['biteDate'] && $report['biteDate'] !== '0000-00-00' ? $report['biteDate'] : date('Y-m-d')); ?>" required>
                             </div>
-                            
-                            <div class="col-md-6">
-                                <label for="animal_type" class="form-label required-field">Animal Type</label>
-                                <select class="form-select" id="animal_type" name="animal_type" required>
+                            <div class="form-group">
+                                <label class="required">Animal Type</label>
+                                <select name="animal_type" id="animal_type" required>
                                     <option value="">-- Select Animal --</option>
                                     <option value="Dog" <?php echo $report['animalType'] === 'Dog' ? 'selected' : ''; ?>>Dog</option>
                                     <option value="Cat" <?php echo $report['animalType'] === 'Cat' ? 'selected' : ''; ?>>Cat</option>
@@ -468,15 +747,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                     <option value="Other" <?php echo $report['animalType'] === 'Other' ? 'selected' : ''; ?>>Other</option>
                                 </select>
                             </div>
-                            
-                            <div class="col-md-6" id="otherAnimalSection" style="display: <?php echo $report['animalType'] === 'Other' ? 'block' : 'none'; ?>;">
-                                <label for="animal_other_type" class="form-label required-field">Specify Animal</label>
-                                <input type="text" class="form-control" id="animal_other_type" name="animal_other_type" value="<?php echo htmlspecialchars($report['animalOtherType'] ?? ''); ?>">
+                            <div class="form-group" id="otherAnimalSection" style="display: <?php echo $report['animalType'] === 'Other' ? 'flex' : 'none'; ?>;">
+                                <label class="required">Specify Animal</label>
+                                <input type="text" name="animal_other_type" value="<?php echo htmlspecialchars($report['animalOtherType'] ?? ''); ?>">
                             </div>
-                            
-                            <div class="col-md-6">
-                                <label for="animal_ownership" class="form-label required-field">Animal Ownership</label>
-                                <select class="form-select" id="animal_ownership" name="animal_ownership" required>
+                            <div class="form-group">
+                                <label class="required">Animal Ownership</label>
+                                <select name="animal_ownership" id="animal_ownership" required>
                                     <option value="">-- Select Ownership --</option>
                                     <option value="Stray" <?php echo $report['animalOwnership'] === 'Stray' ? 'selected' : ''; ?>>Stray</option>
                                     <option value="Owned by patient" <?php echo $report['animalOwnership'] === 'Owned by patient' ? 'selected' : ''; ?>>Owned by patient</option>
@@ -485,371 +762,362 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                     <option value="Unknown" <?php echo $report['animalOwnership'] === 'Unknown' ? 'selected' : ''; ?>>Unknown</option>
                                 </select>
                             </div>
-                            
-                            <div class="col-md-6" id="ownerSection" style="display: <?php echo in_array($report['animalOwnership'], ['Owned by patient', 'Owned by neighbor', 'Owned by unknown person']) ? 'block' : 'none'; ?>;">
-                                <label for="owner_name" class="form-label">Owner's Name</label>
-                                <input type="text" class="form-control" id="owner_name" name="owner_name" value="<?php echo htmlspecialchars($report['ownerName'] ?? ''); ?>">
+                            <div class="form-group" id="ownerSection" style="display: <?php echo in_array($report['animalOwnership'], ['Owned by neighbor', 'Owned by unknown person']) ? 'flex' : 'none'; ?>;">
+                                <label>Owner's Name</label>
+                                <input type="text" name="owner_name" value="<?php echo htmlspecialchars($report['ownerName'] ?? ''); ?>">
                             </div>
-                            
-                            <div class="col-md-6" id="ownerContactSection" style="display: <?php echo in_array($report['animalOwnership'], ['Owned by patient', 'Owned by neighbor', 'Owned by unknown person']) ? 'block' : 'none'; ?>;">
-                                <label for="owner_contact" class="form-label">Owner's Contact</label>
-                                <input type="text" class="form-control" id="owner_contact" name="owner_contact" value="<?php echo htmlspecialchars($report['ownerContact'] ?? ''); ?>">
+                            <div class="form-group" id="ownerContactSection" style="display: <?php echo in_array($report['animalOwnership'], ['Owned by neighbor', 'Owned by unknown person']) ? 'flex' : 'none'; ?>;">
+                                <label>Owner's Contact</label>
+                                <input type="text" name="owner_contact" value="<?php echo htmlspecialchars($report['ownerContact'] ?? ''); ?>">
                             </div>
-                            
-                            <div class="col-md-6">
-                                <label for="animal_status" class="form-label required-field">Animal Status</label>
-                                <select class="form-select" id="animal_status" name="animal_status" required>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Animal Status & Behavior -->
+                <div class="form-card">
+                    <div class="form-card-header">
+                        <i class="bi bi-activity"></i>
+                        <h2>Animal Status & Behavior</h2>
+                    </div>
+                    <div class="form-card-body">
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label class="required">Animal Status</label>
+                                <select name="animal_status" id="animal_status" required>
                                     <option value="Alive" <?php echo $report['animalStatus'] === 'Alive' ? 'selected' : ''; ?>>Alive</option>
                                     <option value="Dead" <?php echo $report['animalStatus'] === 'Dead' ? 'selected' : ''; ?>>Dead</option>
                                     <option value="Unknown" <?php echo $report['animalStatus'] === 'Unknown' ? 'selected' : ''; ?>>Unknown</option>
                                 </select>
                             </div>
-                            
-                            <div class="col-md-6">
-                                <label for="animal_vaccinated" class="form-label required-field">Animal Vaccinated Against Rabies</label>
-                                <select class="form-select" id="animal_vaccinated" name="animal_vaccinated" required>
+                            <div class="form-group">
+                                <label class="required">Animal Vaccinated</label>
+                                <select name="animal_vaccinated" id="animal_vaccinated" required>
                                     <option value="Yes" <?php echo $report['animalVaccinated'] === 'Yes' ? 'selected' : ''; ?>>Yes</option>
                                     <option value="No" <?php echo $report['animalVaccinated'] === 'No' ? 'selected' : ''; ?>>No</option>
                                     <option value="Unknown" <?php echo $report['animalVaccinated'] === 'Unknown' ? 'selected' : ''; ?>>Unknown</option>
                                 </select>
                             </div>
-                            
-                            <div class="col-md-6">
-                                <label for="provoked" class="form-label required-field">Was the bite provoked?</label>
-                                <select class="form-select" id="provoked" name="provoked" required>
+                            <div class="form-group">
+                                <label class="required">Was the bite provoked?</label>
+                                <select name="provoked" id="provoked" required>
                                     <option value="Yes" <?php echo $report['provoked'] === 'Yes' ? 'selected' : ''; ?>>Yes</option>
                                     <option value="No" <?php echo $report['provoked'] === 'No' ? 'selected' : ''; ?>>No</option>
                                     <option value="Unknown" <?php echo $report['provoked'] === 'Unknown' ? 'selected' : ''; ?>>Unknown</option>
                                 </select>
                             </div>
-                            
-                            <div class="col-md-6">
-                                <div class="form-check mt-4">
-                                    <input class="form-check-input" type="checkbox" id="multiple_bites" name="multiple_bites" <?php echo $report['multipleBites'] ? 'checked' : ''; ?>>
-                                    <label class="form-check-label" for="multiple_bites">
-                                        Multiple Bites
-                                    </label>
+                            <div class="form-group">
+                                <div class="checkbox-group">
+                                    <input type="checkbox" id="multiple_bites" name="multiple_bites" <?php echo $report['multipleBites'] ? 'checked' : ''; ?>>
+                                    <label for="multiple_bites">Multiple Bites</label>
                                 </div>
                             </div>
                         </div>
                     </div>
+                </div>
 
-                    <!-- Bite Location and Classification -->
-                    <div class="form-section">
-                        <h3 class="section-title"><i class="bi bi-bullseye"></i> Bite Location & Classification</h3>
-                        <div class="row g-3">
-                            <div class="col-md-12">
-                                <label for="bite_location" class="form-label required-field">Bite Location (Body Part)</label>
-                                <input type="text" class="form-control" id="bite_location" name="bite_location" value="<?php echo htmlspecialchars($report['biteLocation']); ?>" required>
-                                <div class="form-text">Specify the body part(s) where the bite occurred (e.g., right hand, left leg, face)</div>
+                <!-- Bite Location & Classification -->
+                <div class="form-card">
+                    <div class="form-card-header">
+                        <i class="bi bi-bullseye"></i>
+                        <h2>Bite Location & Classification</h2>
+                    </div>
+                    <div class="form-card-body">
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label class="required">Bite Location</label>
+                                <input type="text" name="bite_location" id="bite_location" placeholder="e.g., right hand, left leg, face" value="<?php echo htmlspecialchars($report['biteLocation']); ?>" required>
                             </div>
-                            
-                            <div class="col-md-12">
-                                <label for="bite_type" class="form-label required-field">Bite Category</label>
-                                <select class="form-select" id="bite_type" name="bite_type" required>
+                            <div class="form-group">
+                                <label class="required">Bite Category</label>
+                                <select name="bite_type" id="bite_type" required>
                                     <option value="">-- Select Category --</option>
                                     <option value="Category I" <?php echo $report['biteType'] === 'Category I' ? 'selected' : ''; ?>>Category I</option>
                                     <option value="Category II" <?php echo $report['biteType'] === 'Category II' ? 'selected' : ''; ?>>Category II</option>
                                     <option value="Category III" <?php echo $report['biteType'] === 'Category III' ? 'selected' : ''; ?>>Category III</option>
                                 </select>
-                                
-                                                                <div id="autoClassification" style="margin-top:10px; padding:10px; border-radius:6px; background:#f8fafc; border:1px solid #e6eef9; display:none;">
-                                                                    <strong>Auto-classification:</strong>
-                                                                    <div id="autoCategory" style="margin-top:6px; font-size:1.05rem;"></div>
-                                                                    <div id="autoRationale" style="margin-top:6px; font-size:0.9rem; color:#475569;"></div>
-                                                                </div>
+                            </div>
+                        </div>
 
-                                                                <div style="margin-top:10px;">
-                                                                    <div class="form-check">
-                                                                        <input class="form-check-input" type="checkbox" id="overrideCheckbox">
-                                                                        <label class="form-check-label" for="overrideCheckbox">Override auto-classification</label>
-                                                                    </div>
-                                                                </div>
+                        <!-- AI Classification -->
+                        <div id="autoClassification" class="ai-classification">
+                            <div class="ai-header">
+                                <i class="bi bi-robot"></i>
+                                <span>AI-Powered Risk Assessment</span>
+                            </div>
+                            <div id="autoCategory" class="ai-result">Analyzing...</div>
+                            <div class="ai-grid">
+                                <div class="ai-item">
+                                    <div class="ai-item-label">Severity</div>
+                                    <div class="ai-item-value" id="severityText">-</div>
+                                </div>
+                                <div class="ai-item">
+                                    <div class="ai-item-label">Risk Score</div>
+                                    <div class="ai-item-value" id="scoreText">-</div>
+                                </div>
+                            </div>
+                            <div class="ai-item-label">Risk Factors:</div>
+                            <div id="riskFactorsList" class="risk-badges"></div>
+                            <div style="margin-top: 12px;">
+                                <div class="ai-item-label">Recommendation:</div>
+                                <div id="recommendationText" style="font-weight: 600; margin-top: 4px;">-</div>
+                            </div>
+                        </div>
 
-                                                                <div id="overrideSection" style="display:none; margin-top:10px;">
-                                                                    <label class="form-label">Manual Category (if overriding)</label>
-                                                                    <select class="form-select" id="category_override" name="category_override">
-                                                                        <option value="">-- Select Override Category --</option>
-                                                                        <option value="Category I">Category I</option>
-                                                                        <option value="Category II">Category II</option>
-                                                                        <option value="Category III">Category III</option>
-                                                                    </select>
-                                                                    <label class="form-label" style="margin-top:8px;">Override Reason</label>
-                                                                    <textarea class="form-control" id="override_reason" name="override_reason" rows="2" placeholder="Explain why you are overriding the automated classification (required when overriding)"></textarea>
-                                                                </div>
+                        <!-- Override Checkbox -->
+                        <div class="checkbox-group" style="margin-top: 16px;">
+                            <input type="checkbox" id="overrideCheckbox">
+                            <label for="overrideCheckbox"><i class="bi bi-shield-exclamation text-warning"></i> Override AI classification</label>
+                        </div>
 
-                                                                <div class="category-info mt-3">
-                                    <h5>Bite Categories:</h5>
-                                    <p><strong>Category I:</strong> Touching or feeding of animals, licks on intact skin</p>
-                                    <p><strong>Category II:</strong> Nibbling of uncovered skin, minor scratches or abrasions without bleeding</p>
-                                    <p><strong>Category III:</strong> Single or multiple transdermal bites or scratches, contamination of mucous membrane or broken skin with saliva from animal licks, exposures due to direct contact with bats</p>
+                        <!-- Override Section -->
+                        <div id="overrideSection" class="override-section">
+                            <div class="override-header">
+                                <i class="bi bi-exclamation-triangle-fill"></i>
+                                <span>Manual Override</span>
+                            </div>
+                            <div class="form-grid">
+                                <div class="form-group">
+                                    <label>Override Category</label>
+                                    <select name="category_override" id="category_override">
+                                        <option value="">-- Select Override Category --</option>
+                                        <option value="Category I">Category I (Low Risk)</option>
+                                        <option value="Category II">Category II (Moderate Risk)</option>
+                                        <option value="Category III">Category III (High Risk)</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label class="required">Override Reason</label>
+                                    <textarea name="override_reason" id="override_reason" placeholder="Please provide reasoning for overriding the AI classification."></textarea>
                                 </div>
                             </div>
                         </div>
-                    </div>
 
-                    <!-- Treatment Information -->
-                    <div class="form-section">
-                        <h3 class="section-title"><i class="bi bi-bandaid"></i> Treatment Information</h3>
-                        <div class="row g-3">
-                            <div class="col-md-6">
-                                <div class="form-check">
-                                    <input class="form-check-input" type="checkbox" id="wash_with_soap" name="wash_with_soap" <?php echo $report['washWithSoap'] ? 'checked' : ''; ?>>
-                                    <label class="form-check-label" for="wash_with_soap">
-                                        Wound washed with soap and water
-                                    </label>
-                                </div>
+                        <!-- Category Info -->
+                        <div class="category-info">
+                            <h4>Bite Categories Reference:</h4>
+                            <p><strong>Category I:</strong> Touching or feeding of animals, licks on intact skin</p>
+                            <p><strong>Category II:</strong> Nibbling of uncovered skin, minor scratches or abrasions without bleeding</p>
+                            <p><strong>Category III:</strong> Single or multiple transdermal bites or scratches, contamination of mucous membrane or broken skin with saliva</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Treatment Information -->
+                <div class="form-card">
+                    <div class="form-card-header">
+                        <i class="bi bi-bandaid"></i>
+                        <h2>Treatment Information</h2>
+                    </div>
+                    <div class="form-card-body">
+                        <div class="form-grid">
+                            <div class="checkbox-group">
+                                <input type="checkbox" id="wash_with_soap" name="wash_with_soap" <?php echo $report['washWithSoap'] ? 'checked' : ''; ?>>
+                                <label for="wash_with_soap">Wound washed with soap and water</label>
                             </div>
-                            
-                            <div class="col-md-6">
-                                <div class="form-check">
-                                    <input class="form-check-input" type="checkbox" id="rabies_vaccine" name="rabies_vaccine" <?php echo $report['rabiesVaccine'] ? 'checked' : ''; ?>>
-                                    <label class="form-check-label" for="rabies_vaccine">
-                                        Rabies vaccine administered
-                                    </label>
-                                </div>
+                            <div class="checkbox-group">
+                                <input type="checkbox" id="rabies_vaccine" name="rabies_vaccine" <?php echo $report['rabiesVaccine'] ? 'checked' : ''; ?>>
+                                <label for="rabies_vaccine">Rabies vaccine administered</label>
                             </div>
-                            
-                            <div class="col-md-6" id="rabiesVaccineDateSection" style="display: <?php echo $report['rabiesVaccine'] ? 'block' : 'none'; ?>;">
-                                <label for="rabies_vaccine_date" class="form-label">Date of Rabies Vaccine</label>
-                                <input type="date" class="form-control" id="rabies_vaccine_date" name="rabies_vaccine_date" value="<?php echo htmlspecialchars($report['rabiesVaccineDate'] ?? ''); ?>">
+                            <div class="form-group" id="rabiesVaccineDateSection" style="display: <?php echo $report['rabiesVaccine'] ? 'flex' : 'none'; ?>;">
+                                <label>Date of Rabies Vaccine</label>
+                                <input type="date" name="rabies_vaccine_date" value="<?php echo htmlspecialchars($report['rabiesVaccineDate'] && $report['rabiesVaccineDate'] !== '0000-00-00' ? $report['rabiesVaccineDate'] : ''); ?>">
                             </div>
-                            
-                            <div class="col-md-6">
-                                <div class="form-check">
-                                    <input class="form-check-input" type="checkbox" id="anti_tetanus" name="anti_tetanus" <?php echo $report['antiTetanus'] ? 'checked' : ''; ?>>
-                                    <label class="form-check-label" for="anti_tetanus">
-                                        Anti-tetanus administered
-                                    </label>
-                                </div>
+                            <div class="checkbox-group">
+                                <input type="checkbox" id="anti_tetanus" name="anti_tetanus" <?php echo $report['antiTetanus'] ? 'checked' : ''; ?>>
+                                <label for="anti_tetanus">Anti-tetanus administered</label>
                             </div>
-                            
-                            <div class="col-md-6" id="antiTetanusDateSection" style="display: <?php echo $report['antiTetanus'] ? 'block' : 'none'; ?>;">
-                                <label for="anti_tetanus_date" class="form-label">Date of Anti-tetanus</label>
-                                <input type="date" class="form-control" id="anti_tetanus_date" name="anti_tetanus_date" value="<?php echo htmlspecialchars($report['antiTetanusDate'] ?? ''); ?>">
+                            <div class="form-group" id="antiTetanusDateSection" style="display: <?php echo $report['antiTetanus'] ? 'flex' : 'none'; ?>;">
+                                <label>Date of Anti-tetanus</label>
+                                <input type="date" name="anti_tetanus_date" value="<?php echo htmlspecialchars($report['antiTetanusDate'] && $report['antiTetanusDate'] !== '0000-00-00' ? $report['antiTetanusDate'] : ''); ?>">
                             </div>
-                            
-                            <div class="col-md-6">
-                                <div class="form-check">
-                                    <input class="form-check-input" type="checkbox" id="antibiotics" name="antibiotics" <?php echo $report['antibiotics'] ? 'checked' : ''; ?>>
-                                    <label class="form-check-label" for="antibiotics">
-                                        Antibiotics prescribed
-                                    </label>
-                                </div>
+                            <div class="checkbox-group">
+                                <input type="checkbox" id="antibiotics" name="antibiotics" <?php echo $report['antibiotics'] ? 'checked' : ''; ?>>
+                                <label for="antibiotics">Antibiotics prescribed</label>
                             </div>
-                            
-                            <div class="col-md-6" id="antibioticsDetailsSection" style="display: <?php echo $report['antibiotics'] ? 'block' : 'none'; ?>;">
-                                <label for="antibiotics_details" class="form-label">Antibiotics Details</label>
-                                <input type="text" class="form-control" id="antibiotics_details" name="antibiotics_details" value="<?php echo htmlspecialchars($report['antibioticsDetails'] ?? ''); ?>" placeholder="Type, dosage, etc.">
+                            <div class="form-group" id="antibioticsDetailsSection" style="display: <?php echo $report['antibiotics'] ? 'flex' : 'none'; ?>;">
+                                <label>Antibiotics Details</label>
+                                <input type="text" name="antibiotics_details" value="<?php echo htmlspecialchars($report['antibioticsDetails'] ?? ''); ?>" placeholder="Type, dosage, etc.">
                             </div>
-                            
-                            <div class="col-md-6">
-                                <div class="form-check">
-                                    <input class="form-check-input" type="checkbox" id="referred_to_hospital" name="referred_to_hospital" <?php echo $report['referredToHospital'] ? 'checked' : ''; ?>>
-                                    <label class="form-check-label" for="referred_to_hospital">
-                                        Referred to hospital
-                                    </label>
-                                </div>
+                            <div class="checkbox-group">
+                                <input type="checkbox" id="referred_to_hospital" name="referred_to_hospital" <?php echo $report['referredToHospital'] ? 'checked' : ''; ?>>
+                                <label for="referred_to_hospital">Referred to hospital</label>
                             </div>
-                            
-                            <div class="col-md-6" id="hospitalNameSection" style="display: <?php echo $report['referredToHospital'] ? 'block' : 'none'; ?>;">
-                                <label for="hospital_name" class="form-label">Hospital Name</label>
-                                <input type="text" class="form-control" id="hospital_name" name="hospital_name" value="<?php echo htmlspecialchars($report['hospitalName'] ?? ''); ?>">
+                            <div class="form-group" id="hospitalNameSection" style="display: <?php echo $report['referredToHospital'] ? 'flex' : 'none'; ?>;">
+                                <label>Hospital Name</label>
+                                <input type="text" name="hospital_name" value="<?php echo htmlspecialchars($report['hospitalName'] ?? ''); ?>">
                             </div>
-                            
-                            <div class="col-md-6">
-                                <label for="followup_date" class="form-label">Follow-up Date</label>
-                                <input type="date" class="form-control" id="followup_date" name="followup_date" value="<?php echo htmlspecialchars($report['followUpDate'] ?? ''); ?>">
+                            <div class="form-group">
+                                <label>Follow-up Date</label>
+                                <input type="date" name="followup_date" value="<?php echo htmlspecialchars($report['followUpDate'] && $report['followUpDate'] !== '0000-00-00' ? $report['followUpDate'] : ''); ?>">
                             </div>
-                            
-                            <div class="col-md-6">
-                                <label for="status" class="form-label required-field">Case Status</label>
-                                <select class="form-select" id="status" name="status" required>
+                            <div class="form-group">
+                                <label class="required">Case Status</label>
+                                <select name="status" required>
                                     <option value="pending" <?php echo $report['status'] === 'pending' ? 'selected' : ''; ?>>Pending</option>
                                     <option value="in_progress" <?php echo $report['status'] === 'in_progress' ? 'selected' : ''; ?>>In Progress</option>
                                     <option value="completed" <?php echo $report['status'] === 'completed' ? 'selected' : ''; ?>>Completed</option>
                                     <option value="referred" <?php echo $report['status'] === 'referred' ? 'selected' : ''; ?>>Referred</option>
+                                    <option value="cancelled" <?php echo $report['status'] === 'cancelled' ? 'selected' : ''; ?>>Cancelled</option>
                                 </select>
                             </div>
                         </div>
                     </div>
+                </div>
 
-                    <!-- Additional Notes Section -->
-                    <div class="form-section">
-                        <h3 class="section-title"><i class="bi bi-journal"></i> Additional Notes</h3>
-                        <div class="mb-3">
-                            <label for="notes" class="form-label">Notes</label>
-                            <textarea class="form-control" id="notes" name="notes" rows="4"><?php echo htmlspecialchars($report['notes'] ?? ''); ?></textarea>
-                            <div class="form-text">Any additional information or observations about the case</div>
+                <!-- Additional Notes -->
+                <div class="form-card">
+                    <div class="form-card-header">
+                        <i class="bi bi-journal-text"></i>
+                        <h2>Additional Notes</h2>
+                    </div>
+                    <div class="form-card-body">
+                        <div class="form-group">
+                            <label>Notes</label>
+                            <textarea name="notes" placeholder="Any additional information or observations about the case"><?php echo htmlspecialchars($report['notes'] ?? ''); ?></textarea>
                         </div>
                     </div>
+                </div>
 
-                    <div class="d-flex justify-content-between mt-4">
-                        <div>
-                            <a href="view_report.php?id=<?php echo $reportId; ?>" class="btn btn-outline-secondary me-2">
-                                <i class="bi bi-arrow-left me-2"></i>Back to Report
-                            </a>
-                            <a href="view_reports.php" class="btn btn-outline-secondary">
-                                <i class="bi bi-file-text me-2"></i>All Reports
-                            </a>
-                        </div>
-                        <div>
-                            <button type="reset" class="btn btn-outline-secondary me-2">
-                                <i class="bi bi-arrow-counterclockwise me-2"></i>Reset Changes
-                            </button>
-                            <button type="submit" class="btn btn-primary">
-                                <i class="bi bi-save me-2"></i>Save Changes
-                            </button>
-                        </div>
+                <!-- Action Buttons -->
+                <!-- Removed duplicate back button from form actions -->
+                <div class="form-actions">
+                    <div class="btn-group">
+                        <button type="reset" class="btn btn-secondary">
+                            <i class="bi bi-arrow-counterclockwise"></i> Reset
+                        </button>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-check-lg"></i> Save Changes
+                        </button>
                     </div>
-                </form>
-            </div>
+                </div>
+            </form>
         </div>
     </div>
 
-    <!-- Footer -->
-    <footer class="footer">
-        <div class="container">
-            <div class="d-flex justify-content-between align-items-center">
-                <div>
-                    <small class="text-muted">&copy; <?php echo date('Y'); ?> Animal Bite Treatment Center</small>
-                </div>
-            </div>
-        </div>
-    </footer>
-
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        const PATIENT_ID = <?php echo json_encode($report['patientId'] ?? null); ?>;
+        document.addEventListener('DOMContentLoaded', function() {
+            const patientId = <?php echo json_encode($report['patientId'] ?? null); ?>;
 
-        // Simple form validation and override enforcement
-        document.querySelector('form').addEventListener('submit', function(event) {
-            const requiredFields = ['bite_date', 'animal_type', 'bite_type', 'bite_location'];
-            let isValid = true;
-            
-            requiredFields.forEach(field => {
-                const input = document.getElementById(field);
-                if (!input || !input.value || !input.value.toString().trim()) {
-                    if (input) input.classList.add('is-invalid');
-                    isValid = false;
-                } else {
-                    if (input) input.classList.remove('is-invalid');
+            // Form field visibility toggles
+            const toggleFields = [
+                { checkbox: 'rabies_vaccine', section: 'rabiesVaccineDateSection' },
+                { checkbox: 'anti_tetanus', section: 'antiTetanusDateSection' },
+                { checkbox: 'antibiotics', section: 'antibioticsDetailsSection' },
+                { checkbox: 'referred_to_hospital', section: 'hospitalNameSection' }
+            ];
+
+            toggleFields.forEach(({ checkbox, section }) => {
+                const checkboxEl = document.getElementById(checkbox);
+                const sectionEl = document.getElementById(section);
+                if (checkboxEl && sectionEl) {
+                    checkboxEl.addEventListener('change', function() {
+                        sectionEl.style.display = this.checked ? 'flex' : 'none';
+                    });
                 }
             });
+
+            // Animal type handler
+            document.getElementById('animal_type').addEventListener('change', function() {
+                document.getElementById('otherAnimalSection').style.display = this.value === 'Other' ? 'flex' : 'none';
+            });
+
+            // Animal ownership handler
+            document.getElementById('animal_ownership').addEventListener('change', function() {
+                const show = this.value === 'Owned by neighbor' || this.value === 'Owned by unknown person';
+                document.getElementById('ownerSection').style.display = show ? 'flex' : 'none';
+                document.getElementById('ownerContactSection').style.display = show ? 'flex' : 'none';
+            });
+
+            // Override toggle
+            document.getElementById('overrideCheckbox').addEventListener('change', function() {
+                document.getElementById('overrideSection').style.display = this.checked ? 'block' : 'none';
+                if (!this.checked) {
+                    document.getElementById('category_override').value = '';
+                    document.getElementById('override_reason').value = '';
+                    runClassify();
+                }
+            });
+
+            // AI Classification
+            let classifyTimeout = null;
+            const inputs = ['bite_location', 'animal_type', 'animal_ownership', 'animal_status', 'animal_vaccinated', 'provoked', 'multiple_bites'];
             
-            const overrideCheckbox = document.getElementById('overrideCheckbox');
-            const overrideReason = document.getElementById('override_reason');
-            if (overrideCheckbox && overrideCheckbox.checked) {
-                if (!overrideReason || !overrideReason.value.trim()) {
-                    alert('Please provide a reason for overriding the automated classification.');
-                    event.preventDefault();
+            function scheduleClassify() {
+                if (classifyTimeout) clearTimeout(classifyTimeout);
+                classifyTimeout = setTimeout(runClassify, 600);
+            }
+
+            function runClassify() {
+                const biteLocation = document.getElementById('bite_location').value;
+                const animalType = document.getElementById('animal_type').value;
+                
+                if (!patientId || !biteLocation.trim() || !animalType) {
+                    document.getElementById('autoClassification').style.display = 'none';
                     return;
                 }
+
+                const formData = new FormData();
+                formData.append('patient_id', patientId);
+                formData.append('bite_location', biteLocation);
+                formData.append('animal_type', animalType);
+                formData.append('animal_ownership', document.getElementById('animal_ownership').value);
+                formData.append('animal_status', document.getElementById('animal_status').value);
+                formData.append('animal_vaccinated', document.getElementById('animal_vaccinated').value);
+                formData.append('provoked', document.getElementById('provoked').value);
+                formData.append('multiple_bites', document.getElementById('multiple_bites').checked ? '1' : '');
+
+                fetch('classify_incident.php', { method: 'POST', body: formData })
+                    .then(r => r.json())
+                    .then(json => {
+                        if (json.success && json.data) {
+                            const d = json.data;
+                            const box = document.getElementById('autoClassification');
+                            box.style.display = 'block';
+                            
+                            const cat = document.getElementById('autoCategory');
+                            cat.textContent = d.biteType;
+                            cat.className = 'ai-result ' + (d.biteType === 'Category III' ? 'text-danger' : d.biteType === 'Category II' ? 'text-warning' : 'text-success');
+                            
+                            document.getElementById('severityText').textContent = d.severity;
+                            document.getElementById('scoreText').innerHTML = d.score + '/' + d.maxScore;
+                            
+                            if (d.riskFactors) {
+                                document.getElementById('riskFactorsList').innerHTML = d.riskFactors.map(f => '<span class="risk-badge">' + f + '</span>').join(' ');
+                            }
+                            
+                            const rec = document.getElementById('recommendationText');
+                            rec.textContent = d.recommendation || '-';
+                            rec.className = d.biteType === 'Category III' ? 'text-danger' : d.biteType === 'Category II' ? 'text-warning' : 'text-success';
+                            
+                            if (!document.getElementById('overrideCheckbox').checked) {
+                                document.getElementById('bite_type').value = d.biteType;
+                            }
+                        }
+                    })
+                    .catch(err => {
+                        console.error('Classification error:', err);
+                        document.getElementById('autoClassification').style.display = 'none';
+                    });
             }
 
-            if (!isValid) {
-                event.preventDefault();
-                alert('Please fill in all required fields.');
-            }
-        });
+            inputs.forEach(id => {
+                const el = document.getElementById(id);
+                if (el) {
+                    el.addEventListener('change', scheduleClassify);
+                    el.addEventListener('input', scheduleClassify);
+                }
+            });
 
-        document.addEventListener('DOMContentLoaded', function() {
-            // Toggle sections based on checkbox states
-            const rabiesVaccineCheckbox = document.getElementById('rabies_vaccine');
-            const rabiesVaccineDateSection = document.getElementById('rabiesVaccineDateSection');
-            const antiTetanusCheckbox = document.getElementById('anti_tetanus');
-            const antiTetanusDateSection = document.getElementById('antiTetanusDateSection');
-            const antibioticsCheckbox = document.getElementById('antibiotics');
-            const antibioticsDetailsSection = document.getElementById('antibioticsDetailsSection');
-            const referredToHospitalCheckbox = document.getElementById('referred_to_hospital');
-            const hospitalNameSection = document.getElementById('hospitalNameSection');
-
-            function toggleSection(checkbox, section) {
-                if (!checkbox || !section) return;
-                section.style.display = checkbox.checked ? 'block' : 'none';
-            }
-
-            if (rabiesVaccineCheckbox && rabiesVaccineDateSection) rabiesVaccineCheckbox.addEventListener('change', () => toggleSection(rabiesVaccineCheckbox, rabiesVaccineDateSection));
-            if (antiTetanusCheckbox && antiTetanusDateSection) antiTetanusCheckbox.addEventListener('change', () => toggleSection(antiTetanusCheckbox, antiTetanusDateSection));
-            if (antibioticsCheckbox && antibioticsDetailsSection) antibioticsCheckbox.addEventListener('change', () => toggleSection(antibioticsCheckbox, antibioticsDetailsSection));
-            if (referredToHospitalCheckbox && hospitalNameSection) referredToHospitalCheckbox.addEventListener('change', () => toggleSection(referredToHospitalCheckbox, hospitalNameSection));
-
-            // Classification UI elements
-            const autoDiv = document.getElementById('autoClassification');
-            const autoCategory = document.getElementById('autoCategory');
-            const autoRationale = document.getElementById('autoRationale');
-            const overrideCheckbox = document.getElementById('overrideCheckbox');
-            const overrideSection = document.getElementById('overrideSection');
-            const biteLocationInput = document.getElementById('bite_location');
-            const animalOwnershipInput = document.getElementById('animal_ownership');
-            const animalVaccinatedInput = document.getElementById('animal_vaccinated');
-            const provokedInput = document.getElementById('provoked');
-            const multipleBitesInput = document.getElementById('multiple_bites');
-            const biteTypeSelect = document.getElementById('bite_type');
-
-            let classifyTimer = null;
-            function scheduleClassification() {
-                if (classifyTimer) clearTimeout(classifyTimer);
-                classifyTimer = setTimeout(runClassification, 450);
-            }
-
-            function runClassification() {
-                if (!biteLocationInput) return;
-                const payload = new URLSearchParams();
-                payload.append('patient_id', PATIENT_ID);
-                payload.append('bite_location', biteLocationInput.value || '');
-                if (animalOwnershipInput) payload.append('animal_ownership', animalOwnershipInput.value || '');
-                if (animalVaccinatedInput) payload.append('animal_vaccinated', animalVaccinatedInput.value || '');
-                if (provokedInput) payload.append('provoked', provokedInput.value || '');
-                if (multipleBitesInput) payload.append('multiple_bites', multipleBitesInput.checked ? '1' : '0');
-
-                fetch('classify_incident.php', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                    body: payload.toString()
-                }).then(r => r.json()).then(data => {
-                    if (!data) return;
-                    // Accept both shapes: {biteType, rationale, score} or {success:true,data:{...}}
-                    const res = data.data ? data.data : data;
-                    if (!res) return;
-                    autoDiv.style.display = 'block';
-                    autoCategory.textContent = res.biteType + (res.severity ? (' — ' + res.severity) : '');
-                    autoRationale.textContent = res.rationale || ('Score: ' + (res.score ?? 'N/A'));
-
-                    if (overrideCheckbox && !overrideCheckbox.checked) {
-                        if (biteTypeSelect) biteTypeSelect.value = res.biteType;
-                    }
-                }).catch(err => {
-                    console.error('Classification error', err);
-                });
-            }
-
-            // Wire inputs to classification
-            if (biteLocationInput) biteLocationInput.addEventListener('input', scheduleClassification);
-            if (animalOwnershipInput) animalOwnershipInput.addEventListener('change', scheduleClassification);
-            if (animalVaccinatedInput) animalVaccinatedInput.addEventListener('change', scheduleClassification);
-            if (provokedInput) provokedInput.addEventListener('change', scheduleClassification);
-            if (multipleBitesInput) multipleBitesInput.addEventListener('change', scheduleClassification);
-
-            if (overrideCheckbox) {
-                overrideCheckbox.addEventListener('change', function() {
-                    if (this.checked) {
-                        overrideSection.style.display = 'block';
-                    } else {
-                        overrideSection.style.display = 'none';
-                        const overrideReason = document.getElementById('override_reason');
-                        if (overrideReason) overrideReason.value = '';
-                    }
-                });
-            }
-
-            // Initial run
-            scheduleClassification();
+            // Initial classification
+            setTimeout(() => {
+                if (document.getElementById('bite_location').value && document.getElementById('animal_type').value) {
+                    runClassify();
+                }
+            }, 800);
         });
     </script>
 </body>
 </html>
-<?php
-// End output buffering and send output to browser
-ob_end_flush();
-?> 
+<?php ob_end_flush(); ?>

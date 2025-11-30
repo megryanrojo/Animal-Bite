@@ -1,6 +1,7 @@
 <?php
 session_start();
-require_once '../conn/conn.php'; 
+require_once '../conn/conn.php';
+require_once '../admin/includes/logging_helper.php'; 
 
 // --- Rate Limiting Settings ---
 define('MAX_ATTEMPTS', 5);
@@ -54,13 +55,19 @@ if (!$locked_out && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['email
                 $_SESSION['admin_name'] = $admin['name'];
                 $_SESSION['admin_email'] = $admin['email'];
 
+                // Log successful login
+                logActivity($pdo, 'LOGIN', 'admin', $admin['adminId'], $admin['adminId'], "Admin logged in successfully");
+
               // Show a success message on this page, then let client-side JS redirect
               $success = "Login successful!";
               // Note: do not redirect here so the alert can be rendered for the user
             } else {
                 // Failed login attempt: increment counter
                 $_SESSION['admin_login_attempts']++;
-                
+
+                // Log failed login attempt
+                logActivity($pdo, 'LOGIN_FAILED', 'admin', null, null, "Failed login attempt for email: {$email}");
+
                 if ($_SESSION['admin_login_attempts'] >= MAX_ATTEMPTS) {
                     // Trigger lockout
                     $_SESSION['admin_lockout_time'] = time();

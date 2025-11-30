@@ -335,6 +335,30 @@ function getCategoryClass($category) {
             gap: 4px;
         }
         .btn-view:hover { background: #e2e8f0; color: #1e293b; }
+
+        .action-buttons {
+            display: flex;
+            gap: 6px;
+            align-items: center;
+        }
+
+        .btn-edit {
+            background: #fef3c7;
+            color: #92400e;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 5px;
+            font-size: 0.8rem;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .btn-edit:hover {
+            background: #fde68a;
+            color: #78350f;
+        }
         .empty-state {
             text-align: center;
             padding: 48px;
@@ -500,9 +524,14 @@ function getCategoryClass($category) {
                             <td><span class="status-badge <?php echo getStatusClass($r['status']); ?>"><?php echo ucfirst(str_replace('_', ' ', $r['status'])); ?></span></td>
                             <td><?php echo $r['reportDate'] ? date('M d, Y', strtotime($r['reportDate'])) : '<span style="color:#94a3b8">—</span>'; ?></td>
                             <td>
-                                <a href="view_report.php?id=<?php echo $r['reportId']; ?>" class="btn-view">
-                                    <i class="bi bi-eye"></i> View
-                                </a>
+                                <div class="action-buttons">
+                                    <a href="view_report.php?id=<?php echo $r['reportId']; ?>" class="btn-view">
+                                        <i class="bi bi-eye"></i> View
+                                    </a>
+                                    <a href="edit_report.php?id=<?php echo $r['reportId']; ?>" class="btn-edit">
+                                        <i class="bi bi-pencil"></i> Edit
+                                    </a>
+                                </div>
                             </td>
                         </tr>
                     <?php endforeach; ?>

@@ -272,6 +272,8 @@ try {
         .badge-pending { background: #dbeafe; color: #1e40af; }
         .badge-in-progress { background: #e0e7ff; color: #4338ca; }
         .badge-completed { background: #dcfce7; color: #166534; }
+        .badge-referred { background: #f3e8ff; color: #6b21a8; }
+        .badge-cancelled { background: #fee2e2; color: #991b1b; }
         
         .btn-view {
             padding: 0.5rem 1rem;

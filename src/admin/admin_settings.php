@@ -6,6 +6,7 @@ if (!isset($_SESSION['admin_id'])) {
 }
 
 require_once '../conn/conn.php';
+require_once 'includes/logging_helper.php';
 
 $admin_id = $_SESSION['admin_id'];
 $stmt = $pdo->prepare("SELECT name, email FROM admin WHERE adminId = ?");
@@ -15,6 +16,16 @@ $admin = $stmt->fetch(PDO::FETCH_ASSOC);
 $account_updated = false;
 $password_updated = false;
 $error = "";
+
+// Activity logs
+$page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
+$limit = 20;
+$offset = ($page - 1) * $limit;
+
+// Get activity logs with pagination
+$logs = getActivityLogs($pdo, [], $limit, $offset);
+$total_logs = getActivityLogCount($pdo, []);
+$total_pages = ceil($total_logs / $limit);
 
 // Handle form submissions
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
@@ -42,6 +53,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                     $_SESSION['admin_name'] = $name;
                     $admin['name'] = $name;
                     $admin['email'] = $email;
+
+                    // Log account update
+                    logActivity($pdo, 'UPDATE', 'admin', $admin_id, $admin_id, "Updated account information: name='$name', email='$email'");
                 } catch (PDOException $e) {
                     $error = "Error updating account: " . $e->getMessage();
                 }
@@ -74,6 +88,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 try {
                     $stmt->execute([$hashed_password, $admin_id]);
                     $password_updated = true;
+
+                    // Log password change
+                    logActivity($pdo, 'UPDATE', 'admin', $admin_id, $admin_id, "Password changed");
                 } catch (PDOException $e) {
                     $error = "Error updating password: " . $e->getMessage();
                 }
@@ -154,7 +171,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
         .settings-grid {
             display: grid;
-            grid-template-columns: repeat(2, 1fr);
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
             gap: 24px;
         }
 
@@ -351,6 +368,103 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             background: var(--bg-color);
             border-color: var(--primary-color);
             color: var(--primary-color);
+        }
+
+        /* Logs Table Styles */
+        .logs-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.85rem;
+        }
+
+        .logs-table thead th {
+            background: var(--bg-color);
+            padding: 12px 8px;
+            text-align: left;
+            font-weight: 600;
+            color: var(--text-primary);
+            border-bottom: 2px solid var(--border-color);
+        }
+
+        .logs-table tbody td {
+            padding: 12px 8px;
+            border-bottom: 1px solid var(--border-color);
+            vertical-align: top;
+        }
+
+        .logs-table tbody tr:hover {
+            background: var(--bg-color);
+        }
+
+        .log-action {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .log-action-create { background: #ecfdf5; color: #065f46; }
+        .log-action-update { background: #fef3c7; color: #92400e; }
+        .log-action-delete { background: #fef2f2; color: #991b1b; }
+        .log-action-view { background: #eff6ff; color: #1e40af; }
+        .log-action-login { background: #f0fdf4; color: #166534; }
+
+        .log-entity {
+            color: var(--text-secondary);
+            font-size: 0.8rem;
+        }
+
+        .log-details {
+            color: var(--text-secondary);
+            font-size: 0.8rem;
+            max-width: 200px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .log-timestamp {
+            color: var(--text-secondary);
+            font-size: 0.8rem;
+            white-space: nowrap;
+        }
+
+        .pagination {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 8px;
+            margin-top: 16px;
+        }
+
+        .pagination a, .pagination span {
+            display: inline-block;
+            padding: 6px 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            text-decoration: none;
+            color: var(--text-primary);
+            font-size: 0.85rem;
+        }
+
+        .pagination a:hover {
+            background: var(--primary-color);
+            color: white;
+            border-color: var(--primary-color);
+        }
+
+        .pagination .current {
+            background: var(--primary-color);
+            color: white;
+            border-color: var(--primary-color);
+        }
+
+        .logs-empty {
+            text-align: center;
+            padding: 40px 20px;
+            color: var(--text-secondary);
         }
 
         /* Mobile Responsive */
@@ -554,6 +668,88 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                                 <i class="bi bi-info-circle"></i> Data exports include all current records. Large datasets may take time to process.
                             </p>
                         </div>
+                    </div>
+                </div>
+
+                <!-- Activity Logs -->
+                <div class="settings-card">
+                    <div class="settings-card-header">
+                        <div class="icon">
+                            <i class="bi bi-journal-text"></i>
+                        </div>
+                        <div>
+                            <h3>Activity Logs</h3>
+                            <p>Recent system activity and audit trail</p>
+                        </div>
+                    </div>
+                    <div class="settings-card-body">
+                        <?php if (empty($logs)): ?>
+                        <div class="logs-empty">
+                            <i class="bi bi-journal-x" style="font-size: 2rem; color: var(--text-secondary);"></i>
+                            <p>No activity logs found</p>
+                        </div>
+                        <?php else: ?>
+                        <div style="overflow-x: auto;">
+                            <table class="logs-table">
+                                <thead>
+                                    <tr>
+                                        <th>Action</th>
+                                        <th>Entity</th>
+                                        <th>User</th>
+                                        <th>Details</th>
+                                        <th>Timestamp</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php foreach ($logs as $log): ?>
+                                    <tr>
+                                        <td>
+                                            <span class="log-action log-action-<?php echo strtolower($log['action']); ?>">
+                                                <?php echo htmlspecialchars($log['action']); ?>
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <div><?php echo htmlspecialchars($log['entity_type']); ?></div>
+                                            <?php if ($log['entity_id']): ?>
+                                            <div class="log-entity">ID: <?php echo htmlspecialchars($log['entity_id']); ?></div>
+                                            <?php endif; ?>
+                                        </td>
+                                        <td><?php echo htmlspecialchars(getUserName($pdo, $log['user_id'])); ?></td>
+                                        <td>
+                                            <div class="log-details" title="<?php echo htmlspecialchars($log['details'] ?? ''); ?>">
+                                                <?php echo htmlspecialchars($log['details'] ?? ''); ?>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <div class="log-timestamp"><?php echo date('M d, H:i', strtotime($log['timestamp'])); ?></div>
+                                            <div class="log-entity"><?php echo date('Y', strtotime($log['timestamp'])); ?></div>
+                                        </td>
+                                    </tr>
+                                    <?php endforeach; ?>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <?php if ($total_pages > 1): ?>
+                        <div class="pagination">
+                            <?php if ($page > 1): ?>
+                            <a href="?page=<?php echo $page - 1; ?>">&laquo; Previous</a>
+                            <?php endif; ?>
+
+                            <?php for ($i = max(1, $page - 2); $i <= min($total_pages, $page + 2); $i++): ?>
+                            <a href="?page=<?php echo $i; ?>" class="<?php echo $i === $page ? 'current' : ''; ?>" style="pointer-events: <?php echo $i === $page ? 'none' : 'auto'; ?>;"><?php echo $i; ?></a>
+                            <?php endfor; ?>
+
+                            <?php if ($page < $total_pages): ?>
+                            <a href="?page=<?php echo $page + 1; ?>">Next &raquo;</a>
+                            <?php endif; ?>
+                        </div>
+                        <?php endif; ?>
+
+                        <div style="margin-top: 16px; font-size: 0.8rem; color: var(--text-secondary);">
+                            <i class="bi bi-info-circle"></i> Showing <?php echo count($logs); ?> of <?php echo $total_logs; ?> total activities
+                        </div>
+                        <?php endif; ?>
                     </div>
                 </div>
             </div>

@@ -26,7 +26,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'password' => $hashedPassword
         ]);
 
-        echo "<script>alert('Admin registered successfully!'); window.location.href='../login/admin_login.html';</script>";
+        echo "<script>alert('Admin registered successfully!'); window.location.href='../login/admin_login.php';</script>";
     } catch (PDOException $e) {
         die("Error: " . $e->getMessage());
     }

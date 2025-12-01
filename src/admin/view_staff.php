@@ -56,7 +56,7 @@ $totalRecords = $stmt->fetchColumn();
 $totalPages = ceil($totalRecords / $recordsPerPage);
 
 // Get staff records
-$stmt = $pdo->prepare("SELECT staffId, firstName, lastName, birthDate, contactNumber, email FROM staff $searchCondition ORDER BY lastName, firstName LIMIT $offset, $recordsPerPage");
+    $stmt = $pdo->prepare("SELECT staffId, firstName, lastName, birthDate, contactNumber, email, assignedBarangay FROM staff $searchCondition ORDER BY lastName, firstName LIMIT $offset, $recordsPerPage");
 if (!empty($params)) {
     $stmt->execute($params);
 } else {
@@ -719,6 +719,7 @@ $staffMembers = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                 <th>Staff Member</th>
                                 <th>Contact Number</th>
                                 <th>Email</th>
+                                <th>Barangay</th>
                                 <th>Birth Date</th>
                                 <th>Actions</th>
                             </tr>
@@ -726,7 +727,7 @@ $staffMembers = $stmt->fetchAll(PDO::FETCH_ASSOC);
                         <tbody>
                             <?php if (empty($staffMembers)): ?>
                             <tr>
-                                <td colspan="5">
+                                <td colspan="6">
                                     <div class="empty-state">
                                         <i class="bi bi-people"></i>
                                         <p>No staff members found.</p>
@@ -749,6 +750,7 @@ $staffMembers = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                     </td>
                                     <td data-label="Contact"><?php echo htmlspecialchars($staff['contactNumber']); ?></td>
                                     <td data-label="Email"><?php echo htmlspecialchars($staff['email']); ?></td>
+                                    <td data-label="Barangay"><?php echo htmlspecialchars($staff['assignedBarangay'] ?? 'Not assigned'); ?></td>
                                     <td data-label="Birth Date"><?php echo date('M d, Y', strtotime($staff['birthDate'])); ?></td>
                                     <td data-label="">
                                         <div class="actions-cell">
@@ -834,5 +836,12 @@ $staffMembers = $stmt->fetchAll(PDO::FETCH_ASSOC);
     </div>
     
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        function confirmLogout() {
+            if (confirm('Are you sure you want to log out?')) {
+                window.location.href = '../logout/admin_logout.php';
+            }
+        }
+    </script>
 </body>
 </html>

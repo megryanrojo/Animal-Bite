@@ -10,21 +10,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $lastName = trim($_POST['lastName']);
         $birthDate = $_POST['birthDate'];
         $address = trim($_POST['address']);
+        $assignedBarangay = trim($_POST['assignedBarangay']);
         $contactNumber = trim($_POST['contactNumber']);
         $email = trim($_POST['email']);
         $password = $_POST['password'];
 
         $hashedPassword = password_hash($password, PASSWORD_DEFAULT);
 
-        $stmt = $pdo->prepare("INSERT INTO staff 
-            (firstName, lastName, birthDate, address, contactNumber, email, password) 
-            VALUES (:firstName, :lastName, :birthDate, :address, :contactNumber, :email, :password)");
+        $stmt = $pdo->prepare("INSERT INTO staff
+            (firstName, lastName, birthDate, address, assignedBarangay, contactNumber, email, password)
+            VALUES (:firstName, :lastName, :birthDate, :address, :assignedBarangay, :contactNumber, :email, :password)");
 
         $stmt->execute([
             'firstName' => $firstName,
             'lastName' => $lastName,
             'birthDate' => $birthDate,
             'address' => $address,
+            'assignedBarangay' => $assignedBarangay,
             'contactNumber' => $contactNumber,
             'email' => $email,
             'password' => $hashedPassword

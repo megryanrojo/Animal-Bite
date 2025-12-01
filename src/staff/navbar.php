@@ -1,8 +1,8 @@
 <?php
-if (!isset($staff) && isset($_SESSION['staffId'])) {
+if (!isset($staff) && isset($_SESSION['staff_id'])) {
     require_once '../conn/conn.php';
     $stmt = $pdo->prepare("SELECT firstName, lastName FROM staff WHERE staffId = ?");
-    $stmt->execute([$_SESSION['staffId']]);
+    $stmt->execute([$_SESSION['staff_id']]);
     $staff = $stmt->fetch(PDO::FETCH_ASSOC);
 }
 ?>

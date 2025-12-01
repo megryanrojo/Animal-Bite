@@ -163,9 +163,9 @@ $is_records_active = in_array($current_page, $records_pages);
                 </li>
 
                 <li class="nav-item ms-2">
-                    <a class="nav-link btn-logout" href="../logout/admin_logout.php" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Sign out of the system">
+                    <button class="nav-link btn-logout" onclick="confirmLogout()" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Sign out of the system">
                         <i class="bi bi-box-arrow-right me-1"></i>Logout
-                    </a>
+                    </button>
                 </li>
             </ul>
         </div>

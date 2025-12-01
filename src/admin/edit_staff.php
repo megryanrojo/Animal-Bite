@@ -7,6 +7,14 @@ if (!isset($_SESSION['admin_id'])) {
 
 require_once '../conn/conn.php';
 
+// Fetch available barangays for dropdown
+try {
+    $stmt = $pdo->query("SELECT barangay FROM barangay_coordinates ORDER BY barangay");
+    $barangays = $stmt->fetchAll(PDO::FETCH_COLUMN);
+} catch (PDOException $e) {
+    $barangays = [];
+}
+
 // Check if staff ID is provided
 if (!isset($_GET['id']) || !is_numeric($_GET['id'])) {
     $_SESSION['error'] = "Invalid staff ID.";
@@ -23,9 +31,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $lastName = trim($_POST['lastName']);
         $birthDate = $_POST['birthDate'];
         $address = trim($_POST['address']);
+        $assignedBarangay = trim($_POST['assignedBarangay']);
         $contactNumber = trim($_POST['contactNumber']);
         $email = trim($_POST['email']);
-        
+
         // Check if password should be updated
         $passwordUpdate = "";
         $params = [
@@ -33,6 +42,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'lastName' => $lastName,
             'birthDate' => $birthDate,
             'address' => $address,
+            'assignedBarangay' => $assignedBarangay,
             'contactNumber' => $contactNumber,
             'email' => $email,
             'staffId' => $staffId
@@ -45,13 +55,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $params['password'] = $hashedPassword;
         }
 
-        $stmt = $pdo->prepare("UPDATE staff SET 
-            firstName = :firstName, 
-            lastName = :lastName, 
-            birthDate = :birthDate, 
-            address = :address, 
-            contactNumber = :contactNumber, 
-            email = :email" . $passwordUpdate . " 
+        $stmt = $pdo->prepare("UPDATE staff SET
+            firstName = :firstName,
+            lastName = :lastName,
+            birthDate = :birthDate,
+            address = :address,
+            assignedBarangay = :assignedBarangay,
+            contactNumber = :contactNumber,
+            email = :email" . $passwordUpdate . "
             WHERE staffId = :staffId");
 
         $stmt->execute($params);
@@ -326,6 +337,18 @@ try {
               <div class="form-floating">
                 <textarea name="address" id="address" class="form-control" placeholder="Address" style="height: 100px" required><?php echo htmlspecialchars($staff['address']); ?></textarea>
                 <label for="address">Address</label>
+              </div>
+            </div>
+
+            <div class="mb-3">
+              <div class="form-floating">
+                <select name="assignedBarangay" id="assignedBarangay" class="form-select" required>
+                  <option value="">Select Barangay</option>
+                  <?php foreach ($barangays as $barangay): ?>
+                    <option value="<?php echo htmlspecialchars($barangay); ?>" <?php echo ($staff['assignedBarangay'] ?? '') === $barangay ? 'selected' : ''; ?>><?php echo htmlspecialchars($barangay); ?></option>
+                  <?php endforeach; ?>
+                </select>
+                <label for="assignedBarangay">Assigned Barangay</label>
               </div>
             </div>
           </div>

@@ -277,26 +277,102 @@ body {
   font-weight: 700;
   line-height: 1.2;
   letter-spacing: -0.03em;
-  margin-bottom: 1.5rem;
-}
-
-.branding-main p {
-  font-size: 1.125rem;
-  color: rgba(255, 255, 255, 0.8);
-  line-height: 1.7;
-  margin-bottom: 2.5rem;
+  margin-bottom: 1rem;
 }
 
 .feature-list {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
 }
 
 .feature-item {
   display: flex;
   align-items: center;
-  gap: 0.875rem;
+  gap: 0.75rem;
+}
+
+.feature-item .feature-icon {
+  opacity: 0.9;
+  font-size: 1.1rem;
+}
+
+.feature-item span {
+  font-size: 0.9rem;
+  font-weight: 400;
+}
+
+.system-navigation {
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  padding-top: 1rem;
+  text-align: center;
+}
+
+.system-navigation h3 {
+  color: white;
+  font-size: 1rem;
+  font-weight: 600;
+  margin-bottom: 1rem;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.system-buttons {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: center;
+  flex-wrap: nowrap;
+}
+
+.system-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  background: rgba(255, 255, 255, 0.15);
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-radius: 10px;
+  color: white;
+  text-decoration: none;
+  transition: all 0.3s ease;
+  backdrop-filter: blur(10px);
+  min-width: 140px;
+  justify-content: center;
+  flex: 1;
+  max-width: 160px;
+}
+
+.system-btn:hover {
+  background: rgba(255, 255, 255, 0.25);
+  border-color: rgba(255, 255, 255, 0.5);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+}
+
+.system-btn-active {
+  background: rgba(255, 255, 255, 0.9) !important;
+  color: #0ea5e9 !important;
+  border-color: rgba(255, 255, 255, 0.9) !important;
+  box-shadow: 0 4px 15px rgba(14, 165, 233, 0.3);
+}
+
+.system-btn i {
+  font-size: 1.5rem;
+  opacity: 0.9;
+}
+
+.system-btn span {
+  font-size: 0.875rem;
+  font-weight: 500;
+  text-align: center;
+  line-height: 1.3;
+}
+
+.system-btn small {
+  display: block;
+  font-size: 0.75rem;
+  opacity: 0.8;
+  font-weight: 400;
 }
 
 .feature-icon {
@@ -597,9 +673,49 @@ body {
 
 @media (min-width: 1280px) {
   .branding-main h1 { font-size: 3rem; }
-  .form-panel { 
-    flex: 0 0 45%; 
-    max-width: 45%; 
+  .form-panel {
+    flex: 0 0 45%;
+    max-width: 45%;
+  }
+}
+
+/* Mobile responsive for system navigation */
+@media (max-width: 640px) {
+  .branding-main h1 {
+    font-size: 2rem;
+    margin-bottom: 0.75rem;
+  }
+
+  .feature-list {
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+  }
+
+  .system-navigation {
+    padding-top: 0.75rem;
+  }
+
+  .system-navigation h3 {
+    font-size: 0.9rem;
+    margin-bottom: 0.75rem;
+  }
+
+  .system-buttons {
+    gap: 0.5rem;
+  }
+
+  .system-btn {
+    min-width: 120px;
+    max-width: 140px;
+    padding: 0.625rem 0.75rem;
+  }
+
+  .system-btn i {
+    font-size: 1.1rem;
+  }
+
+  .system-btn span {
+    font-size: 0.75rem;
   }
 }
 </style>
@@ -620,8 +736,7 @@ body {
       </div>
       
       <div class="branding-main">
-        <h1>City Health Office Administration</h1>
-        <p>Comprehensive animal bite case management system for healthcare professionals. Track, monitor, and manage patient records efficiently.</p>
+        <h1>Talisay City Health Animal Bite Center</h1>
         
         <div class="feature-list">
           <div class="feature-item">
@@ -639,6 +754,21 @@ body {
           <div class="feature-item">
             <div class="feature-icon"><i class="bi bi-graph-up"></i></div>
             <span>Decision support dashboard</span>
+          </div>
+        </div>
+
+        <!-- System Access Navigation -->
+        <div class="system-navigation">
+          <h3>Choose Your System Access</h3>
+          <div class="system-buttons">
+            <a href="admin_login.php" class="system-btn system-btn-active">
+              <i class="bi bi-building"></i>
+              <span>City Health Office<br><small>Admin Dashboard</small></span>
+            </a>
+            <a href="staff_login.php" class="system-btn">
+              <i class="bi bi-person-badge"></i>
+              <span>Barangay Health Workers<br><small>Staff Portal</small></span>
+            </a>
           </div>
         </div>
       </div>

@@ -405,5 +405,12 @@ function calculateAge($dateOfBirth) {
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    function confirmLogout() {
+        if (confirm('Are you sure you want to log out?')) {
+            window.location.href = '../logout/admin_logout.php';
+        }
+    }
+</script>
 </body>
 </html>

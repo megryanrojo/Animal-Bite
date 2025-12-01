@@ -1,7 +1,7 @@
 <?php
 session_start();
-if (!isset($_SESSION['staffId'])) {
-    header("Location: ../login/staff_login.html");
+if (!isset($_SESSION['staff_id'])) {
+    header("Location: ../login/staff_login.php");
     exit;
 }
 
@@ -9,46 +9,16 @@ require_once '../conn/conn.php';
 
 // Get staff information
 try {
-    $stmt = $pdo->prepare("SELECT firstName, lastName FROM staff WHERE staffId = ?");
-    $stmt->execute([$_SESSION['staffId']]);
+    $stmt = $pdo->prepare("SELECT firstName, lastName, assignedBarangay FROM staff WHERE staffId = ?");
+    $stmt->execute([$_SESSION['staff_id']]);
     $staff = $stmt->fetch(PDO::FETCH_ASSOC);
+    $assignedBarangay = $staff['assignedBarangay'] ?? '';
 } catch (PDOException $e) {
-    $staff = ['firstName' => 'User', 'lastName' => ''];
+    $staff = ['firstName' => 'User', 'lastName' => '', 'assignedBarangay' => ''];
+    $assignedBarangay = '';
 }
 
-// Get recent animal bite reports (last 5)
-try {
-    $recentReportsStmt = $pdo->prepare("
-        SELECT r.*, CONCAT(p.firstName, ' ', p.lastName) as patientName 
-        FROM reports r
-        LEFT JOIN patients p ON r.patientId = p.patientId
-        ORDER BY r.reportDate DESC LIMIT 5
-    ");
-    $recentReportsStmt->execute();
-    $recentReports = $recentReportsStmt->fetchAll(PDO::FETCH_ASSOC);
-} catch (PDOException $e) {
-    $recentReports = [];
-}
-
-// Get statistics
-try {
-    $totalReportsStmt = $pdo->query("SELECT COUNT(*) FROM reports");
-    $totalReports = $totalReportsStmt->fetchColumn();
-    
-    $todayReportsStmt = $pdo->query("SELECT COUNT(*) FROM reports WHERE DATE(reportDate) = CURDATE()");
-    $todayReports = $todayReportsStmt->fetchColumn();
-    
-    $pendingReportsStmt = $pdo->query("SELECT COUNT(*) FROM reports WHERE status = 'pending'");
-    $pendingReports = $pendingReportsStmt->fetchColumn();
-    
-    $categoryIIIStmt = $pdo->query("SELECT COUNT(*) FROM reports WHERE biteType = 'Category III' AND status != 'completed'");
-    $categoryIIICases = $categoryIIIStmt->fetchColumn();
-} catch (PDOException $e) {
-    $totalReports = 0;
-    $todayReports = 0;
-    $pendingReports = 0;
-    $categoryIIICases = 0;
-}
+// Staff dashboard - simplified for encoding only
 ?>
 
 <!DOCTYPE html>
@@ -80,7 +50,7 @@ try {
       top: 0;
       z-index: 100;
     }
-    
+
     .header-content {
       max-width: 1200px;
       margin: 0 auto;
@@ -89,7 +59,7 @@ try {
       align-items: center;
       gap: 1rem;
     }
-    
+
     .logo {
       display: flex;
       align-items: center;
@@ -98,18 +68,18 @@ try {
       font-size: 1.1rem;
       color: #1a1a1a;
     }
-    
+
     .logo i {
       color: #16a34a;
       font-size: 1.25rem;
     }
-    
+
     .header-actions {
       display: flex;
       align-items: center;
       gap: 0.75rem;
     }
-    
+
     .btn-new {
       background: #16a34a;
       color: white;
@@ -124,27 +94,29 @@ try {
       text-decoration: none;
       transition: background 0.2s;
     }
-    
+
     .btn-new:hover {
       background: #15803d;
       color: white;
     }
-    
+
     .btn-logout {
-      background: transparent;
-      color: #6b7280;
-      border: 1px solid #e5e7eb;
-      padding: 0.5rem 0.75rem;
+      background: #dc2626;
+      color: white;
+      border: none;
+      padding: 0.5rem;
       border-radius: 6px;
-      font-size: 0.875rem;
-      text-decoration: none;
-      transition: all 0.2s;
+      font-size: 1rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: background 0.2s;
     }
-    
+
     .btn-logout:hover {
-      background: #fee2e2;
-      color: #dc2626;
-      border-color: #fecaca;
+      background: #b91c1c;
+      color: white;
     }
     
     /* Main Content */
@@ -172,209 +144,124 @@ try {
       font-size: 0.9rem;
     }
     
-    /* Stats Grid */
-    .stats-grid {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 1rem;
-      margin-bottom: 1.5rem;
+    /* Quick Actions */
+    .quick-actions {
+      margin-bottom: 3rem;
     }
-    
-    @media (max-width: 900px) {
-      .stats-grid {
-        grid-template-columns: repeat(2, 1fr);
-      }
-    }
-    
-    @media (max-width: 500px) {
-      .stats-grid {
-        grid-template-columns: 1fr;
-      }
-    }
-    
-    .stat-card {
+
+    .action-card {
       background: white;
-      border-radius: 10px;
-      padding: 1.25rem;
-      border: 1px solid #e5e7eb;
-    }
-    
-    .stat-card-header {
+      border-radius: 12px;
+      padding: 2rem;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      border-left: 4px solid #10b981;
       display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-      margin-bottom: 0.5rem;
+      align-items: center;
+      gap: 1.5rem;
     }
-    
-    .stat-label {
-      font-size: 0.8rem;
-      color: #6b7280;
-      font-weight: 500;
-      text-transform: uppercase;
-      letter-spacing: 0.025em;
+
+    .action-card.primary {
+      border-left-color: #10b981;
     }
-    
-    .stat-icon {
-      width: 36px;
-      height: 36px;
-      border-radius: 8px;
+
+    .action-icon {
+      width: 60px;
+      height: 60px;
+      background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+      border-radius: 50%;
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 1rem;
+      color: white;
+      font-size: 1.5rem;
+      flex-shrink: 0;
     }
-    
-    .stat-icon.green {
-      background: #dcfce7;
-      color: #16a34a;
-    }
-    
-    .stat-icon.blue {
-      background: #dbeafe;
-      color: #2563eb;
-    }
-    
-    .stat-icon.yellow {
-      background: #fef3c7;
-      color: #d97706;
-    }
-    
-    .stat-icon.red {
-      background: #fee2e2;
-      color: #dc2626;
-    }
-    
-    .stat-value {
-      font-size: 2rem;
-      font-weight: 700;
-      color: #1a1a1a;
-      line-height: 1;
-    }
-    
-    /* Card */
-    .card {
-      background: white;
-      border-radius: 10px;
-      border: 1px solid #e5e7eb;
-      overflow: hidden;
-    }
-    
-    .card-header {
-      padding: 1rem 1.25rem;
-      border-bottom: 1px solid #e5e7eb;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-    
-    .card-title {
-      font-size: 1rem;
+
+    .action-content h3 {
+      font-size: 1.25rem;
       font-weight: 600;
-      color: #1a1a1a;
-      margin: 0;
+      color: #111827;
+      margin-bottom: 0.5rem;
     }
-    
-    .btn-link {
-      color: #16a34a;
-      font-size: 0.875rem;
+
+    .action-content p {
+      color: #6b7280;
+      margin-bottom: 1rem;
+    }
+
+    .btn-action {
+      background: #10b981;
+      color: white;
+      border: none;
+      padding: 0.5rem 1rem;
+      border-radius: 6px;
       text-decoration: none;
       font-weight: 500;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      transition: background 0.2s;
     }
-    
-    .btn-link:hover {
-      text-decoration: underline;
+
+    .btn-action:hover {
+      background: #059669;
+      color: white;
     }
-    
-    /* Table */
-    .table-wrap {
-      overflow-x: auto;
+
+    /* Instructions */
+    .instructions {
+      background: white;
+      border-radius: 12px;
+      padding: 2rem;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
     }
-    
-    .table {
-      width: 100%;
-      border-collapse: collapse;
-      margin: 0;
-    }
-    
-    .table th,
-    .table td {
-      padding: 0.875rem 1.25rem;
-      text-align: left;
-      border-bottom: 1px solid #f3f4f6;
-    }
-    
-    .table th {
-      background: #f9fafb;
-      font-size: 0.75rem;
+
+    .instructions h2 {
+      font-size: 1.5rem;
       font-weight: 600;
-      color: #6b7280;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-    }
-    
-    .table tbody tr:hover {
-      background: #f9fafb;
-    }
-    
-    .table tbody tr:last-child td {
-      border-bottom: none;
-    }
-    
-    .patient-name {
-      font-weight: 500;
-      color: #1a1a1a;
-    }
-    
-    /* Badges */
-    .badge {
-      display: inline-block;
-      padding: 0.25rem 0.625rem;
-      border-radius: 9999px;
-      font-size: 0.75rem;
-      font-weight: 500;
-    }
-    
-    .badge-cat1 {
-      background: #f3f4f6;
-      color: #4b5563;
-    }
-    
-    .badge-cat2 {
-      background: #fef3c7;
-      color: #92400e;
-    }
-    
-    .badge-cat3 {
-      background: #fee2e2;
-      color: #dc2626;
-    }
-    
-    .badge-pending {
-      background: #dbeafe;
-      color: #1d4ed8;
-    }
-    
-    .badge-progress {
-      background: #e0e7ff;
-      color: #4338ca;
-    }
-    
-    .badge-completed {
-      background: #dcfce7;
-      color: #16a34a;
-    }
-    
-    /* Empty State */
-    .empty-state {
-      padding: 3rem 1rem;
+      color: #111827;
+      margin-bottom: 1.5rem;
       text-align: center;
-      color: #9ca3af;
     }
-    
-    .empty-state i {
-      font-size: 2.5rem;
-      margin-bottom: 0.75rem;
-      display: block;
+
+    .steps {
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+    }
+
+    .step {
+      display: flex;
+      gap: 1rem;
+      align-items: flex-start;
+    }
+
+    .step-number {
+      width: 40px;
+      height: 40px;
+      background: #10b981;
+      color: white;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 600;
+      font-size: 1.1rem;
+      flex-shrink: 0;
+    }
+
+    .step-content h4 {
+      font-size: 1rem;
+      font-weight: 600;
+      color: #111827;
+      margin-bottom: 0.5rem;
+    }
+
+    .step-content p {
+      color: #6b7280;
+      font-size: 0.875rem;
+      line-height: 1.5;
+      margin: 0;
     }
     
     /* Responsive */
@@ -409,9 +296,9 @@ try {
           <i class="bi bi-plus"></i>
           New Report
         </a>
-        <a href="../login/logout.php" class="btn-logout">
+        <button class="btn-logout" onclick="confirmLogout()">
           <i class="bi bi-box-arrow-right"></i>
-        </a>
+        </button>
       </div>
     </div>
   </header>
@@ -422,105 +309,63 @@ try {
     <!-- Welcome -->
     <div class="welcome">
       <h1>Welcome back, <?php echo htmlspecialchars($staff['firstName']); ?></h1>
-      <p>Here's what's happening with your cases today.</p>
+      <p>Report and document animal bite incidents in your barangay</p>
     </div>
 
-    <!-- Stats -->
-    <div class="stats-grid">
-      <div class="stat-card">
-        <div class="stat-card-header">
-          <span class="stat-label">Total Cases</span>
-          <div class="stat-icon green">
-            <i class="bi bi-file-text"></i>
-          </div>
+    <!-- Quick Actions -->
+    <div class="quick-actions">
+      <div class="action-card primary">
+        <div class="action-icon">
+          <i class="bi bi-plus-circle"></i>
         </div>
-        <div class="stat-value"><?php echo $totalReports; ?></div>
-      </div>
-      
-      <div class="stat-card">
-        <div class="stat-card-header">
-          <span class="stat-label">Today</span>
-          <div class="stat-icon blue">
-            <i class="bi bi-calendar"></i>
-          </div>
+        <div class="action-content">
+          <h3>Create New Report</h3>
+          <p>Document a new animal bite incident</p>
+          <a href="new_report.php" class="btn-action">
+            <i class="bi bi-plus me-1"></i>
+            Start New Report
+          </a>
         </div>
-        <div class="stat-value"><?php echo $todayReports; ?></div>
-      </div>
-      
-      <div class="stat-card">
-        <div class="stat-card-header">
-          <span class="stat-label">Pending</span>
-          <div class="stat-icon yellow">
-            <i class="bi bi-clock"></i>
-          </div>
-        </div>
-        <div class="stat-value"><?php echo $pendingReports; ?></div>
-      </div>
-      
-      <div class="stat-card">
-        <div class="stat-card-header">
-          <span class="stat-label">Category III</span>
-          <div class="stat-icon red">
-            <i class="bi bi-exclamation-triangle"></i>
-          </div>
-        </div>
-        <div class="stat-value"><?php echo $categoryIIICases; ?></div>
       </div>
     </div>
 
-    <!-- Recent Cases -->
-    <div class="card">
-      <div class="card-header">
-        <h2 class="card-title">Recent Cases</h2>
-        <a href="reports.php" class="btn-link">View all</a>
+    <!-- Instructions -->
+    <div class="instructions">
+      <h2>How to Report</h2>
+      <div class="steps">
+        <div class="step">
+          <div class="step-number">1</div>
+          <div class="step-content">
+            <h4>Find the Patient</h4>
+            <p>Use the patient search to locate existing records or create a new patient entry.</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-number">2</div>
+          <div class="step-content">
+            <h4>Record Incident Details</h4>
+            <p>Document the bite location, animal type, circumstances, and patient information.</p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-number">3</div>
+          <div class="step-content">
+            <h4>Submit Report</h4>
+            <p>The system will automatically classify the case and provide treatment recommendations.</p>
+          </div>
+        </div>
       </div>
-      
-      <?php if (empty($recentReports)): ?>
-        <div class="empty-state">
-          <i class="bi bi-inbox"></i>
-          <p>No cases recorded yet</p>
-        </div>
-      <?php else: ?>
-        <div class="table-wrap">
-          <table class="table">
-            <thead>
-              <tr>
-                <th>Patient</th>
-                <th>Date</th>
-                <th>Category</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              <?php foreach ($recentReports as $report): ?>
-                <tr>
-                  <td class="patient-name"><?php echo htmlspecialchars($report['patientName'] ?? 'Unknown'); ?></td>
-                  <td><?php echo date('M j, Y', strtotime($report['reportDate'])); ?></td>
-                  <td>
-                    <?php
-                      $catClass = 'badge-cat1';
-                      if ($report['biteType'] === 'Category II') $catClass = 'badge-cat2';
-                      if ($report['biteType'] === 'Category III') $catClass = 'badge-cat3';
-                    ?>
-                    <span class="badge <?php echo $catClass; ?>"><?php echo htmlspecialchars($report['biteType']); ?></span>
-                  </td>
-                  <td>
-                    <?php
-                      $statusClass = 'badge-pending';
-                      if ($report['status'] === 'in-progress') $statusClass = 'badge-progress';
-                      if ($report['status'] === 'completed') $statusClass = 'badge-completed';
-                    ?>
-                    <span class="badge <?php echo $statusClass; ?>"><?php echo ucfirst(htmlspecialchars($report['status'])); ?></span>
-                  </td>
-                </tr>
-              <?php endforeach; ?>
-            </tbody>
-          </table>
-        </div>
-      <?php endif; ?>
     </div>
 
   </main>
+
+  <script>
+    function confirmLogout() {
+      if (confirm('Are you sure you want to log out?')) {
+        window.location.href = '../logout/staff_logout.php';
+      }
+    }
+  </script>
 
 </body>
 </html>

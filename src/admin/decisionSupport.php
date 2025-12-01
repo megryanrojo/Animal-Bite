@@ -1515,6 +1515,12 @@ function buildUrl($newParams = []) {
             // This would toggle the sidebar on mobile - implement based on your navbar.php
             document.querySelector('.sidebar')?.classList.toggle('show');
         }
+
+        function confirmLogout() {
+            if (confirm('Are you sure you want to log out?')) {
+                window.location.href = '../logout/admin_logout.php';
+            }
+        }
     </script>
 </body>
 </html>

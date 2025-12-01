@@ -6,6 +6,14 @@ if (!isset($_SESSION['admin_id'])) {
 }
 require_once '../conn/conn.php';
 require_once 'includes/notification_helper.php';
+
+// Fetch available barangays for dropdown
+try {
+    $stmt = $pdo->query("SELECT barangay FROM barangay_coordinates ORDER BY barangay");
+    $barangays = $stmt->fetchAll(PDO::FETCH_COLUMN);
+} catch (PDOException $e) {
+    $barangays = [];
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -181,24 +189,7 @@ require_once 'includes/notification_helper.php';
       border-color: var(--primary-light);
     }
     
-    /* Alert */
-    .alert-success-custom {
-      background: #ecfdf5;
-      border: 1px solid #a7f3d0;
-      color: #065f46;
-      padding: 0.875rem 1rem;
-      border-radius: 8px;
-      margin-bottom: 1.5rem;
-      display: flex;
-      align-items: center;
-      gap: 0.75rem;
-      font-size: 0.875rem;
-      font-weight: 500;
-    }
-    
-    .alert-success-custom i {
-      font-size: 1.125rem;
-    }
+    /* Alert Styles */
     
     /* Form Card */
     .form-card {
@@ -235,11 +226,10 @@ require_once 'includes/notification_helper.php';
     
     /* Form Sections */
     .form-section {
-      margin-bottom: 1.75rem;
-      padding-bottom: 1.5rem;
-      border-bottom: 1px solid var(--border-color);
+      margin-bottom: 2rem;
+      padding-bottom: 1.75rem;
     }
-    
+
     .form-section:last-child {
       margin-bottom: 0;
       padding-bottom: 0;
@@ -261,14 +251,19 @@ require_once 'includes/notification_helper.php';
     .form-section-title i {
       font-size: 0.875rem;
     }
+
+
+    .form-text {
+      margin-top: 0.25rem;
+    }
     
     /* Form Inputs */
     .form-floating {
       position: relative;
     }
     
-    .form-floating > .form-control,
-    .form-floating > .form-select {
+    /* Form Inputs */
+    .form-floating > .form-control {
       height: calc(3.25rem + 2px);
       padding: 0.875rem 0.875rem;
       font-size: 0.9375rem;
@@ -277,12 +272,44 @@ require_once 'includes/notification_helper.php';
       background: white;
       transition: all 0.2s;
     }
-    
-    .form-floating > .form-control:focus,
-    .form-floating > .form-select:focus {
+
+    .form-floating > .form-control:focus {
       border-color: var(--primary-light);
       box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.15);
       outline: none;
+    }
+
+    /* Form Select */
+    .form-select {
+      height: calc(3.25rem + 2px);
+      padding: 0.875rem 2.5rem 0.875rem 0.875rem;
+      font-size: 0.9375rem;
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      background: white;
+      background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3e%3c/svg%3e");
+      background-position: right 0.75rem center;
+      background-repeat: no-repeat;
+      background-size: 1rem;
+      transition: all 0.2s;
+      appearance: none;
+    }
+
+    .form-select:focus {
+      border-color: var(--primary-light);
+      box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.15);
+      outline: none;
+    }
+
+    /* Form Labels */
+    .form-label {
+      font-size: 0.9375rem;
+      font-weight: 500;
+      color: var(--text-dark);
+      margin-bottom: 0.5rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
     }
     
     .form-floating > label {
@@ -330,6 +357,43 @@ require_once 'includes/notification_helper.php';
     .password-feedback.fair { color: var(--warning); }
     .password-feedback.good { color: var(--primary); }
     .password-feedback.strong { color: var(--success); }
+
+    /* Form Validation */
+    .form-floating > .form-control.is-invalid {
+      border-color: var(--danger);
+      box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.15);
+    }
+
+    .form-select.is-invalid {
+      border-color: var(--danger);
+      box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.15);
+    }
+
+    .form-floating > .form-control.is-valid {
+      border-color: var(--success);
+      box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.15);
+    }
+
+    .form-select.is-valid {
+      border-color: var(--success);
+      box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.15);
+    }
+
+    .invalid-feedback {
+      display: none;
+      font-size: 0.75rem;
+      color: var(--danger);
+      margin-top: 0.25rem;
+      font-weight: 500;
+    }
+
+    .form-floating > .form-control.is-invalid ~ .invalid-feedback {
+      display: block;
+    }
+
+    .form-select.is-invalid ~ .invalid-feedback {
+      display: block;
+    }
     
     /* Form Footer */
     .form-card-footer {
@@ -384,31 +448,105 @@ require_once 'includes/notification_helper.php';
       .top-navbar {
         padding: 0 1rem;
       }
-      
+
       .navbar-center {
         display: none;
       }
-      
+
       .form-container {
-        padding: 1.25rem 1rem;
+        padding: 1rem 0.75rem;
+        max-width: 100%;
       }
-      
+
       .page-header {
         flex-direction: column;
-        align-items: flex-start;
+        align-items: stretch;
+        gap: 1rem;
       }
-      
+
+      .page-header h2 {
+        font-size: 1.25rem;
+        margin-bottom: 0.5rem;
+      }
+
+      .form-card {
+        border-radius: 8px;
+      }
+
       .form-card-body {
-        padding: 1.25rem;
+        padding: 1.25rem 1rem;
       }
-      
+
+      .form-card-header {
+        padding: 1rem 1.25rem;
+      }
+
       .form-card-footer {
+        padding: 1rem 1.25rem;
         flex-direction: column;
+        gap: 0.75rem;
       }
-      
+
       .btn-cancel, .btn-submit {
         width: 100%;
         justify-content: center;
+        padding: 0.75rem 1rem;
+      }
+
+      .form-section {
+        margin-bottom: 1.5rem;
+        padding-bottom: 1.25rem;
+      }
+
+      .form-floating > .form-control {
+        font-size: 1rem;
+      }
+
+      .form-floating > label {
+        font-size: 0.9375rem;
+      }
+
+      .form-select {
+        font-size: 1rem;
+      }
+
+      .form-label {
+        font-size: 0.9375rem;
+      }
+
+      .password-strength-container {
+        margin-top: 0.5rem;
+      }
+
+      .password-feedback {
+        font-size: 0.6875rem;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .form-container {
+        padding: 0.75rem 0.5rem;
+      }
+
+      .page-header {
+        margin-bottom: 1rem;
+      }
+
+      .form-card-body {
+        padding: 1rem 0.75rem;
+      }
+
+      .form-card-header {
+        padding: 0.875rem 1rem;
+      }
+
+      .form-card-header h5 {
+        font-size: 0.875rem;
+      }
+
+      .form-section-title {
+        font-size: 0.75rem;
+        margin-bottom: 0.875rem;
       }
     }
   </style>
@@ -421,18 +559,20 @@ require_once 'includes/notification_helper.php';
     <!-- Page Header -->
     <div class="page-header">
       <div>
-        <h2>Add New Staff</h2>
-        <p>Register a new barangay health worker to the system</p>
+        <h2><i class="bi bi-person-plus me-2"></i>Add New Staff Member</h2>
+        <p>Register a new barangay health worker and assign them to a specific barangay</p>
       </div>
-      <a href="view_staff.php" class="btn-back">
-        <i class="bi bi-arrow-left"></i> Back
+      <a href="view_staff.php" class="btn-back" title="Back to Staff Management">
+        <i class="bi bi-arrow-left"></i> Back to Staff
       </a>
     </div>
 
     <!-- Success Message -->
-    <div id="successMessage" class="alert-success-custom d-none">
-      <i class="bi bi-check-circle-fill"></i>
-      <span>Staff member added successfully!</span>
+    <div id="successMessage" class="alert alert-success alert-dismissible fade d-none" role="alert">
+      <i class="bi bi-check-circle-fill me-2"></i>
+      <strong>Success!</strong> Staff member has been added successfully.
+      <a href="view_staff.php" class="alert-link ms-2">View Staff List</a>
+      <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
     </div>
 
     <!-- Form Card -->
@@ -449,7 +589,7 @@ require_once 'includes/notification_helper.php';
               <i class="bi bi-person"></i>
               Personal Information
             </div>
-            <div class="row g-3 mb-3">
+            <div class="row g-3">
               <div class="col-md-6">
                 <div class="form-floating">
                   <input type="text" name="firstName" id="firstName" class="form-control" placeholder="First Name" required>
@@ -464,18 +604,27 @@ require_once 'includes/notification_helper.php';
               </div>
             </div>
 
-            <div class="mb-3">
-              <div class="form-floating">
-                <input type="date" name="birthDate" id="birthDate" class="form-control" placeholder="Birth Date" required>
-                <label for="birthDate">Birth Date</label>
-              </div>
+            <div class="form-floating mb-3">
+              <input type="date" name="birthDate" id="birthDate" class="form-control" placeholder="Birth Date" required>
+              <label for="birthDate">Birth Date</label>
             </div>
 
-            <div class="mb-3">
-              <div class="form-floating">
-                <textarea name="address" id="address" class="form-control" placeholder="Address" required></textarea>
-                <label for="address">Complete Address</label>
-              </div>
+            <div class="form-floating mb-3">
+              <textarea name="address" id="address" class="form-control" placeholder="Address" required style="min-height: 80px;"></textarea>
+              <label for="address">Complete Address</label>
+            </div>
+
+            <label for="assignedBarangay" class="form-label">
+              <i class="bi bi-geo-alt-fill me-1"></i>Assigned Barangay
+            </label>
+            <select name="assignedBarangay" id="assignedBarangay" class="form-select" required>
+              <option value="">Select Barangay Assignment</option>
+              <?php foreach ($barangays as $barangay): ?>
+                <option value="<?php echo htmlspecialchars($barangay); ?>"><?php echo htmlspecialchars($barangay); ?></option>
+              <?php endforeach; ?>
+            </select>
+            <div class="form-text text-muted mb-3">
+              <small>This staff member will be responsible for reports from the selected barangay.</small>
             </div>
           </div>
 
@@ -485,18 +634,14 @@ require_once 'includes/notification_helper.php';
               <i class="bi bi-telephone"></i>
               Contact Information
             </div>
-            <div class="mb-3">
-              <div class="form-floating">
-                <input type="tel" name="contactNumber" id="contactNumber" class="form-control" placeholder="Contact Number" required>
-                <label for="contactNumber">Contact Number</label>
-              </div>
+            <div class="form-floating mb-3">
+              <input type="tel" name="contactNumber" id="contactNumber" class="form-control" placeholder="Contact Number" required>
+              <label for="contactNumber">Contact Number</label>
             </div>
 
-            <div class="mb-3">
-              <div class="form-floating">
-                <input type="email" name="email" id="email" class="form-control" placeholder="Email" required>
-                <label for="email">Email Address</label>
-              </div>
+            <div class="form-floating">
+              <input type="email" name="email" id="email" class="form-control" placeholder="Email" required>
+              <label for="email">Email Address</label>
             </div>
           </div>
 
@@ -506,11 +651,9 @@ require_once 'includes/notification_helper.php';
               <i class="bi bi-shield-lock"></i>
               Account Information
             </div>
-            <div class="mb-3">
-              <div class="form-floating">
-                <input type="password" name="password" id="password" class="form-control" placeholder="Password" required>
-                <label for="password">Password</label>
-              </div>
+            <div class="form-floating mb-3">
+              <input type="password" name="password" id="password" class="form-control" placeholder="Password" required>
+              <label for="password">Password</label>
               <div class="password-strength-container">
                 <div class="password-strength">
                   <div class="password-strength-bar" id="passwordStrengthBar"></div>
@@ -519,17 +662,19 @@ require_once 'includes/notification_helper.php';
               </div>
             </div>
 
-            <div class="mb-3">
-              <div class="form-floating">
-                <input type="password" id="confirmPassword" class="form-control" placeholder="Confirm Password" required>
-                <label for="confirmPassword">Confirm Password</label>
+            <div class="form-floating">
+              <input type="password" id="confirmPassword" class="form-control" placeholder="Confirm Password" required>
+              <label for="confirmPassword">Confirm Password</label>
+              <div class="invalid-feedback" id="confirmPasswordError">
+                Passwords do not match.
               </div>
             </div>
           </div>
         </form>
       </div>
       <div class="form-card-footer">
-        <button type="button" class="btn-cancel" onclick="window.location.href='admin_dashboard.php'">
+        <button type="button" class="btn-cancel" onclick="window.location.href='view_staff.php'">
+          <i class="bi bi-x-circle"></i>
           Cancel
         </button>
         <button type="submit" form="staffForm" class="btn-submit">
@@ -545,13 +690,22 @@ require_once 'includes/notification_helper.php';
     document.addEventListener('DOMContentLoaded', function() {
       const urlParams = new URLSearchParams(window.location.search);
       if (urlParams.has('success')) {
-        document.getElementById('successMessage').classList.remove('d-none');
+        const successAlert = document.getElementById('successMessage');
+        successAlert.classList.remove('d-none');
+        successAlert.classList.add('show');
+
+        // Auto-hide after 5 seconds
+        setTimeout(() => {
+          successAlert.classList.remove('show');
+          setTimeout(() => successAlert.classList.add('d-none'), 150);
+        }, 5000);
       }
       
       const password = document.getElementById('password');
       const confirmPassword = document.getElementById('confirmPassword');
       const strengthBar = document.getElementById('passwordStrengthBar');
       const feedback = document.getElementById('passwordFeedback');
+      const confirmPasswordError = document.getElementById('confirmPasswordError');
       const form = document.getElementById('staffForm');
       
       password.addEventListener('input', function() {
@@ -592,15 +746,63 @@ require_once 'includes/notification_helper.php';
             break;
         }
       });
-      
+
+      // Real-time password confirmation validation
+      confirmPassword.addEventListener('input', function() {
+        if (confirmPassword.value === '') {
+          confirmPassword.classList.remove('is-invalid', 'is-valid');
+          return;
+        }
+
+        if (password.value === confirmPassword.value) {
+          confirmPassword.classList.remove('is-invalid');
+          confirmPassword.classList.add('is-valid');
+        } else {
+          confirmPassword.classList.remove('is-valid');
+          confirmPassword.classList.add('is-invalid');
+        }
+      });
+
+      // Also validate on password change
+      password.addEventListener('input', function() {
+        if (confirmPassword.value !== '') {
+          if (password.value === confirmPassword.value) {
+            confirmPassword.classList.remove('is-invalid');
+            confirmPassword.classList.add('is-valid');
+          } else {
+            confirmPassword.classList.remove('is-valid');
+            confirmPassword.classList.add('is-invalid');
+          }
+        }
+      });
+
       form.addEventListener('submit', function(event) {
+        let isValid = true;
+
+        // Check password match
         if (password.value !== confirmPassword.value) {
+          confirmPassword.classList.add('is-invalid');
+          isValid = false;
+        }
+
+        if (!isValid) {
           event.preventDefault();
-          alert('Passwords do not match!');
+          // Scroll to first error
+          const firstError = form.querySelector('.is-invalid');
+          if (firstError) {
+            firstError.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }
           return false;
         }
+
         return true;
       });
+
+      function confirmLogout() {
+        if (confirm('Are you sure you want to log out?')) {
+          window.location.href = '../logout/admin_logout.php';
+        }
+      }
     });
   </script>
 </body>

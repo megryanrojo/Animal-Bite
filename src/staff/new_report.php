@@ -190,6 +190,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $barangay
       ]);
       $patientId = $pdo->lastInsertId();
+
+      // Log patient creation
+      logActivity($pdo, 'CREATE', 'patient', $patientId, $_SESSION['staff_id'], "Created new patient: {$firstName} {$lastName}");
     }
 
     // Validate that patient exists
@@ -441,6 +444,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
           null,
           null
         ]);
+
+        $vaccId = $pdo->lastInsertId();
+        logActivity($pdo, 'CREATE', 'vaccination_record', $vaccId, $_SESSION['staff_id'], "Created vaccination record for patient ID: {$patientId}, report ID: {$reportId}");
       }
     }
 

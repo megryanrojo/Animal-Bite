@@ -15,7 +15,14 @@ $admin = $stmt->fetch(PDO::FETCH_ASSOC);
 
 // Activity logs with pagination and filtering
 $page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
-$limit = 50;
+$limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 50;
+
+// Validate limit to prevent abuse
+$allowed_limits = [25, 50, 100, 250, 500];
+if (!in_array($limit, $allowed_limits)) {
+    $limit = 50;
+}
+
 $offset = ($page - 1) * $limit;
 
 // Filters
@@ -29,6 +36,37 @@ if (!empty($_GET['date_to'])) $filters['date_to'] = $_GET['date_to'];
 $logs = getActivityLogs($pdo, $filters, $limit, $offset);
 $total_logs = getActivityLogCount($pdo, $filters);
 $total_pages = ceil($total_logs / $limit);
+
+// Handle CSV download
+if (isset($_GET['download'])) {
+    // Get all logs for export (not paginated)
+    $all_logs = getActivityLogs($pdo, $filters, PHP_INT_MAX, 0);
+
+    // Set headers for CSV download
+    header('Content-Type: text/csv; charset=utf-8');
+    header('Content-Disposition: attachment; filename=activity_logs_' . date('Y-m-d_H-i-s') . '.csv');
+
+    // Create output stream
+    $output = fopen('php://output', 'w');
+
+    // Write CSV headers
+    fputcsv($output, ['Timestamp', 'Action', 'Entity Type', 'Entity ID', 'User', 'Details']);
+
+    // Write data rows
+    foreach ($all_logs as $log) {
+        fputcsv($output, [
+            date('Y-m-d H:i:s', strtotime($log['timestamp'])),
+            $log['action'],
+            $log['entity_type'],
+            $log['entity_id'] ?? '',
+            getUserName($pdo, $log['user_id']),
+            $log['details'] ?? ''
+        ]);
+    }
+
+    fclose($output);
+    exit;
+}
 
 // Get filter options
 $actions = $pdo->query("SELECT DISTINCT action FROM activity_logs ORDER BY action")->fetchAll(PDO::FETCH_COLUMN);
@@ -202,6 +240,12 @@ $users = $pdo->query("SELECT DISTINCT u.user_id, CASE WHEN a.name IS NOT NULL TH
             text-decoration: none;
         }
 
+        .button-group {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
         .logs-wrapper {
             width: 100%;
             overflow-x: auto;
@@ -350,6 +394,35 @@ $users = $pdo->query("SELECT DISTINCT u.user_id, CASE WHEN a.name IS NOT NULL TH
             color: var(--text-secondary);
         }
 
+        .pagination-info {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin: 16px 0;
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+        }
+
+        .page-size-selector {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .page-size-selector label {
+            font-size: 0.875rem;
+            font-weight: 500;
+        }
+
+        .page-size-selector select {
+            padding: 4px 8px;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            font-size: 0.875rem;
+            background: #fff;
+            min-width: 80px;
+        }
+
         .logs-empty {
             text-align: center;
             padding: 64px 24px;
@@ -380,6 +453,28 @@ $users = $pdo->query("SELECT DISTINCT u.user_id, CASE WHEN a.name IS NOT NULL TH
         .btn-back:hover {
             border-color: var(--primary);
             color: var(--primary);
+            text-decoration: none;
+        }
+
+        .btn-download {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            background: var(--success);
+            color: #fff;
+            border: 1px solid var(--success);
+            border-radius: 6px;
+            text-decoration: none;
+            font-size: 0.875rem;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+
+        .btn-download:hover {
+            background: #059669;
+            border-color: #059669;
+            color: #fff;
             text-decoration: none;
         }
 
@@ -451,6 +546,11 @@ $users = $pdo->query("SELECT DISTINCT u.user_id, CASE WHEN a.name IS NOT NULL TH
 
             .form-group {
                 margin-bottom: 0;
+            }
+
+            .button-group {
+                flex-direction: column;
+                gap: 8px;
             }
 
             .btn-filter,
@@ -705,6 +805,32 @@ $users = $pdo->query("SELECT DISTINCT u.user_id, CASE WHEN a.name IS NOT NULL TH
                 padding: 10px;
                 text-align: center;
             }
+
+            .pagination-info {
+                flex-direction: column;
+                gap: 8px;
+                align-items: stretch;
+            }
+
+            .page-size-selector {
+                justify-content: center;
+                font-size: 0.75rem;
+            }
+
+            .page-size-selector select {
+                min-width: 70px;
+                font-size: 0.75rem;
+            }
+
+            .pagination-info {
+                flex-direction: column;
+                gap: 12px;
+                align-items: stretch;
+            }
+
+            .page-size-selector {
+                justify-content: center;
+            }
         }
 
         @media (max-width: 360px) {
@@ -759,10 +885,14 @@ $users = $pdo->query("SELECT DISTINCT u.user_id, CASE WHEN a.name IS NOT NULL TH
     <div class="page-header">
         <h1>Activity Logs</h1>
         <p>Complete audit trail of all system activities</p>
-        <div style="margin-top: 8px;">
+        <div style="margin-top: 8px; display: flex; gap: 12px; align-items: center;">
             <a href="admin_settings.php" class="btn-back">
                 <i class="bi bi-arrow-left"></i>
                 Back to Settings
+            </a>
+            <a href="?download=1<?php echo !empty($_GET) ? '&' . http_build_query(array_diff_key($_GET, ['download' => ''])) : ''; ?>" class="btn-download">
+                <i class="bi bi-download"></i>
+                Download Logs
             </a>
         </div>
     </div>
@@ -821,16 +951,30 @@ $users = $pdo->query("SELECT DISTINCT u.user_id, CASE WHEN a.name IS NOT NULL TH
                 </div>
 
                 <div class="form-group">
-                    <button type="submit" class="btn-filter">
-                        <i class="bi bi-funnel"></i>
-                        Filter
-                    </button>
-                    <?php if (!empty($_GET)): ?>
-                    <a href="activity_logs.php" class="btn-clear">
-                        <i class="bi bi-x-circle"></i>
-                        Clear
-                    </a>
-                    <?php endif; ?>
+                    <label for="limit">Show Entries</label>
+                    <select name="limit" id="limit">
+                        <option value="25" <?php echo ($limit == 25) ? 'selected' : ''; ?>>25 entries</option>
+                        <option value="50" <?php echo ($limit == 50) ? 'selected' : ''; ?>>50 entries</option>
+                        <option value="100" <?php echo ($limit == 100) ? 'selected' : ''; ?>>100 entries</option>
+                        <option value="250" <?php echo ($limit == 250) ? 'selected' : ''; ?>>250 entries</option>
+                        <option value="500" <?php echo ($limit == 500) ? 'selected' : ''; ?>>500 entries</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>&nbsp;</label> <!-- Invisible label for alignment -->
+                    <div class="button-group">
+                        <button type="submit" class="btn-filter">
+                            <i class="bi bi-funnel"></i>
+                            Filter
+                        </button>
+                        <?php if (!empty($_GET)): ?>
+                        <a href="activity_logs.php" class="btn-clear">
+                            <i class="bi bi-x-circle"></i>
+                            Clear
+                        </a>
+                        <?php endif; ?>
+                    </div>
                 </div>
             </form>
         </div>
@@ -894,38 +1038,78 @@ $users = $pdo->query("SELECT DISTINCT u.user_id, CASE WHEN a.name IS NOT NULL TH
         </table>
         </div>
 
-        <!-- Pagination -->
+        <!-- Pagination Info and Controls -->
+        <div class="pagination-info">
+            <div class="page-size-selector">
+                <label>Show:</label>
+                <select onchange="changePageSize(this.value)">
+                    <option value="25" <?php echo ($limit == 25) ? 'selected' : ''; ?>>25</option>
+                    <option value="50" <?php echo ($limit == 50) ? 'selected' : ''; ?>>50</option>
+                    <option value="100" <?php echo ($limit == 100) ? 'selected' : ''; ?>>100</option>
+                    <option value="250" <?php echo ($limit == 250) ? 'selected' : ''; ?>>250</option>
+                    <option value="500" <?php echo ($limit == 500) ? 'selected' : ''; ?>>500</option>
+                </select>
+                <span>entries per page</span>
+            </div>
+            <div class="logs-summary">
+                Showing <?php echo ($offset + 1); ?> to <?php echo min($offset + count($logs), $total_logs); ?> of <?php echo $total_logs; ?> entries
+                <?php if (!empty(array_filter($filters))): ?>
+                (filtered)
+                <?php endif; ?>
+            </div>
+        </div>
+
+        <!-- Enhanced Pagination -->
         <?php if ($total_pages > 1): ?>
         <div class="pagination">
             <?php if ($page > 1): ?>
-            <a href="?<?php echo http_build_query(array_merge($_GET, ['page' => $page - 1])); ?>">
+            <a href="?<?php echo http_build_query(array_merge($_GET, ['page' => 1])); ?>" title="First Page">
+                <i class="bi bi-chevron-double-left"></i>
+            </a>
+            <a href="?<?php echo http_build_query(array_merge($_GET, ['page' => $page - 1])); ?>" title="Previous Page">
                 <i class="bi bi-chevron-left"></i>
             </a>
             <?php endif; ?>
 
-            <?php for ($i = max(1, $page - 2); $i <= min($total_pages, $page + 2); $i++): ?>
-            <?php if ($i === $page): ?>
-            <span class="current"><?php echo $i; ?></span>
-            <?php else: ?>
-            <a href="?<?php echo http_build_query(array_merge($_GET, ['page' => $i])); ?>"><?php echo $i; ?></a>
-            <?php endif; ?>
-            <?php endfor; ?>
+            <?php
+            $start_page = max(1, $page - 2);
+            $end_page = min($total_pages, $page + 2);
+
+            // Show first page if not in range
+            if ($start_page > 1) {
+                echo '<a href="?' . http_build_query(array_merge($_GET, ['page' => 1])) . '">1</a>';
+                if ($start_page > 2) {
+                    echo '<span>...</span>';
+                }
+            }
+
+            for ($i = $start_page; $i <= $end_page; $i++) {
+                if ($i === $page) {
+                    echo '<span class="current">' . $i . '</span>';
+                } else {
+                    echo '<a href="?' . http_build_query(array_merge($_GET, ['page' => $i])) . '">' . $i . '</a>';
+                }
+            }
+
+            // Show last page if not in range
+            if ($end_page < $total_pages) {
+                if ($end_page < $total_pages - 1) {
+                    echo '<span>...</span>';
+                }
+                echo '<a href="?' . http_build_query(array_merge($_GET, ['page' => $total_pages])) . '">' . $total_pages . '</a>';
+            }
+            ?>
 
             <?php if ($page < $total_pages): ?>
-            <a href="?<?php echo http_build_query(array_merge($_GET, ['page' => $page + 1])); ?>">
+            <a href="?<?php echo http_build_query(array_merge($_GET, ['page' => $page + 1])); ?>" title="Next Page">
                 <i class="bi bi-chevron-right"></i>
+            </a>
+            <a href="?<?php echo http_build_query(array_merge($_GET, ['page' => $total_pages])); ?>" title="Last Page">
+                <i class="bi bi-chevron-double-right"></i>
             </a>
             <?php endif; ?>
         </div>
         <?php endif; ?>
-
-        <!-- Summary -->
-        <div class="logs-summary">
-            Showing <?php echo count($logs); ?> of <?php echo $total_logs; ?> total activity logs
-            <?php if (!empty($filters)): ?>
-            (filtered results)
-            <?php endif; ?>
-        </div>
         <?php endif; ?>
     </div>
 
@@ -935,6 +1119,13 @@ $users = $pdo->query("SELECT DISTINCT u.user_id, CASE WHEN a.name IS NOT NULL TH
             if (confirm('Are you sure you want to log out?')) {
                 window.location.href = '../logout/admin_logout.php';
             }
+        }
+
+        function changePageSize(newLimit) {
+            const url = new URL(window.location);
+            url.searchParams.set('limit', newLimit);
+            url.searchParams.set('page', '1'); // Reset to first page when changing limit
+            window.location.href = url.toString();
         }
     </script>
 </body>

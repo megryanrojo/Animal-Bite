@@ -1,6 +1,7 @@
 <?php
 session_start();
 require_once '../conn/conn.php';
+require_once '../admin/includes/logging_helper.php';
 
 // --- Rate Limiting Settings ---
 define('MAX_ATTEMPTS', 5);
@@ -57,6 +58,9 @@ if (!$locked_out && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['email
                 $_SESSION['staff_email'] = $staff['email'];
                 $_SESSION['staff_barangay'] = $staff['assignedBarangay'];
 
+                // Log successful login
+                logActivity($pdo, 'LOGIN', 'staff', $staff['staffId'], $staff['staffId'], "Staff member logged in successfully");
+
                 // Redirect to staff dashboard
                 header("Location: ../staff/dashboard.php");
                 exit();
@@ -66,6 +70,10 @@ if (!$locked_out && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['email
                 if ($_SESSION['staff_login_attempts'] >= MAX_ATTEMPTS) {
                     $_SESSION['staff_lockout_time'] = time();
                 }
+
+                // Log failed login attempt
+                logActivity($pdo, 'LOGIN_FAILED', 'staff', null, null, "Failed login attempt for email: {$email}");
+
                 $error = "Invalid email or password.";
             }
         } catch (PDOException $e) {

@@ -1,5 +1,5 @@
 <?php
-header("Location: /src/login/admin_login.html");
+header("Location: /src/login/admin_login.php");
 exit();
 ?>
 

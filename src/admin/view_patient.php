@@ -27,7 +27,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['vaccination_action'])
             $doseNumber     = isset($_POST['doseNumber']) ? (int)$_POST['doseNumber'] : 1;
             $dateGiven      = !empty($_POST['dateGiven']) ? $_POST['dateGiven'] : null;
             $vaccineName    = !empty($_POST['vaccineName']) ? $_POST['vaccineName'] : null;
-            $batchNumber    = !empty($_POST['batchNumber']) ? $_POST['batchNumber'] : null;
             $administeredBy = !empty($_POST['administeredBy']) ? $_POST['administeredBy'] : null;
             $remarks        = !empty($_POST['remarks']) ? $_POST['remarks'] : null;
             // Ensure patient-level vaccinations created here are not linked to a report
@@ -36,9 +35,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['vaccination_action'])
             if ($action === 'add') {
                 $insertStmt = $pdo->prepare("
                     INSERT INTO vaccination_records
-                        (patientId, reportId, exposureType, doseNumber, dateGiven, vaccineName, batchNumber, administeredBy, remarks)
+                        (patientId, reportId, exposureType, doseNumber, dateGiven, vaccineName, administeredBy, remarks)
                     VALUES
-                        (:patientId, :reportId, :exposureType, :doseNumber, :dateGiven, :vaccineName, :batchNumber, :administeredBy, :remarks)
+                        (:patientId, :reportId, :exposureType, :doseNumber, :dateGiven, :vaccineName, :administeredBy, :remarks)
                 ");
                 $insertStmt->execute([
                     ':patientId'      => $patientId,
@@ -47,7 +46,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['vaccination_action'])
                     ':doseNumber'     => $doseNumber,
                     ':dateGiven'      => $dateGiven,
                     ':vaccineName'    => $vaccineName,
-                    ':batchNumber'    => $batchNumber,
                     ':administeredBy' => $administeredBy,
                     ':remarks'        => $remarks,
                 ]);
@@ -60,7 +58,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['vaccination_action'])
                         doseNumber = :doseNumber,
                         dateGiven = :dateGiven,
                         vaccineName = :vaccineName,
-                        batchNumber = :batchNumber,
                         administeredBy = :administeredBy,
                         remarks = :remarks,
                         reportId = :reportId,
@@ -72,7 +69,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['vaccination_action'])
                     ':doseNumber'     => $doseNumber,
                     ':dateGiven'      => $dateGiven,
                     ':vaccineName'    => $vaccineName,
-                    ':batchNumber'    => $batchNumber,
                     ':administeredBy' => $administeredBy,
                     ':remarks'        => $remarks,
                     ':reportId'       => $reportId,
@@ -739,7 +735,7 @@ function calculateAge($dateOfBirth) {
                 <h3 class="section-title"><i class="bi bi-shield-check"></i> PrEP (Preventive)</h3>
                 <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#vaccinationModal"
                         data-vaccination-id="" data-exposure-type="PrEP" data-dose-number="1"
-                        data-date-given="" data-vaccine-name="" data-batch-number=""
+                        data-date-given="" data-vaccine-name=""
                         data-administered-by="" data-remarks="" data-report-id="">
                     <i class="bi bi-plus"></i> Add PrEP Dose
                 </button>
@@ -757,7 +753,7 @@ function calculateAge($dateOfBirth) {
                             <th>Date</th>
                             <th>Dose</th>
                             <th>Vaccine</th>
-                            <th>By</th>
+                            <th>Administered By</th>
                             <th>Remarks</th>
                             <th></th>
                         </tr>
@@ -768,7 +764,7 @@ function calculateAge($dateOfBirth) {
                             <td data-label="Date"><?php echo $vacc['dateGiven'] ? date('M d, Y', strtotime($vacc['dateGiven'])) : 'N/A'; ?></td>
                             <td data-label="Dose"><?php echo (int)$vacc['doseNumber']; ?></td>
                             <td data-label="Vaccine"><?php echo htmlspecialchars($vacc['vaccineName'] ?? '-'); ?></td>
-                            <td data-label="By"><?php echo htmlspecialchars($vacc['administeredBy'] ?? '-'); ?></td>
+                            <td data-label="Administered By"><?php echo htmlspecialchars($vacc['administeredBy'] ?? '-'); ?></td>
                             <td data-label="Remarks" style="max-width: 180px;">
                                 <span style="display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
                                     <?php echo htmlspecialchars($vacc['remarks'] ?? '-'); ?>
@@ -782,7 +778,6 @@ function calculateAge($dateOfBirth) {
                                         data-dose-number="<?php echo (int)$vacc['doseNumber']; ?>"
                                         data-date-given="<?php echo htmlspecialchars($vacc['dateGiven']); ?>"
                                         data-vaccine-name="<?php echo htmlspecialchars($vacc['vaccineName'] ?? ''); ?>"
-                                        data-batch-number="<?php echo htmlspecialchars($vacc['batchNumber'] ?? ''); ?>"
                                         data-administered-by="<?php echo htmlspecialchars($vacc['administeredBy'] ?? ''); ?>"
                                         data-remarks="<?php echo htmlspecialchars($vacc['remarks'] ?? ''); ?>"
                                         data-report-id="<?php echo htmlspecialchars($vacc['reportId'] ?? ''); ?>">
@@ -808,7 +803,7 @@ function calculateAge($dateOfBirth) {
                 <p style="color: #78350f; margin-bottom: 10px;">No PrEP doses recorded.</p>
                 <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#vaccinationModal"
                         data-vaccination-id="" data-exposure-type="PrEP" data-dose-number="1"
-                        data-date-given="" data-vaccine-name="" data-batch-number=""
+                        data-date-given="" data-vaccine-name=""
                         data-administered-by="" data-remarks="" data-report-id="">
                     <i class="bi bi-plus"></i> Add First PrEP Dose
                 </button>
@@ -986,10 +981,6 @@ function calculateAge($dateOfBirth) {
                             <input type="text" class="form-control" name="vaccineName" id="vaccineName" placeholder="e.g., Verorab, Rabipur">
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label">Batch Number</label>
-                            <input type="text" class="form-control" name="batchNumber" id="batchNumber">
-                        </div>
-                        <div class="col-md-6">
                             <label class="form-label">Administered By</label>
                             <input type="text" class="form-control" name="administeredBy" id="administeredBy" placeholder="Health worker name">
                         </div>
@@ -1029,7 +1020,6 @@ function calculateAge($dateOfBirth) {
             const doseNumber = document.getElementById('doseNumber');
             const dateGiven = document.getElementById('dateGiven');
             const vaccineName = document.getElementById('vaccineName');
-            const batchNumber = document.getElementById('batchNumber');
             const administeredBy = document.getElementById('administeredBy');
             const reportId = document.getElementById('reportId');
             const remarks = document.getElementById('remarks');
@@ -1043,7 +1033,6 @@ function calculateAge($dateOfBirth) {
                 doseNumber.value = button.getAttribute('data-dose-number') || '1';
                 dateGiven.value = button.getAttribute('data-date-given') || '';
                 vaccineName.value = button.getAttribute('data-vaccine-name') || '';
-                batchNumber.value = button.getAttribute('data-batch-number') || '';
                 administeredBy.value = button.getAttribute('data-administered-by') || '';
                 remarks.value = button.getAttribute('data-remarks') || '';
 
@@ -1060,7 +1049,6 @@ function calculateAge($dateOfBirth) {
                 doseNumber.value = button.getAttribute('data-dose-number') || '1';
                 dateGiven.value = button.getAttribute('data-date-given') || '';
                 vaccineName.value = button.getAttribute('data-vaccine-name') || '';
-                batchNumber.value = button.getAttribute('data-batch-number') || '';
                 administeredBy.value = button.getAttribute('data-administered-by') || '';
                 remarks.value = button.getAttribute('data-remarks') || '';
 

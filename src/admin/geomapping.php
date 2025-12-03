@@ -23,10 +23,10 @@ $defaultDateTo = date('Y-m-d');
 $defaultDateFrom = date('Y-m-d', strtotime('-12 months', strtotime($defaultDateTo)));
 $dateFrom = isset($_GET['date_from']) ? $_GET['date_from'] : '';
 $dateTo = isset($_GET['date_to']) ? $_GET['date_to'] : '';
+$barangayFilter = isset($_GET['barangay']) ? $_GET['barangay'] : '';
 $animalType = isset($_GET['animal_type']) ? $_GET['animal_type'] : '';
 $biteCategory = isset($_GET['bite_category']) ? $_GET['bite_category'] : '';
 $status = isset($_GET['status']) ? $_GET['status'] : '';
-$appliedDefaultRange = false;
 
 if ($dateFrom === '' && $dateTo === '') {
     $dateFrom = $defaultDateFrom;
@@ -45,7 +45,6 @@ if ($dateFrom !== '' && $dateTo !== '' && strtotime($dateFrom) > strtotime($date
 }
 
 $dateRangeLabel = date('M d, Y', strtotime($dateFrom)) . ' – ' . date('M d, Y', strtotime($dateTo));
-$dateWindowMonths = max(1, round((strtotime($dateTo) - strtotime($dateFrom)) / (30 * 24 * 60 * 60)));
 
 // Get unique animal types for filter dropdown
 try {
@@ -74,6 +73,10 @@ if (!empty($dateFrom)) {
 if (!empty($dateTo)) {
     $where .= " AND r.biteDate <= ?";
     $params[] = $dateTo;
+}
+if (!empty($barangayFilter)) {
+    $where .= " AND p.barangay = ?";
+    $params[] = $barangayFilter;
 }
 if (!empty($animalType)) {
     $where .= " AND r.animalType = ?";
@@ -147,14 +150,15 @@ try {
     $allCasesStmt->execute($params);
     $cases = $allCasesStmt->fetchAll(PDO::FETCH_ASSOC);
 
-    // Prepare data for barangay counts and risk levels
+    // Prepare structured data for barangay counts and risk levels
     $barangayCounts = [];
     foreach ($heatmapData as $data) {
         $barangayCounts[] = [
-            'barangay' => $data['barangay'],
+            'barangay' => htmlspecialchars($data['barangay'], ENT_QUOTES, 'UTF-8'),
             'count' => (int)$data['case_count']
         ];
     }
+    // Sort by case count descending
     usort($barangayCounts, fn($a, $b) => $b['count'] <=> $a['count']);
 
 } catch (PDOException $e) {
@@ -217,19 +221,27 @@ try {
     error_log('Error fetching barangay coordinates: ' . $e->getMessage());
 }
 
-// Ensure each case has coordinates, fallback to barangay centroid if missing
+// Ensure each case has validated coordinates and consistent data types
 foreach ($cases as &$case) {
+    // Sanitize text fields
+    $case['barangay'] = $case['barangay'] ? htmlspecialchars($case['barangay'], ENT_QUOTES, 'UTF-8') : 'Unknown';
+    $case['animalType'] = $case['animalType'] ? htmlspecialchars($case['animalType'], ENT_QUOTES, 'UTF-8') : null;
+    $case['biteType'] = $case['biteType'] ? htmlspecialchars($case['biteType'], ENT_QUOTES, 'UTF-8') : null;
+    $case['status'] = $case['status'] ? htmlspecialchars($case['status'], ENT_QUOTES, 'UTF-8') : null;
+    $case['patientName'] = $case['patientName'] ? htmlspecialchars($case['patientName'], ENT_QUOTES, 'UTF-8') : 'Unknown';
+
+    // Validate and set coordinates with fallback to barangay centroid
     $latEmpty = empty($case['latitude']) || $case['latitude'] == 0;
     $lngEmpty = empty($case['longitude']) || $case['longitude'] == 0;
+
     if (($latEmpty || $lngEmpty) && !empty($case['barangay']) && isset($barangayCoordinates[$case['barangay']])) {
-        $case['latitude'] = $barangayCoordinates[$case['barangay']]['lat'];
-        $case['longitude'] = $barangayCoordinates[$case['barangay']]['lng'];
-    }
-    if (!empty($case['latitude'])) {
-        $case['latitude'] = (float)$case['latitude'];
-    }
-    if (!empty($case['longitude'])) {
-        $case['longitude'] = (float)$case['longitude'];
+        $case['latitude'] = (float)$barangayCoordinates[$case['barangay']]['lat'];
+        $case['longitude'] = (float)$barangayCoordinates[$case['barangay']]['lng'];
+        $case['coordinates_fallback'] = true; // Flag to indicate fallback was used
+    } else {
+        $case['latitude'] = $case['latitude'] ? (float)$case['latitude'] : null;
+        $case['longitude'] = $case['longitude'] ? (float)$case['longitude'] : null;
+        $case['coordinates_fallback'] = false;
     }
 }
 unset($case);
@@ -258,6 +270,14 @@ foreach ($heatmapData as $data) {
 
 $maxCount = !empty($barangayCounts) ? max(array_column($barangayCounts, 'count')) : 1;
 
+// Function to calculate standard deviation
+function calculateStandardDeviation($numbers) {
+    if (empty($numbers)) return 0;
+    $mean = array_sum($numbers) / count($numbers);
+    $variance = array_sum(array_map(function($x) use ($mean) { return pow($x - $mean, 2); }, $numbers)) / count($numbers);
+    return sqrt($variance);
+}
+
         // Enhanced statistical analysis for better risk assessment
         $allCounts = array_column($barangayCounts, 'count');
         sort($allCounts);
@@ -273,20 +293,220 @@ $maxCount = !empty($barangayCounts) ? max(array_column($barangayCounts, 'count')
             'std_dev' => calculateStandardDeviation($allCounts)
         ];
 
-        // Calculate dynamic thresholds for legend
+// Calculate dynamic thresholds for legend based on statistical analysis
         $lowThreshold = max(1, (int)ceil($stats['p25']));
         $highThreshold = max($lowThreshold + 1, (int)ceil($stats['p95']));
 
-function calculateStandardDeviation($numbers) {
-    if (empty($numbers)) return 0;
-    $mean = array_sum($numbers) / count($numbers);
-    $variance = array_sum(array_map(function($x) use ($mean) { return pow($x - $mean, 2); }, $numbers)) / count($numbers);
-    return sqrt($variance);
+// ==========================================
+// DECISION SUPPORT SYSTEM (DSS) FEATURES
+// ==========================================
+
+/**
+ * Calculate comprehensive risk scores for each barangay
+ * @param array $barangayData Barangay case data
+ * @param array $stats Statistical data
+ * @return array Risk assessment data
+ */
+function calculateBarangayRiskScores($barangayData, $stats) {
+    $riskScores = [];
+
+    foreach ($barangayData as $barangay => $cases) {
+        $caseCount = count($cases);
+        if ($caseCount === 0) continue;
+
+        // Factor 1: Case density (normalized by statistical distribution)
+        $densityScore = 0;
+        if ($stats['std_dev'] > 0) {
+            $zScore = ($caseCount - $stats['mean']) / $stats['std_dev'];
+            $densityScore = max(0, min(100, 50 + ($zScore * 10))); // Convert to 0-100 scale
+        }
+
+        // Factor 2: Severity index (Category III = 3, II = 2, I = 1)
+        $severityScore = 0;
+        $severeCases = 0;
+        foreach ($cases as $case) {
+            $severity = 1;
+            if (strpos($case['biteType'], 'III') !== false) $severity = 3;
+            elseif (strpos($case['biteType'], 'II') !== false) $severity = 2;
+            $severityScore += $severity;
+            if ($severity >= 2) $severeCases++;
+        }
+        $avgSeverity = $severityScore / $caseCount;
+        $severityPercentile = min(100, ($avgSeverity - 1) * 33.33); // 1->0, 2->33.33, 3->66.66+
+
+        // Factor 3: Recency score (cases in last 30 days get higher weight)
+        $now = time();
+        $recentScore = 0;
+        $monthAgo = $now - (30 * 24 * 60 * 60);
+        foreach ($cases as $case) {
+            $caseTime = strtotime($case['biteDate']);
+            if ($caseTime >= $monthAgo) {
+                $daysOld = ($now - $caseTime) / (24 * 60 * 60);
+                $recencyWeight = max(0.1, 1 - ($daysOld / 30)); // Exponential decay
+                $recentScore += $recencyWeight;
+            }
+        }
+        $recencyPercentile = min(100, ($recentScore / $caseCount) * 100);
+
+        // Factor 4: Animal type risk (stray vs owned)
+        $animalRiskScore = 0;
+        $animalTypes = [];
+        foreach ($cases as $case) {
+            $animalType = $case['animalType'] ?: 'Unknown';
+            if (!isset($animalTypes[$animalType])) {
+                $animalTypes[$animalType] = ['total' => 0, 'stray' => 0];
+            }
+            $animalTypes[$animalType]['total']++;
+            if (isset($case['status']) && stripos($case['status'], 'stray') !== false) {
+                $animalTypes[$animalType]['stray']++;
+            }
+        }
+
+        foreach ($animalTypes as $type => $data) {
+            $strayRatio = $data['total'] > 0 ? $data['stray'] / $data['total'] : 0;
+            $animalRiskScore += $strayRatio * $data['total'];
+        }
+        $animalPercentile = min(100, ($animalRiskScore / $caseCount) * 100);
+
+        // Composite risk score (weighted average)
+        $compositeScore = (
+            $densityScore * 0.4 +      // Population density factor
+            $severityPercentile * 0.3 + // Severity factor
+            $recencyPercentile * 0.2 +  // Time factor
+            $animalPercentile * 0.1     // Animal factor
+        );
+
+        // Determine risk level and color coding
+        $riskLevel = 'low';
+        $riskColor = '#22c55e'; // Green
+        $riskLabel = 'Low Risk';
+        $priority = 'Monitor';
+
+        if ($compositeScore >= 75) {
+            $riskLevel = 'critical';
+            $riskColor = '#dc2626'; // Red
+            $riskLabel = 'Critical Risk';
+            $priority = 'Immediate Action';
+        } elseif ($compositeScore >= 60) {
+            $riskLevel = 'high';
+            $riskColor = '#ea580c'; // Orange
+            $riskLabel = 'High Risk';
+            $priority = 'High Priority';
+        } elseif ($compositeScore >= 40) {
+            $riskLevel = 'medium';
+            $riskColor = '#f59e0b'; // Yellow
+            $riskLabel = 'Medium Risk';
+            $priority = 'Moderate Attention';
+        }
+
+        $riskScores[$barangay] = [
+            'barangay' => $barangay,
+            'caseCount' => $caseCount,
+            'compositeScore' => round($compositeScore, 1),
+            'densityScore' => round($densityScore, 1),
+            'severityScore' => round($severityPercentile, 1),
+            'recencyScore' => round($recencyPercentile, 1),
+            'animalRiskScore' => round($animalPercentile, 1),
+            'severeCases' => $severeCases,
+            'riskLevel' => $riskLevel,
+            'riskColor' => $riskColor,
+            'riskLabel' => $riskLabel,
+            'priority' => $priority,
+            'recommendations' => generateRiskRecommendations($riskLevel, $caseCount, $severeCases)
+        ];
+    }
+
+    return $riskScores;
 }
 
-// Risk thresholds based on statistical analysis
-$lowThreshold = max(1, (int)ceil($stats['p25']));
-$highThreshold = max($lowThreshold + 1, (int)ceil($stats['p95']));
+/**
+ * Generate risk-based recommendations
+ */
+function generateRiskRecommendations($riskLevel, $caseCount, $severeCases) {
+    $recommendations = [];
+
+    switch ($riskLevel) {
+        case 'critical':
+            $recommendations[] = 'Immediate veterinary intervention required';
+            $recommendations[] = 'Increase animal control patrols';
+            $recommendations[] = 'Public health alert for residents';
+            if ($severeCases > 0) {
+                $recommendations[] = 'Priority vaccination program';
+            }
+            break;
+        case 'high':
+            $recommendations[] = 'Enhanced animal control measures';
+            $recommendations[] = 'Community education campaigns';
+            $recommendations[] = 'Regular veterinary monitoring';
+            break;
+        case 'medium':
+            $recommendations[] = 'Monitor animal populations';
+            $recommendations[] = 'Public awareness programs';
+            $recommendations[] = 'Regular reporting and assessment';
+            break;
+        default:
+            $recommendations[] = 'Maintain standard monitoring';
+            $recommendations[] = 'Continue public education';
+            break;
+    }
+
+    if ($caseCount > 10) {
+        $recommendations[] = 'Consider establishing animal control station';
+    }
+
+    return $recommendations;
+}
+
+// Build barangay case data for risk calculation
+$barangayCaseData = [];
+foreach ($cases as $case) {
+    $barangay = $case['barangay'] ?: 'Unknown';
+    if (!isset($barangayCaseData[$barangay])) {
+        $barangayCaseData[$barangay] = [];
+    }
+    $barangayCaseData[$barangay][] = $case;
+}
+
+// Calculate comprehensive risk scores for all barangays
+$barangayRiskScores = calculateBarangayRiskScores($barangayCaseData, $stats);
+
+// ==========================================
+// STRUCTURED DATA OUTPUT FOR JAVASCRIPT
+// ==========================================
+
+/**
+ * Prepare and validate all data for JavaScript consumption
+ * Ensures consistent data types and proper JSON encoding
+ */
+$jsData = [
+    'cases' => $cases,
+    'heatmapData' => $jsHeatmapData,
+    'barangayCoordinates' => $barangayCoordinates,
+    'maxCount' => (int)$maxCount,
+    'stats' => array_map(function($value) {
+        return is_numeric($value) ? (float)$value : $value;
+    }, $stats),
+    'barangayCounts' => $barangayCounts,
+    'recentCases' => $recentCases,
+    'barangayRiskScores' => $barangayRiskScores,
+    'config' => [
+        'centerLat' => (float)$centerLat,
+        'centerLng' => (float)$centerLng,
+        'mapBounds' => $mapBounds,
+        'lowThreshold' => (int)$lowThreshold,
+        'highThreshold' => (int)$highThreshold,
+        'totalCases' => (int)$totalCases,
+        'dateRangeLabel' => $dateRangeLabel
+    ]
+];
+
+// Validate JSON encoding will work
+foreach ($jsData as $key => $value) {
+    if (json_encode($value) === false) {
+        error_log("JSON encoding failed for {$key}: " . json_last_error_msg());
+        $jsData[$key] = []; // Fallback to empty array
+    }
+}
 ?>
 
 <!DOCTYPE html>
@@ -367,7 +587,6 @@ $highThreshold = max($lowThreshold + 1, (int)ceil($stats['p95']));
             background: white;
             border-bottom: 1px solid var(--gray-200);
             flex-shrink: 0;
-            flex-wrap: wrap;
         }
         
         .filters-bar .page-title {
@@ -378,6 +597,7 @@ $highThreshold = max($lowThreshold + 1, (int)ceil($stats['p95']));
             align-items: center;
             gap: 0.5rem;
             margin-right: auto;
+            white-space: nowrap;
         }
         
         .filters-bar .page-title i {
@@ -397,13 +617,14 @@ $highThreshold = max($lowThreshold + 1, (int)ceil($stats['p95']));
             display: flex;
             align-items: center;
             gap: 0.75rem;
-            flex-wrap: wrap;
+            flex: 1;
+            justify-content: flex-end;
         }
         
         .filter-item {
             display: flex;
             align-items: center;
-            gap: 0.35rem;
+            gap: 0.5rem;
         }
         
         .filter-item label {
@@ -420,7 +641,7 @@ $highThreshold = max($lowThreshold + 1, (int)ceil($stats['p95']));
             border: 1px solid var(--gray-300);
             border-radius: 6px;
             background: white;
-            min-width: 120px;
+            min-width: 130px;
         }
         
         .filter-item input:focus,
@@ -450,6 +671,7 @@ $highThreshold = max($lowThreshold + 1, (int)ceil($stats['p95']));
         
         .filter-btn-primary:hover { background: var(--primary-dark); }
         
+
         .filter-btn-secondary {
             background: var(--gray-100);
             color: var(--gray-700);
@@ -1133,17 +1355,30 @@ $highThreshold = max($lowThreshold + 1, (int)ceil($stats['p95']));
             .filters-bar {
                 padding: 0.5rem 0.75rem;
                 gap: 0.5rem;
+                flex-wrap: wrap;
             }
             .page-title {
                 flex-basis: 100%;
                 font-size: 1rem;
             }
-            .filter-item label { display: none; }
+            .filter-group {
+                flex-basis: 100%;
+                flex-wrap: wrap;
+                justify-content: flex-start;
+            }
+            .filter-item {
+                flex: 1 1 auto;
+                min-width: 120px;
+            }
+            .filter-item label { 
+                display: none; 
+            }
             .filter-item input,
             .filter-item select {
                 min-width: 100px;
                 padding: 0.35rem 0.5rem;
                 font-size: 0.8rem;
+                width: 100%;
             }
             .filter-btn {
                 padding: 0.35rem 0.6rem;
@@ -1174,7 +1409,7 @@ $highThreshold = max($lowThreshold + 1, (int)ceil($stats['p95']));
     <div class="page-wrapper">
         <div class="main-wrapper">
             <!-- Filters bar -->
-            <form method="GET" action="geomapping.php" class="filters-bar">
+            <form method="GET" action="geomapping.php" class="filters-bar" onsubmit="event.preventDefault(); applyFilters(); return false;">
                 <div class="page-title">
                     <i class="bi bi-geo-alt-fill"></i>
                     Geomapping
@@ -1182,17 +1417,33 @@ $highThreshold = max($lowThreshold + 1, (int)ceil($stats['p95']));
                 </div>
                 
                 <div class="filter-group">
+                    <!-- Date Range Filters -->
                     <div class="filter-item">
                         <label>From</label>
-                        <input type="date" name="date_from" value="<?= htmlspecialchars($dateFrom) ?>">
+                        <input type="date" name="date_from" id="dateFromFilter" value="<?= htmlspecialchars($dateFrom) ?>" onchange="applyFilters()">
                     </div>
                     <div class="filter-item">
                         <label>To</label>
-                        <input type="date" name="date_to" value="<?= htmlspecialchars($dateTo) ?>">
+                        <input type="date" name="date_to" id="dateToFilter" value="<?= htmlspecialchars($dateTo) ?>" onchange="applyFilters()">
                     </div>
+
+                    <!-- Barangay Filter -->
+                    <div class="filter-item">
+                        <label>Barangay</label>
+                        <select name="barangay" id="barangayFilter" onchange="applyFilters()">
+                            <option value="">All Barangays</option>
+                            <?php foreach ($barangays as $brgy): ?>
+                                <option value="<?= htmlspecialchars($brgy) ?>" <?= $barangayFilter === $brgy ? 'selected' : '' ?>>
+                                    <?= htmlspecialchars($brgy) ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+
+                    <!-- Animal Type Filter -->
                     <div class="filter-item">
                         <label>Animal</label>
-                        <select name="animal_type">
+                        <select name="animal_type" id="animalTypeFilter" onchange="applyFilters()">
                             <option value="">All Animals</option>
                             <?php foreach ($animalTypes as $type): ?>
                                 <option value="<?= htmlspecialchars($type) ?>" <?= $animalType === $type ? 'selected' : '' ?>>
@@ -1201,35 +1452,24 @@ $highThreshold = max($lowThreshold + 1, (int)ceil($stats['p95']));
                             <?php endforeach; ?>
                         </select>
                     </div>
+
+                    <!-- Category Filter -->
                     <div class="filter-item">
                         <label>Category</label>
-                        <select name="bite_category">
+                        <select name="bite_category" id="biteCategoryFilter" onchange="applyFilters()">
                             <option value="">All Categories</option>
                             <option value="Category I" <?= $biteCategory === 'Category I' ? 'selected' : '' ?>>Category I</option>
                             <option value="Category II" <?= $biteCategory === 'Category II' ? 'selected' : '' ?>>Category II</option>
                             <option value="Category III" <?= $biteCategory === 'Category III' ? 'selected' : '' ?>>Category III</option>
                         </select>
                     </div>
-                    <div class="filter-item">
-                        <label>Status</label>
-                        <select name="status">
-                            <option value="">All Status</option>
-                            <option value="Active" <?= $status === 'Active' ? 'selected' : '' ?>>Active</option>
-                            <option value="Completed" <?= $status === 'Completed' ? 'selected' : '' ?>>Completed</option>
-                            <option value="Pending" <?= $status === 'Pending' ? 'selected' : '' ?>>Pending</option>
-                        </select>
-                    </div>
-                    <button type="submit" class="filter-btn filter-btn-primary" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Apply selected filters to the map and data">
-                        <i class="bi bi-search"></i> Apply
-                    </button>
-                    <a href="geomapping.php" class="filter-btn filter-btn-secondary" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Reset all filters and show all data">
+
+                    <!-- Clear Button (only show when filters are active) -->
+                    <?php if (!empty($dateFrom) || !empty($dateTo) || !empty($barangayFilter) || !empty($animalType) || !empty($biteCategory)): ?>
+                    <button type="button" class="filter-btn filter-btn-secondary" onclick="clearAllFilters()" title="Clear all filters">
                         <i class="bi bi-x-lg"></i> Clear
-                    </a>
-                </div>
-                <div class="filters-meta">
-                    <span class="range-pill">
-                        <i class="bi bi-calendar3"></i> <?= $dateRangeLabel; ?>
-                    </span>
+                    </button>
+                    <?php endif; ?>
                 </div>
             </form>
             
@@ -1260,6 +1500,11 @@ $highThreshold = max($lowThreshold + 1, (int)ceil($stats['p95']));
 
                     <!-- Heatmap Settings Panel -->
                     <div class="heatmap-settings" id="heatmapSettings" style="display: none;">
+                        <div class="settings-info">
+                            <small style="color: var(--gray-600); font-size: 0.75rem;">
+                                <i class="bi bi-info-circle"></i> Heatmap uses spatial clustering and zoom-independent scaling for accurate risk representation
+                            </small>
+                        </div>
                         <div class="settings-panel">
                             <div class="setting-group">
                                 <label class="setting-label">Radius</label>
@@ -1279,7 +1524,8 @@ $highThreshold = max($lowThreshold + 1, (int)ceil($stats['p95']));
                             <div class="setting-group">
                                 <label class="setting-label">Intensity Mode</label>
                                 <select id="intensityMode" onchange="updateIntensityMode(this.value)">
-                                    <option value="linear" selected>Linear (Recommended)</option>
+                                    <option value="risk-weighted" selected>Risk-weighted (Recommended)</option>
+                                    <option value="linear">Linear</option>
                                     <option value="percentile">Percentile-based</option>
                                     <option value="logarithmic">Logarithmic</option>
                                 </select>
@@ -1474,6 +1720,69 @@ $highThreshold = max($lowThreshold + 1, (int)ceil($stats['p95']));
                                 </table>
                             </div>
                         </div>
+
+                        <!-- Risk Analysis -->
+                        <div class="data-section">
+                            <div class="data-header" onclick="toggleSection(this)">
+                                <h6><i class="bi bi-exclamation-triangle-fill"></i> Risk Analysis</h6>
+                                <i class="bi bi-chevron-down toggle-icon"></i>
+                            </div>
+                            <div class="data-body" id="riskBody" style="max-height: 300px;">
+                                <div class="risk-summary">
+                                    <?php
+                                    $criticalCount = 0;
+                                    $highCount = 0;
+                                    $mediumCount = 0;
+                                    $lowCount = 0;
+
+                                    foreach ($barangayRiskScores as $risk) {
+                                        switch ($risk['riskLevel']) {
+                                            case 'critical': $criticalCount++; break;
+                                            case 'high': $highCount++; break;
+                                            case 'medium': $mediumCount++; break;
+                                            default: $lowCount++; break;
+                                        }
+                                    }
+                                    ?>
+                                    <div class="risk-overview">
+                                        <div class="risk-stat"><span class="badge badge-critical"><?= $criticalCount ?></span> Critical</div>
+                                        <div class="risk-stat"><span class="badge badge-high"><?= $highCount ?></span> High</div>
+                                        <div class="risk-stat"><span class="badge badge-medium"><?= $mediumCount ?></span> Medium</div>
+                                        <div class="risk-stat"><span class="badge badge-low"><?= $lowCount ?></span> Low</div>
+                                    </div>
+                                </div>
+                                <table class="data-table risk-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Barangay</th>
+                                            <th>Risk Score</th>
+                                            <th>Priority</th>
+                                            <th>Action</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <?php
+                                        // Sort by risk score descending
+                                        uasort($barangayRiskScores, function($a, $b) {
+                                            return $b['compositeScore'] <=> $a['compositeScore'];
+                                        });
+
+                                        $count = 0;
+                                        foreach ($barangayRiskScores as $barangay => $risk):
+                                            if ($count >= 10) break; // Show top 10
+                                            $count++;
+                                        ?>
+                                        <tr onclick="focusLocation('<?= htmlspecialchars($barangay) ?>')">
+                                            <td><?= htmlspecialchars($barangay) ?></td>
+                                            <td><strong style="color: <?= $risk['riskColor'] ?>;"><?= $risk['compositeScore'] ?></strong></td>
+                                            <td><span class="badge badge-<?= $risk['riskLevel'] ?>"><?= $risk['priority'] ?></span></td>
+                                            <td><button class="btn btn-sm btn-outline-primary" onclick="event.stopPropagation(); showRiskDetails('<?= htmlspecialchars($barangay) ?>')">Details</button></td>
+                                        </tr>
+                                        <?php endforeach; ?>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
                         
                         <!-- Recent Cases -->
                         <div class="data-section">
@@ -1512,41 +1821,69 @@ $highThreshold = max($lowThreshold + 1, (int)ceil($stats['p95']));
     </div>
 
     <script>
-        // Test function availability
-        // console.log('Script loaded, focusLocation function:', typeof focusLocation);
+        // ==========================================
+        // DATA INITIALIZATION AND PROCESSING
+        // ==========================================
 
-        // Initialize map
-        const centerLat = <?= $centerLat ?>;
-        const centerLng = <?= $centerLng ?>;
+        /**
+         * Structured data from PHP backend
+         */
+        const jsData = <?= json_encode($jsData) ?>;
+        const cases = jsData.cases || [];
+        const heatmapData = jsData.heatmapData || [];
+        const barangayCoords = jsData.barangayCoordinates || {};
+        const maxCount = jsData.maxCount || 1;
+        const stats = jsData.stats || {};
+        const originalBarangayCounts = jsData.barangayCounts || [];
+        const originalRecentCases = jsData.recentCases || [];
+        const barangayRiskScores = jsData.barangayRiskScores || {};
+        const config = jsData.config || {};
+
+        // ==========================================
+        // MAP INITIALIZATION
+        // ==========================================
+
+        // Initialize map using structured config
+        const centerLat = config.centerLat || 10.735;
+        const centerLng = config.centerLng || 122.966;
         const talisayBounds = L.latLngBounds(
-            [<?= $mapBounds['southWest']['lat'] ?>, <?= $mapBounds['southWest']['lng'] ?>],
-            [<?= $mapBounds['northEast']['lat'] ?>, <?= $mapBounds['northEast']['lng'] ?>]
+            [config.mapBounds?.southWest?.lat || 10.60, config.mapBounds?.southWest?.lng || 122.85],
+            [config.mapBounds?.northEast?.lat || 10.90, config.mapBounds?.northEast?.lng || 123.08]
         );
         const map = L.map('map', {
             maxBounds: talisayBounds,
             maxBoundsViscosity: 1.0,
-            minZoom: 12,
-            maxZoom: 18
+            minZoom: 11,
+            maxZoom: 19,
+            zoomControl: true,
+            scrollWheelZoom: true,
+            doubleClickZoom: true,
+            boxZoom: true,
+            keyboard: true,
+            dragging: true,
+            touchZoom: true
         }).setView([centerLat, centerLng], 13);
+
+        // Enhanced zoom behavior - fit bounds initially but allow user control
         map.fitBounds(talisayBounds);
-        
+
+        // Add scale control
+        L.control.scale({
+            position: 'bottomleft',
+            metric: true,
+            imperial: false
+        }).addTo(map);
+
         const heatmapBtnEl = document.getElementById('heatmapBtn');
         const markersBtnEl = document.getElementById('markersBtn');
-        
+
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             attribution: '&copy; OpenStreetMap contributors'
         }).addTo(map);
-        
-        // Data from PHP
-        const cases = <?= json_encode($cases) ?>;
-        const heatmapData = <?= json_encode($jsHeatmapData) ?>;
-        const barangayCoords = <?= json_encode($barangayCoordinates) ?>;
-        const maxCount = <?= (int)$maxCount ?> || 1;
-        const stats = <?= json_encode($stats) ?>;
-        const originalBarangayCounts = <?= json_encode($barangayCounts) ?>;
-        const originalRecentCases = <?= json_encode($recentCases) ?>;
-        
-        // Build barangay case data for quick lookup
+
+        /**
+         * Build barangay case data for quick lookup and risk calculations
+         */
         const barangayCaseData = {};
         cases.forEach(c => {
             const barangay = c.barangay || 'Unknown';
@@ -1558,168 +1895,383 @@ $highThreshold = max($lowThreshold + 1, (int)ceil($stats['p95']));
         
         let focusedLocation = null;
 
-        // Layers
+        // ==========================================
+        // MAP LAYERS AND VISUALIZATION
+        // ==========================================
+
+        /**
+         * Map layers for different visualization modes
+         */
         let heatLayer = null;
-        let markersLayer = L.layerGroup();
+        let markersLayer = L.markerClusterGroup({
+            chunkedLoading: true,
+            maxClusterRadius: 50,
+            spiderfyOnMaxZoom: true,
+            showCoverageOnHover: false,
+            zoomToBoundsOnClick: true,
+            removeOutsideVisibleBounds: true,
+            animate: true,
+            iconCreateFunction: function(cluster) {
+                const childCount = cluster.getChildCount();
+                let className = 'marker-cluster-';
+
+                if (childCount < 10) {
+                    className += 'small';
+                } else if (childCount < 100) {
+                    className += 'medium';
+                } else {
+                    className += 'large';
+                }
+
+                return new L.DivIcon({
+                    html: '<div><span>' + childCount + '</span></div>',
+                    className: 'marker-cluster ' + className,
+                    iconSize: new L.Point(40, 40)
+                });
+            }
+        });
         const markerPoints = [];
 
-        // Heatmap configuration with interactive controls
+        // ==========================================
+        // CONFIGURATION OBJECTS
+        // ==========================================
+
+        /**
+         * Heatmap visualization configuration
+         */
         let heatmapConfig = {
-            radius: 40,
-            blur: 25,
+            radius: 25,        // Fixed radius representing ~500m influence area
+            blur: 20,          // Fixed blur for consistent appearance
             max: 1.0,
             maxZoom: 18,
-            minOpacity: 0.3,
-            intensityMode: 'linear' // 'percentile', 'linear', 'logarithmic' - linear with sqrt scaling for better data reflection
+            minOpacity: 0.4,  // Slightly increased for better visibility
+            intensityMode: 'risk-weighted' // 'percentile', 'linear', 'logarithmic', 'risk-weighted'
         };
 
-        // Time filter configuration
+        /**
+         * Time-based filtering configuration
+         */
         let currentTimeFilter = {
-            type: 'all', // 'all', 'days', 'custom'
-            days: null,
+            type: 'all', // 'all', 'recent', 'month', 'quarter', 'year', 'custom'
+            period: null, // for predefined periods
+            days: null, // for custom day ranges
             startDate: null,
             endDate: null
         };
 
-        // Multivariate filter configuration
+        /**
+         * Multivariate filtering configuration
+         */
         let currentMultivariateFilters = {
             animalType: '',
             biteCategory: '',
             status: ''
         };
 
-        // Dynamic legend thresholds
+        /**
+         * Dynamic legend thresholds based on statistical analysis
+         */
         let currentLegendThresholds = {
-            low: <?= $lowThreshold ?>,
-            high: <?= $highThreshold ?>
+            low: config.lowThreshold || 1,
+            high: config.highThreshold || 7
         };
 
-        // Enhanced intensity calculation using statistical analysis and risk scoring
+        /**
+         * Calculate heatmap intensity with enhanced statistical analysis and risk scoring
+         * @param {number} count - Number of cases in the area
+         * @param {string} barangay - Barangay name for risk calculation
+         * @param {number} localMaxCount - Local maximum count for scaling (optional)
+         * @returns {number} Intensity value between 0.0 and 1.0
+         */
         function calculateHeatmapIntensity(count, barangay = null, localMaxCount = null) {
+            if (count === 0) return 0.0;
+
             // Use local max count if provided (for filtered data), otherwise use global max
             const maxCountForScaling = localMaxCount || maxCount;
             const { p25, p50, p75, p95, mean, std_dev } = stats;
-            let intensity = 0;
+
+            let baseIntensity = 0;
 
             switch(heatmapConfig.intensityMode) {
                 case 'percentile':
-                    if (count <= p25) intensity = Math.max(0.05, count / Math.max(p25, 1) * 0.25);
-                    else if (count <= p50) intensity = 0.25 + (count - p25) / Math.max(p50 - p25, 1) * 0.25;
-                    else if (count <= p75) intensity = 0.5 + (count - p50) / Math.max(p75 - p50, 1) * 0.25;
-                    else if (count <= p95) intensity = 0.75 + (count - p75) / Math.max(p95 - p75, 1) * 0.2;
-                    else intensity = 0.95 + Math.min(0.05, (count - p95) / Math.max(p95, 1) * 0.05);
+                    // Enhanced percentile-based scaling with better distribution
+                    if (count <= p25) {
+                        baseIntensity = Math.max(0.05, (count / Math.max(p25, 1)) * 0.3);
+                    } else if (count <= p50) {
+                        baseIntensity = 0.3 + ((count - p25) / Math.max(p50 - p25, 1)) * 0.2;
+                    } else if (count <= p75) {
+                        baseIntensity = 0.5 + ((count - p50) / Math.max(p75 - p50, 1)) * 0.2;
+                    } else if (count <= p95) {
+                        baseIntensity = 0.7 + ((count - p75) / Math.max(p95 - p75, 1)) * 0.2;
+                    } else {
+                        baseIntensity = 0.9 + Math.min(0.1, ((count - p95) / Math.max(p95, 1)) * 0.1);
+                    }
                     break;
 
                 case 'logarithmic':
-                    intensity = Math.min(1.0, Math.max(0.05, Math.log(count + 1) / Math.log(maxCountForScaling + 1)));
+                    // Improved logarithmic scaling with better minimum visibility
+                    baseIntensity = Math.min(1.0, Math.max(0.08, Math.log(count + 1) / Math.log(maxCountForScaling + 1)));
+                    break;
+
+                case 'risk-weighted':
+                    // New mode: Risk-weighted scaling combining count and statistical outliers
+                    const zScore = std_dev > 0 ? (count - mean) / std_dev : 0;
+                    const percentile = count <= p25 ? 0.2 :
+                                     count <= p50 ? 0.4 :
+                                     count <= p75 ? 0.6 :
+                                     count <= p95 ? 0.8 : 0.95;
+
+                    // Combine percentile ranking with z-score for outlier detection
+                    baseIntensity = Math.min(1.0, Math.max(0.05,
+                        (percentile * 0.7) + (Math.max(0, zScore) * 0.1) + (count / maxCountForScaling * 0.2)
+                    ));
                     break;
 
                 case 'linear':
                 default:
-                    // Enhanced scaling that ensures critical areas reach maximum intensity
+                    // Enhanced linear scaling with better granularity
                     const ratio = count / maxCountForScaling;
 
-                    // Guarantee that areas with high absolute counts show as critical
-                    if (count >= 10 && ratio >= 0.5) {
-                        // High count areas - force red colors
-                        intensity = Math.max(0.8, 0.8 + (ratio - 0.5) / 0.5 * 0.2);
-                    } else if (count >= maxCountForScaling * 0.7) {
-                        // Top 30% by count - guaranteed high intensity (0.8-1.0)
-                        intensity = 0.8 + (ratio - 0.7) / 0.3 * 0.2;
-                    } else if (ratio >= 0.5) {
-                        // Next tier (0.5-0.7) - medium-high
-                        intensity = 0.5 + (ratio - 0.5) / 0.2 * 0.3;
-                    } else if (ratio >= 0.3) {
-                        // Medium (0.3-0.5)
-                        intensity = 0.3 + (ratio - 0.3) / 0.2 * 0.2;
+                    // Multi-tier scaling for better visual differentiation
+                    if (ratio >= 0.8) {
+                        baseIntensity = 0.8 + ((ratio - 0.8) / 0.2) * 0.2; // 0.8-1.0
+                    } else if (ratio >= 0.6) {
+                        baseIntensity = 0.6 + ((ratio - 0.6) / 0.2) * 0.2; // 0.6-0.8
+                    } else if (ratio >= 0.4) {
+                        baseIntensity = 0.4 + ((ratio - 0.4) / 0.2) * 0.2; // 0.4-0.6
+                    } else if (ratio >= 0.2) {
+                        baseIntensity = 0.2 + ((ratio - 0.2) / 0.2) * 0.2; // 0.2-0.4
                     } else if (ratio >= 0.1) {
-                        // Low-medium (0.1-0.3)
-                        intensity = 0.1 + (ratio - 0.1) / 0.2 * 0.2;
+                        baseIntensity = 0.1 + ((ratio - 0.1) / 0.1) * 0.1; // 0.1-0.2
                     } else {
-                        // Very low (0.05-0.1)
-                        intensity = Math.max(0.05, ratio * 0.5);
+                        baseIntensity = Math.max(0.05, ratio * 2); // 0.05-0.1
                     }
-                    intensity = Math.min(1.0, Math.max(0.05, intensity));
                     break;
             }
 
-            // Apply risk multiplier if barangay data available
+            // Apply risk multiplier with enhanced scaling
+            let finalIntensity = baseIntensity;
             if (barangay && barangayCaseData[barangay]) {
                 const riskMultiplier = calculateRiskMultiplier(barangay);
-                // Stronger boost for high-risk areas to ensure they show as critical
-                if (riskMultiplier > 1.3) {
-                    // Critical areas get maximum intensity boost
-                    intensity = Math.min(1.0, intensity * riskMultiplier * 0.8);
-                } else if (riskMultiplier > 1.1) {
-                    // Medium risk areas get moderate boost
-                    intensity = Math.min(1.0, intensity * (1 + (riskMultiplier - 1) * 0.5));
+
+                // Enhanced risk-based intensity scaling
+                if (riskMultiplier >= 1.5) {
+                    // Critical risk areas - significant boost
+                    finalIntensity = Math.min(1.0, baseIntensity * riskMultiplier * 0.7);
+                } else if (riskMultiplier >= 1.2) {
+                    // High risk areas - moderate boost
+                    finalIntensity = Math.min(1.0, baseIntensity * (1 + (riskMultiplier - 1) * 0.6));
+                } else if (riskMultiplier >= 0.9) {
+                    // Medium risk areas - light boost
+                    finalIntensity = Math.min(1.0, baseIntensity * (1 + (riskMultiplier - 1) * 0.3));
                 } else {
-                    // Low risk areas get minimal boost
-                    intensity = Math.min(1.0, intensity * (1 + (riskMultiplier - 1) * 0.2));
+                    // Low risk areas - minimal boost
+                    finalIntensity = Math.max(0.05, baseIntensity * riskMultiplier);
                 }
             }
+
+            // Ensure minimum visibility for areas with cases
+            return Math.max(0.05, Math.min(1.0, finalIntensity));
 
             return intensity;
         }
 
         // Basic risk scoring algorithm
+        // ==========================================
+        // CORE CALCULATION FUNCTIONS
+        // ==========================================
+
+        /**
+         * Calculate risk multiplier for a barangay based on multiple factors
+         * @param {string} barangay - Barangay name
+         * @returns {number} Risk multiplier between 0.8 and 2.0
+         */
         function calculateRiskMultiplier(barangay) {
             const barangayCases = barangayCaseData[barangay] || [];
             if (barangayCases.length === 0) return 1.0;
 
-            // Factor 1: Recency (more recent cases = higher risk)
             const now = new Date();
-            const recentCases = barangayCases.filter(c => {
+            const totalCases = barangayCases.length;
+
+            // Factor 1: Time-based decay (exponential decay over time)
+            let timeWeightedScore = 0;
+            const halfLifeDays = 90; // Risk halves every 90 days
+            barangayCases.forEach(c => {
                 const caseDate = new Date(c.biteDate);
                 const daysDiff = (now - caseDate) / (1000 * 60 * 60 * 24);
-                return daysDiff <= 30; // Last 30 days
+                const decayFactor = Math.pow(0.5, daysDiff / halfLifeDays);
+                timeWeightedScore += decayFactor;
+            });
+            const recencyScore = Math.min(timeWeightedScore / totalCases, 2.0);
+
+            // Factor 2: Severity weighting (Category III > II > I)
+            let severityWeightedScore = 0;
+            barangayCases.forEach(c => {
+                let severityWeight = 1.0;
+                if (c.biteType === 'Category II') severityWeight = 1.5;
+                else if (c.biteType === 'Category III') severityWeight = 2.0;
+                severityWeightedScore += severityWeight;
+            });
+            const severityScore = severityWeightedScore / totalCases;
+
+            // Factor 3: Animal type risk (stray vs owned, diversity)
+            const animalStats = {};
+            barangayCases.forEach(c => {
+                const animalType = c.animalType || 'Unknown';
+                if (!animalStats[animalType]) {
+                    animalStats[animalType] = { count: 0, stray: 0, owned: 0 };
+                }
+                animalStats[animalType].count++;
+
+                // Assume status indicates stray vs owned (this could be enhanced with actual data)
+                if (c.status && c.status.toLowerCase().includes('stray')) {
+                    animalStats[animalType].stray++;
+                } else {
+                    animalStats[animalType].owned++;
+                }
             });
 
-            // Factor 2: Severity (higher category = higher risk)
-            const severeCases = barangayCases.filter(c =>
-                c.biteType === 'Category II' || c.biteType === 'Category III'
-            );
+            // Calculate animal risk (stray animals are higher risk, diversity increases risk)
+            let animalRiskScore = 0;
+            const animalTypes = Object.keys(animalStats);
+            animalTypes.forEach(type => {
+                const stats = animalStats[type];
+                const strayRatio = stats.stray / stats.count;
+                const typeRisk = 1.0 + (strayRatio * 0.5); // Stray animals increase risk
+                animalRiskScore += typeRisk * stats.count;
+            });
+            animalRiskScore = animalRiskScore / totalCases;
+            const diversityBonus = Math.min(animalTypes.length * 0.1, 0.5); // Diversity bonus
 
-            // Factor 3: Animal diversity (more animal types = higher risk)
-            const animalTypes = new Set(barangayCases.map(c => c.animalType).filter(Boolean));
+            // Factor 4: Case density (population-adjusted risk if available)
+            const densityScore = 1.0; // Placeholder - could be enhanced with population data
 
-            // Calculate composite risk score
-            const recencyScore = recentCases.length / Math.max(barangayCases.length, 1);
-            const severityScore = severeCases.length / Math.max(barangayCases.length, 1);
-            const diversityScore = Math.min(animalTypes.size / 3, 1); // Cap at 3 animal types
+            // Calculate composite risk score with weighted factors
+            const compositeRisk = (
+                recencyScore * 0.4 +      // Time decay (most important)
+                severityScore * 0.3 +     // Severity
+                animalRiskScore * 0.2 +   // Animal factors
+                diversityBonus * 0.1      // Diversity bonus
+            ) * densityScore;
 
-            const compositeRisk = (recencyScore * 0.4) + (severityScore * 0.4) + (diversityScore * 0.2);
-
-            // Return multiplier (1.0 to 1.5)
-            return 1.0 + (compositeRisk * 0.5);
+            // Return multiplier (0.8 to 2.0 range for better differentiation)
+            return Math.max(0.8, Math.min(2.0, 1.0 + (compositeRisk - 1.0) * 0.5));
         }
 
-        // Filter cases by current filters (time + multivariate)
+        // ==========================================
+        // SPATIAL ANALYSIS FUNCTIONS
+        // ==========================================
+
+        /**
+         * Cluster nearby cases to prevent heatmap overcrowding and false intensity buildup
+         * @param {Array} cases - Array of case objects with latitude/longitude
+         * @param {number} maxDistance - Maximum distance in degrees for clustering (~0.001 = ~100m)
+         * @returns {Array} Array of case clusters
+         */
+        function clusterNearbyCases(cases, maxDistance = 0.001) {
+            const clusters = [];
+            const used = new Set();
+
+            cases.forEach((caseItem, index) => {
+                if (used.has(index)) return;
+
+                const cluster = [caseItem];
+                used.add(index);
+
+                // Find all nearby cases within maxDistance
+                cases.forEach((otherCase, otherIndex) => {
+                    if (used.has(otherIndex) || index === otherIndex) return;
+
+                    const distance = calculateDistance(
+                        parseFloat(caseItem.latitude), parseFloat(caseItem.longitude),
+                        parseFloat(otherCase.latitude), parseFloat(otherCase.longitude)
+                    );
+
+                    if (distance <= maxDistance) {
+                        cluster.push(otherCase);
+                        used.add(otherIndex);
+                    }
+                });
+
+                clusters.push(cluster);
+            });
+
+            return clusters;
+        }
+
+        /**
+         * Calculate distance between two geographic points using Haversine formula
+         * @param {number} lat1 - Latitude of first point
+         * @param {number} lng1 - Longitude of first point
+         * @param {number} lat2 - Latitude of second point
+         * @param {number} lng2 - Longitude of second point
+         * @returns {number} Distance in degrees (approximately)
+         */
+        function calculateDistance(lat1, lng1, lat2, lng2) {
+            const dLat = (lat2 - lat1) * Math.PI / 180;
+            const dLng = (lng2 - lng1) * Math.PI / 180;
+            const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                     Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                     Math.sin(dLng/2) * Math.sin(dLng/2);
+            return 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        }
+
+        // ==========================================
+        // DATA FILTERING FUNCTIONS
+        // ==========================================
+
+        /**
+         * Filter cases by current time and multivariate filters
+         * @returns {Array} Filtered array of cases
+         */
         function getFilteredCases() {
             let filteredCases = cases;
 
-            // Apply time filter
+            // Apply enhanced time filter
             if (currentTimeFilter.type !== 'all') {
                 const now = new Date();
-                let cutoffDate = null;
+                let startDate = null;
+                let endDate = now;
 
-                if (currentTimeFilter.type === 'days') {
-                    cutoffDate = new Date(now.getTime() - (currentTimeFilter.days * 24 * 60 * 60 * 1000));
-                } else if (currentTimeFilter.type === 'custom' && currentTimeFilter.startDate) {
-                    cutoffDate = new Date(currentTimeFilter.startDate);
+                switch (currentTimeFilter.type) {
+                    case 'recent':
+                        // Last 7 days
+                        startDate = new Date(now.getTime() - (7 * 24 * 60 * 60 * 1000));
+                        break;
+                    case 'month':
+                        // Current month
+                        startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+                        break;
+                    case 'quarter':
+                        // Current quarter
+                        const quarterStartMonth = Math.floor(now.getMonth() / 3) * 3;
+                        startDate = new Date(now.getFullYear(), quarterStartMonth, 1);
+                        break;
+                    case 'year':
+                        // Current year
+                        startDate = new Date(now.getFullYear(), 0, 1);
+                        break;
+                    case 'days':
+                        if (currentTimeFilter.days) {
+                            startDate = new Date(now.getTime() - (currentTimeFilter.days * 24 * 60 * 60 * 1000));
+                        }
+                        break;
+                    case 'custom':
+                        if (currentTimeFilter.startDate) {
+                            startDate = new Date(currentTimeFilter.startDate);
+                        }
+                        if (currentTimeFilter.endDate) {
+                            endDate = new Date(currentTimeFilter.endDate);
+                        }
+                        break;
                 }
 
-                filteredCases = filteredCases.filter(c => {
-                    const caseDate = new Date(c.biteDate);
-                    if (currentTimeFilter.type === 'custom') {
-                        if (currentTimeFilter.endDate) {
-                            const endDate = new Date(currentTimeFilter.endDate);
-                            return caseDate >= cutoffDate && caseDate <= endDate;
-                        }
-                        return caseDate >= cutoffDate;
-                    }
-                    return caseDate >= cutoffDate;
-                });
+                if (startDate) {
+                    filteredCases = filteredCases.filter(c => {
+                        const caseDate = new Date(c.biteDate);
+                        return caseDate >= startDate && caseDate <= endDate;
+                    });
+                }
             }
 
             // Apply multivariate filters
@@ -1782,14 +2334,41 @@ $highThreshold = max($lowThreshold + 1, (int)ceil($stats['p95']));
                 // Calculate local maximum for filtered data
                 const filteredMaxCount = Math.max(...Object.values(filteredBarangayCounts), 1);
 
-                heatPoints = filteredHeatmapData
-                    .filter(point => point.lat && point.lng)
-                    .map(point => {
+                // Generate heat points with spatial distribution to prevent artificial overlap
+                // This approach uses actual case locations when available, clustering nearby cases
+                // to provide more accurate risk visualization without zoom-dependent artifacts
+                heatPoints = [];
+
+                filteredHeatmapData.forEach(point => {
+                    if (!point.lat || !point.lng) return;
+
+                    const barangay = point.barangay;
+                    const caseCount = point.count;
+                    const intensity = calculateHeatmapIntensity(caseCount, barangay, filteredMaxCount);
+
+                    // Get actual case locations for this barangay if available
+                    const barangayCases = filteredCases.filter(c => c.barangay === barangay && c.latitude && c.longitude);
+
+                    if (barangayCases.length > 0) {
+                        // Distribute heat based on actual case locations
+                        // Group nearby cases to prevent overcrowding
+                        const caseClusters = clusterNearbyCases(barangayCases, 0.001); // ~100m clustering
+
+                        caseClusters.forEach(cluster => {
+                            const avgLat = cluster.reduce((sum, c) => sum + parseFloat(c.latitude), 0) / cluster.length;
+                            const avgLng = cluster.reduce((sum, c) => sum + parseFloat(c.longitude), 0) / cluster.length;
+                            const clusterIntensity = intensity * Math.min(cluster.length / caseCount, 1); // Proportional intensity
+                            heatPoints.push([avgLat, avgLng, clusterIntensity]);
+                        });
+                    } else {
+                        // Fallback to barangay centroid with reduced intensity to minimize overlap
                         const lat = parseFloat(point.lat);
                         const lng = parseFloat(point.lng);
-                        const intensity = calculateHeatmapIntensity(point.count, point.barangay, filteredMaxCount);
-                        return [lat, lng, intensity];
-                    });
+                        // Reduce intensity for centroid-only data to prevent false high-risk appearance
+                        const centroidIntensity = intensity * 0.7;
+                        heatPoints.push([lat, lng, centroidIntensity]);
+                    }
+                });
 
                 // Update cache
                 heatmapCache = {
@@ -1809,13 +2388,19 @@ $highThreshold = max($lowThreshold + 1, (int)ceil($stats['p95']));
             }
         }
 
+        // ==========================================
+        // HEATMAP VISUALIZATION FUNCTIONS
+        // ==========================================
+
+        /**
+         * Create heatmap layer directly (for small datasets)
+         * @param {Array} heatPoints - Array of [lat, lng, intensity] points
+         */
         function createHeatmapDirectly(heatPoints) {
-            // Adjust radius and blur based on zoom level for consistent visual density
-            const currentZoom = map.getZoom();
-            // Less aggressive scaling to prevent over-blending at low zoom
-            const zoomFactor = 1 + (currentZoom - 13) * 0.05;
-            const adjustedRadius = Math.max(20, Math.min(45, heatmapConfig.radius * zoomFactor));
-            const adjustedBlur = Math.max(20, Math.min(35, heatmapConfig.blur * zoomFactor));
+            // Fixed radius and blur for consistent risk visualization across all zoom levels
+            // Radius represents approximate 500m influence area (scaled for map pixels)
+            const adjustedRadius = heatmapConfig.radius || 25;
+            const adjustedBlur = heatmapConfig.blur || 20;
 
             heatLayer = L.heatLayer(heatPoints, {
                 radius: adjustedRadius,
@@ -1844,12 +2429,10 @@ $highThreshold = max($lowThreshold + 1, (int)ceil($stats['p95']));
         }
 
         function createHeatmapWithWorker(heatPoints) {
-            // Adjust radius and blur based on zoom level for consistent visual density
-            const currentZoom = map.getZoom();
-            // Less aggressive scaling to prevent over-blending at low zoom
-            const zoomFactor = 1 + (currentZoom - 13) * 0.05;
-            const adjustedRadius = Math.max(20, Math.min(45, heatmapConfig.radius * zoomFactor));
-            const adjustedBlur = Math.max(20, Math.min(35, heatmapConfig.blur * zoomFactor));
+            // Fixed radius and blur for consistent risk visualization across all zoom levels
+            // Radius represents approximate 500m influence area (scaled for map pixels)
+            const adjustedRadius = heatmapConfig.radius || 25;
+            const adjustedBlur = heatmapConfig.blur || 20;
 
             // For very large datasets, process in chunks to prevent UI blocking
             const chunkSize = 500;
@@ -1911,37 +2494,110 @@ $highThreshold = max($lowThreshold + 1, (int)ceil($stats['p95']));
         // Initialize legend thresholds
         updateLegendThresholds();
         
-        // Create markers
+        /**
+         * Create enhanced markers with risk-based styling
+         */
+        function createMarkers() {
+            // Clear existing markers
+            markersLayer.clearLayers();
+            markerPoints.length = 0;
+
         cases.forEach(c => {
             if (c.latitude && c.longitude) {
                 const lat = parseFloat(c.latitude);
                 const lng = parseFloat(c.longitude);
-                const marker = L.circleMarker([lat, lng], {
-                    radius: 7,
-                    fillColor: '#0ea5e9',
-                    color: '#0284c7',
+
+                    // Determine marker style based on bite category and risk
+                    let markerStyle = {
+                        radius: 6,
                     weight: 2,
                     opacity: 1,
-                    fillOpacity: 0.7
-                });
+                        fillOpacity: 0.8
+                    };
+
+                    // Color coding based on bite category (risk level)
+                    switch (c.biteType) {
+                        case 'Category III':
+                            markerStyle.fillColor = '#dc2626'; // Red - highest risk
+                            markerStyle.color = '#b91c1c';
+                            markerStyle.radius = 8;
+                            break;
+                        case 'Category II':
+                            markerStyle.fillColor = '#ea580c'; // Orange - high risk
+                            markerStyle.color = '#c2410c';
+                            markerStyle.radius = 7;
+                            break;
+                        case 'Category I':
+                        default:
+                            markerStyle.fillColor = '#f59e0b'; // Yellow - moderate risk
+                            markerStyle.color = '#d97706';
+                            break;
+                    }
+
+                    // Additional styling for stray animals
+                    if (c.status && c.status.toLowerCase().includes('stray')) {
+                        markerStyle.weight = 3;
+                        markerStyle.opacity = 0.9;
+                    }
+
+                    const marker = L.circleMarker([lat, lng], markerStyle);
+
                 markerPoints.push([lat, lng]);
+
+                    // Enhanced popup with more information
+                    const formatDate = (dateStr) => {
+                        if (!dateStr) return 'N/A';
+                        const date = new Date(dateStr);
+                        return date.toLocaleDateString('en-US', {
+                            year: 'numeric',
+                            month: 'short',
+                            day: 'numeric'
+                        });
+                    };
+
+                    const riskLevel = c.biteType === 'Category III' ? 'Critical' :
+                                     c.biteType === 'Category II' ? 'High' : 'Moderate';
+
                 marker.bindPopup(`
-                    <div style="font-size: 13px;">
-                        <strong style="font-size: 14px;">${c.barangay || 'Unknown Location'}</strong><br>
-                        <span style="color: #6b7280;">Animal:</span> ${c.animalType || 'N/A'}<br>
-                        <span style="color: #6b7280;">Category:</span> ${c.biteType || 'N/A'}<br>
-                        <span style="color: #6b7280;">Date:</span> ${c.biteDate || 'N/A'}
+                        <div style="font-family: system-ui, sans-serif; font-size: 14px; max-width: 250px;">
+                            <div style="border-bottom: 1px solid #e5e7eb; padding-bottom: 8px; margin-bottom: 8px;">
+                                <strong style="font-size: 16px; color: #1f2937;">${c.barangay || 'Unknown Location'}</strong>
+                            </div>
+                            <div style="display: grid; gap: 4px;">
+                                <div><span style="color: #6b7280;">Patient:</span> ${c.patientName || 'N/A'}</div>
+                                <div><span style="color: #6b7280;">Animal:</span> ${c.animalType || 'N/A'}</div>
+                                <div><span style="color: #6b7280;">Category:</span> <strong>${c.biteType || 'N/A'}</strong></div>
+                                <div><span style="color: #6b7280;">Risk Level:</span> <span style="color: ${markerStyle.fillColor};">${riskLevel}</span></div>
+                                <div><span style="color: #6b7280;">Date:</span> ${formatDate(c.biteDate)}</div>
+                                <div><span style="color: #6b7280;">Status:</span> ${c.status || 'N/A'}</div>
+                            </div>
                     </div>
                 `);
+
                 markersLayer.addLayer(marker);
             }
         });
+        }
+
+        // ==========================================
+        // MARKER VISUALIZATION FUNCTIONS
+        // ==========================================
+
+        // Initialize markers
+        createMarkers();
         
         if (!heatLayer && markerPoints.length > 0) {
             showMarkers();
             heatmapBtnEl.disabled = true;
         }
         
+        // ==========================================
+        // LAYER CONTROL FUNCTIONS
+        // ==========================================
+
+        /**
+         * Show heatmap layer and hide markers
+         */
         function showHeatmap() {
             if (!heatLayer) return;
             heatLayer.addTo(map);
@@ -1957,7 +2613,13 @@ $highThreshold = max($lowThreshold + 1, (int)ceil($stats['p95']));
             heatmapBtnEl.classList.remove('active');
         }
 
-        // Interactive heatmap controls
+        // ==========================================
+        // UI CONTROL FUNCTIONS
+        // ==========================================
+
+        /**
+         * Toggle heatmap settings panel visibility
+         */
         function toggleHeatmapSettings() {
             const settings = document.getElementById('heatmapSettings');
             const btn = document.getElementById('settingsBtn');
@@ -2041,17 +2703,93 @@ $highThreshold = max($lowThreshold + 1, (int)ceil($stats['p95']));
             updateLegendThresholds();
         }
 
-        // Multivariate filter functions
+        // ==========================================
+        // ENHANCED FILTER SYSTEM
+        // ==========================================
+
+
+        /**
+         * Apply filters and update URL parameters
+         */
+        function applyFilters() {
+            const params = new URLSearchParams();
+            
+            const dateFrom = document.getElementById('dateFromFilter')?.value || '';
+            const dateTo = document.getElementById('dateToFilter')?.value || '';
+            const barangay = document.getElementById('barangayFilter')?.value || '';
+            const animalType = document.getElementById('animalTypeFilter')?.value || '';
+            const biteCategory = document.getElementById('biteCategoryFilter')?.value || '';
+            const status = document.getElementById('statusFilter')?.value || '';
+
+            if (dateFrom) params.set('date_from', dateFrom);
+            if (dateTo) params.set('date_to', dateTo);
+            if (barangay) params.set('barangay', barangay);
+            if (animalType) params.set('animal_type', animalType);
+            if (biteCategory) params.set('bite_category', biteCategory);
+            if (status) params.set('status', status);
+
+            // Update URL and reload
+            const newUrl = 'geomapping.php' + (params.toString() ? '?' + params.toString() : '');
+            window.location.href = newUrl;
+        }
+
+        /**
+         * Clear all filters
+         */
+        function clearAllFilters() {
+            window.location.href = 'geomapping.php';
+        }
+
+
+        /**
+         * Initialize filters from URL parameters
+         */
+        function initializeFiltersFromURL() {
+            const urlParams = new URLSearchParams(window.location.search);
+            
+            if (urlParams.has('date_from')) {
+                const dateFromInput = document.getElementById('dateFromFilter');
+                if (dateFromInput) dateFromInput.value = urlParams.get('date_from');
+            }
+            if (urlParams.has('date_to')) {
+                const dateToInput = document.getElementById('dateToFilter');
+                if (dateToInput) dateToInput.value = urlParams.get('date_to');
+            }
+            if (urlParams.has('barangay')) {
+                const barangayInput = document.getElementById('barangayFilter');
+                if (barangayInput) barangayInput.value = urlParams.get('barangay');
+            }
+            if (urlParams.has('animal_type')) {
+                const animalInput = document.getElementById('animalTypeFilter');
+                if (animalInput) animalInput.value = urlParams.get('animal_type');
+            }
+            if (urlParams.has('bite_category')) {
+                const categoryInput = document.getElementById('biteCategoryFilter');
+                if (categoryInput) categoryInput.value = urlParams.get('bite_category');
+            }
+        }
+
+        // Initialize filters on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeFiltersFromURL();
+        });
+
+        // ==========================================
+        // FILTER UPDATE FUNCTIONS (Legacy - for sidebar filters)
+        // ==========================================
+
+        /**
+         * Update multivariate filters from UI inputs (for sidebar)
+         */
         function updateMultivariateFilters() {
             currentMultivariateFilters = {
-                animalType: document.getElementById('animalTypeFilter').value,
-                biteCategory: document.getElementById('biteCategoryFilter').value,
-                status: document.getElementById('statusFilter').value
+                animalType: document.getElementById('animalTypeFilter')?.value || '',
+                biteCategory: document.getElementById('biteCategoryFilter')?.value || '',
+                status: document.getElementById('statusFilter')?.value || ''
             };
 
             createHeatmap();
             updateSidebarWithFilteredData();
-            updateLegendThresholds();
             updateLegendThresholds();
         }
 
@@ -2087,8 +2825,175 @@ $highThreshold = max($lowThreshold + 1, (int)ceil($stats['p95']));
             }
         }
 
-        // Export functionality
-        function exportHeatmapData() {
+        // ==========================================
+        // SIDEBAR AND EXPORT FUNCTIONS
+        // ==========================================
+
+        /**
+         * Update the risk analysis section with filtered data
+         */
+        function updateRiskAnalysis(filteredBarangayCounts) {
+            // Calculate risk statistics for filtered data
+            let criticalCount = 0, highCount = 0, mediumCount = 0, lowCount = 0;
+
+            Object.keys(filteredBarangayCounts).forEach(barangay => {
+                const riskData = barangayRiskScores[barangay];
+                if (riskData) {
+                    switch (riskData.riskLevel) {
+                        case 'critical': criticalCount++; break;
+                        case 'high': highCount++; break;
+                        case 'medium': mediumCount++; break;
+                        default: lowCount++; break;
+                    }
+                } else {
+                    // Fallback for filtered data without risk scores
+                    lowCount++;
+                }
+            });
+
+            // Update risk overview
+            const riskOverviewHtml = `
+                <div class="risk-overview">
+                    <div class="risk-stat"><span class="badge badge-critical">${criticalCount}</span> Critical</div>
+                    <div class="risk-stat"><span class="badge badge-high">${highCount}</span> High</div>
+                    <div class="risk-stat"><span class="badge badge-medium">${mediumCount}</span> Medium</div>
+                    <div class="risk-stat"><span class="badge badge-low">${lowCount}</span> Low</div>
+                </div>
+            `;
+
+            // Update risk table with top 10 highest risk areas from filtered data
+            let riskTableHtml = `
+                <table class="data-table risk-table">
+                    <thead>
+                        <tr>
+                            <th>Barangay</th>
+                            <th>Risk Score</th>
+                            <th>Priority</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+
+            const riskItems = Object.entries(filteredBarangayCounts)
+                .map(([barangay, count]) => {
+                    const riskData = barangayRiskScores[barangay];
+                    return {
+                        barangay,
+                        count,
+                        riskData,
+                        sortScore: riskData ? riskData.compositeScore : 0
+                    };
+                })
+                .sort((a, b) => b.sortScore - a.sortScore)
+                .slice(0, 10); // Top 10
+
+            if (riskItems.length > 0) {
+                riskItems.forEach(({ barangay, riskData }) => {
+                    if (riskData) {
+                        riskTableHtml += `
+                            <tr onclick="focusLocation('${barangay.replace(/'/g, "\\'")}')">
+                                <td>${barangay}</td>
+                                <td><strong style="color: ${riskData.riskColor};">${riskData.compositeScore}</strong></td>
+                                <td><span class="badge badge-${riskData.riskLevel}">${riskData.priority}</span></td>
+                                <td><button class="btn btn-sm btn-outline-primary" onclick="event.stopPropagation(); showRiskDetails('${barangay.replace(/'/g, "\\'")}')">Details</button></td>
+                            </tr>
+                        `;
+                    }
+                });
+            } else {
+                riskTableHtml += '<tr><td colspan="4" style="text-align: center; color: var(--gray-500);">No risk data available</td></tr>';
+            }
+
+            riskTableHtml += '</tbody></table>';
+
+            document.getElementById('riskBody').innerHTML = riskOverviewHtml + riskTableHtml;
+        }
+
+        /**
+         * Show detailed risk analysis for a barangay
+         */
+        function showRiskDetails(barangay) {
+            const riskData = barangayRiskScores[barangay];
+            if (!riskData) {
+                alert('Risk data not available for this barangay');
+                return;
+            }
+
+            const modalContent = `
+                <div class="risk-details-modal">
+                    <h5 style="color: ${riskData.riskColor};">${barangay} - ${riskData.riskLabel}</h5>
+                    <div class="risk-metrics">
+                        <div class="metric">
+                            <span class="metric-label">Composite Risk Score:</span>
+                            <span class="metric-value" style="color: ${riskData.riskColor};">${riskData.compositeScore}/100</span>
+                        </div>
+                        <div class="metric">
+                            <span class="metric-label">Case Density:</span>
+                            <span class="metric-value">${riskData.densityScore}/100</span>
+                        </div>
+                        <div class="metric">
+                            <span class="metric-label">Severity Score:</span>
+                            <span class="metric-value">${riskData.severityScore}/100</span>
+                        </div>
+                        <div class="metric">
+                            <span class="metric-label">Recency Score:</span>
+                            <span class="metric-value">${riskData.recencyScore}/100</span>
+                        </div>
+                        <div class="metric">
+                            <span class="metric-label">Animal Risk Score:</span>
+                            <span class="metric-value">${riskData.animalRiskScore}/100</span>
+                        </div>
+                        <div class="metric">
+                            <span class="metric-label">Total Cases:</span>
+                            <span class="metric-value">${riskData.caseCount}</span>
+                        </div>
+                        <div class="metric">
+                            <span class="metric-label">Severe Cases:</span>
+                            <span class="metric-value">${riskData.severeCases}</span>
+                        </div>
+                    </div>
+                    <div class="recommendations">
+                        <h6>Recommended Actions:</h6>
+                        <ul>
+                            ${riskData.recommendations.map(rec => `<li>${rec}</li>`).join('')}
+                        </ul>
+                    </div>
+                </div>
+            `;
+
+            // Create and show modal (using Bootstrap if available)
+            if (typeof bootstrap !== 'undefined') {
+                const modal = document.createElement('div');
+                modal.className = 'modal fade';
+                modal.innerHTML = `
+                    <div class="modal-dialog modal-lg">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h5 class="modal-title">Risk Analysis Details</h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                            </div>
+                            <div class="modal-body">${modalContent}</div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-primary" onclick="focusLocation('${barangay.replace(/'/g, "\\'")}')">View on Map</button>
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                document.body.appendChild(modal);
+                new bootstrap.Modal(modal).show();
+                modal.addEventListener('hidden.bs.modal', () => document.body.removeChild(modal));
+            } else {
+                // Fallback alert
+                alert(`${barangay} Risk Analysis:\n\nRisk Level: ${riskData.riskLabel}\nScore: ${riskData.compositeScore}/100\n\nRecommendations:\n${riskData.recommendations.join('\n')}`);
+            }
+        }
+
+        /**
+         * Update sidebar with filtered data
+         */
+        function updateSidebarWithFilteredData() {
             const filteredCases = getFilteredCases();
             const filteredBarangayCounts = {};
 
@@ -2175,20 +3080,42 @@ $highThreshold = max($lowThreshold + 1, (int)ceil($stats['p95']));
                     <tbody>
             `;
 
-            Object.entries(filteredBarangayCounts)
-                .sort((a, b) => b[1] - a[1])
-                .forEach(([barangay, count]) => {
+            // Sort barangays by comprehensive risk score, then by case count
+            const sortedBarangays = Object.entries(filteredBarangayCounts)
+                .map(([barangay, count]) => {
+                    const riskData = barangayRiskScores[barangay];
+                    return {
+                        barangay,
+                        count,
+                        riskData,
+                        sortKey: riskData ? riskData.compositeScore : (count / maxFilteredCount * 50) // Fallback for filtered data
+                    };
+                })
+                .sort((a, b) => b.sortKey - a.sortKey);
+
+            sortedBarangays.forEach(({ barangay, count, riskData }) => {
+                let risk = 'low', riskLabel = 'Low', riskColor = '#22c55e';
+
+                if (riskData) {
+                    // Use comprehensive risk scoring
+                    risk = riskData.riskLevel;
+                    riskLabel = riskData.riskLabel;
+                    riskColor = riskData.riskColor;
+                } else {
+                    // Fallback to simple ratio-based scoring for filtered data
                     const ratio = maxFilteredCount > 0 ? count / maxFilteredCount : 0;
-                    let risk = 'low', riskLabel = 'Low';
-                    if (ratio >= 0.75) { risk = 'critical'; riskLabel = 'Critical'; }
-                    else if (ratio >= 0.5) { risk = 'high'; riskLabel = 'High'; }
-                    else if (ratio >= 0.25) { risk = 'medium'; riskLabel = 'Medium'; }
+                    if (ratio >= 0.75) { risk = 'critical'; riskLabel = 'Critical'; riskColor = '#dc2626'; }
+                    else if (ratio >= 0.5) { risk = 'high'; riskLabel = 'High'; riskColor = '#ea580c'; }
+                    else if (ratio >= 0.25) { risk = 'medium'; riskLabel = 'Medium'; riskColor = '#f59e0b'; }
+                }
+
+                const scoreDisplay = riskData ? `${riskData.compositeScore}` : '';
 
                     areasHtml += `
-                        <tr onclick="focusLocation('${barangay.replace(/'/g, "\\'")}')">
+                    <tr onclick="focusLocation('${barangay.replace(/'/g, "\\'")}')" title="${riskData ? riskData.priority : ''}">
                             <td>${barangay}</td>
-                            <td><strong>${count}</strong></td>
-                            <td><span class="badge badge-${risk}">${riskLabel}</span></td>
+                        <td><strong>${count}</strong>${scoreDisplay ? ` <small style="color: ${riskColor};">(${scoreDisplay})</small>` : ''}</td>
+                        <td><span class="badge badge-${risk}" style="background-color: ${riskColor};">${riskLabel}</span></td>
                         </tr>
                     `;
                 });
@@ -2199,6 +3126,9 @@ $highThreshold = max($lowThreshold + 1, (int)ceil($stats['p95']));
 
             areasHtml += '</tbody></table>';
             document.getElementById('areasBody').innerHTML = areasHtml;
+
+            // Update risk analysis section
+            updateRiskAnalysis(filteredBarangayCounts);
 
             // Update recent cases
             const recentFilteredCases = filteredCases
@@ -2398,8 +3328,23 @@ $highThreshold = max($lowThreshold + 1, (int)ceil($stats['p95']));
             var casesForBarangay = barangayCaseData[barangay] || [];
             var caseCount = casesForBarangay.length;
 
-            // Determine appropriate zoom level based on case density
-            let zoomLevel = caseCount > 20 ? 15 : caseCount > 10 ? 16 : 17;
+            // Enhanced zoom level calculation based on case density and geographic spread
+            let zoomLevel;
+            if (caseCount > 50) {
+                zoomLevel = 14; // Wider view for high-density areas
+            } else if (caseCount > 20) {
+                zoomLevel = 15; // Medium zoom for moderate density
+            } else if (caseCount > 5) {
+                zoomLevel = 16; // Closer zoom for low density
+            } else {
+                zoomLevel = 17; // Closest zoom for very few cases
+            }
+
+            // Adjust zoom based on current map zoom to avoid jarring jumps
+            const currentZoom = map.getZoom();
+            if (Math.abs(currentZoom - zoomLevel) > 3) {
+                zoomLevel = Math.max(currentZoom - 1, zoomLevel);
+            }
 
             // Basic bounds check (optional for now)
 

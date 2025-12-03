@@ -321,6 +321,12 @@ function getCategoryClass($category) {
             border-radius: 12px;
             font-size: 0.8rem;
             font-weight: 600;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 120px;
+            display: inline-block;
+            text-align: center;
         }
         .btn-view {
             background: #f1f5f9;
@@ -388,6 +394,11 @@ function getCategoryClass($category) {
             color: #fff;
             border: 1px solid #3b82f6;
         }
+        .pagination-row .ellipsis {
+            padding: 8px 14px;
+            color: #94a3b8;
+            user-select: none;
+        }
         @media (max-width: 992px) {
             .page-container {
                 padding: 16px;
@@ -418,6 +429,20 @@ function getCategoryClass($category) {
                 width: 100%;
                 justify-content: center;
             }
+            .pagination-row {
+                gap: 2px;
+            }
+            .pagination-row a,
+            .pagination-row span,
+            .pagination-row .ellipsis {
+                padding: 6px 10px;
+                font-size: 0.8rem;
+            }
+            .status-badge {
+                max-width: 100px;
+                font-size: 0.75rem;
+                padding: 3px 8px;
+            }
         }
         @media (max-width: 480px) {
             .page-container {
@@ -425,6 +450,11 @@ function getCategoryClass($category) {
             }
             table {
                 min-width: 640px;
+            }
+            .status-badge {
+                max-width: 80px;
+                font-size: 0.7rem;
+                padding: 2px 6px;
             }
         }
     </style>
@@ -515,7 +545,7 @@ function getCategoryClass($category) {
                 <?php if (count($reports) > 0): ?>
                     <?php foreach ($reports as $r): ?>
                         <tr>
-                            <td><strong><?php echo htmlspecialchars($r['lastName'] . ', ' . $r['firstName']); ?></strong></td>
+                            <td><strong><?php echo htmlspecialchars(strtoupper($r['lastName'] . ', ' . $r['firstName'])); ?></strong></td>
                             <td><?php echo htmlspecialchars($r['contactNumber']); ?></td>
                             <td><?php echo htmlspecialchars($r['barangay']); ?></td>
                             <td><?php echo htmlspecialchars($r['animalType']); ?></td>
@@ -544,13 +574,61 @@ function getCategoryClass($category) {
 
         <?php if ($totalPages > 1): ?>
         <div class="pagination-row">
-            <?php for ($i = 1; $i <= $totalPages; $i++): ?>
+            <?php
+            $showPages = 5; // Total pages to show around current page
+            $halfShow = floor($showPages / 2);
+
+            // Calculate start and end pages to show
+            $startPage = max(1, $page - $halfShow);
+            $endPage = min($totalPages, $page + $halfShow);
+
+            // Adjust if we're near the beginning or end
+            if ($endPage - $startPage + 1 < $showPages) {
+                if ($startPage == 1) {
+                    $endPage = min($totalPages, $startPage + $showPages - 1);
+                } elseif ($endPage == $totalPages) {
+                    $startPage = max(1, $endPage - $showPages + 1);
+                }
+            }
+
+            // Previous button
+            if ($page > 1): ?>
+                <a href="<?php echo buildUrl(['page' => $page - 1]); ?>" title="Previous page">&laquo;</a>
+            <?php endif; ?>
+
+            <?php
+            // First page + ellipsis if needed
+            if ($startPage > 1): ?>
+                <a href="<?php echo buildUrl(['page' => 1]); ?>">1</a>
+                <?php if ($startPage > 2): ?>
+                    <span class="ellipsis">...</span>
+                <?php endif; ?>
+            <?php endif; ?>
+
+            <?php
+            // Page range
+            for ($i = $startPage; $i <= $endPage; $i++): ?>
                 <?php if ($i == $page): ?>
                     <span class="active"><?php echo $i; ?></span>
                 <?php else: ?>
                     <a href="<?php echo buildUrl(['page' => $i]); ?>"><?php echo $i; ?></a>
                 <?php endif; ?>
             <?php endfor; ?>
+
+            <?php
+            // Last page + ellipsis if needed
+            if ($endPage < $totalPages): ?>
+                <?php if ($endPage < $totalPages - 1): ?>
+                    <span class="ellipsis">...</span>
+                <?php endif; ?>
+                <a href="<?php echo buildUrl(['page' => $totalPages]); ?>"><?php echo $totalPages; ?></a>
+            <?php endif; ?>
+
+            <?php
+            // Next button
+            if ($page < $totalPages): ?>
+                <a href="<?php echo buildUrl(['page' => $page + 1]); ?>" title="Next page">&raquo;</a>
+            <?php endif; ?>
         </div>
         <?php endif; ?>
     </div>

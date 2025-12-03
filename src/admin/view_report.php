@@ -34,6 +34,54 @@ try {
         exit;
     }
 
+    // Function to parse AI classification from notes
+    function parseAiClassification($notes) {
+        if (empty($notes) || strpos($notes, '[CLASSIFICATION REPORT]') === false) {
+            return null;
+        }
+
+        $classificationText = substr($notes, strpos($notes, '[CLASSIFICATION REPORT]'));
+        $classificationText = str_replace('[CLASSIFICATION REPORT]', '', $classificationText);
+
+        // Parse the classification details
+        $lines = explode("\n", trim($classificationText));
+        $classification = [
+            'riskScore' => null,
+            'riskFactors' => [],
+            'recommendation' => null,
+            'rationale' => trim($classificationText)
+        ];
+
+        foreach ($lines as $line) {
+            $line = trim($line);
+            if (strpos($line, 'Risk Score:') === 0) {
+                // Extract score like "Risk Score: 8/15 | Factors: factor1, factor2"
+                if (preg_match('/Risk Score:\s*(\d+)\/(\d+)\s*\|\s*Factors:\s*(.+)/', $line, $matches)) {
+                    $classification['riskScore'] = $matches[1] . '/' . $matches[2];
+                    $classification['riskFactors'] = array_map('trim', explode(',', $matches[3]));
+                }
+            } elseif (strpos($line, 'Immediate PEP') !== false || strpos($line, 'PEP required') !== false || strpos($line, 'Hospital referral') !== false) {
+                $classification['recommendation'] = $line;
+            }
+        }
+
+        return $classification;
+    }
+
+    // Parse AI classification from the report notes
+    $report['aiClassification'] = parseAiClassification($report['notes']);
+
+    // Function to clean notes by removing AI classification
+    function cleanNotes($notes) {
+        if (empty($notes) || strpos($notes, '[CLASSIFICATION REPORT]') === false) {
+            return $notes;
+        }
+        return trim(substr($notes, 0, strpos($notes, '[CLASSIFICATION REPORT]')));
+    }
+
+    // Clean notes for display (remove AI classification)
+    $report['cleanNotes'] = cleanNotes($report['notes']);
+
     // Get staff details if assigned
     $staffName = "Not assigned";
     if (!empty($report['staffId'])) {
@@ -835,6 +883,43 @@ $daysSinceBite = $now->diff($biteDate)->days;
                 </div>
             </div>
 
+            <!-- AI Classification Section -->
+            <?php if (!empty($report['aiClassification'])): ?>
+            <div class="ai-classification-hero" style="margin-top: 16px; padding: 16px; background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%); border-radius: 8px; border: 1px solid #e2e8f0;">
+                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
+                    <i class="bi bi-robot" style="color: #6b7280;"></i>
+                    <h3 style="font-size: 14px; font-weight: 600; color: #374151; margin: 0;">AI Risk Assessment</h3>
+                    <?php if (!empty($report['aiClassification']['riskScore'])): ?>
+                    <span class="badge" style="background: #fef3c7; color: #92400e; font-size: 0.75rem;">
+                        Risk Score: <?php echo htmlspecialchars($report['aiClassification']['riskScore']); ?>
+                    </span>
+                    <?php endif; ?>
+                </div>
+
+                <?php if (!empty($report['aiClassification']['riskFactors'])): ?>
+                <div style="margin-bottom: 12px;">
+                    <div style="font-size: 0.75rem; font-weight: 600; color: #6b7280; margin-bottom: 6px;">Identified Risk Factors:</div>
+                    <div style="display: flex; flex-wrap: wrap; gap: 6px;">
+                        <?php foreach ($report['aiClassification']['riskFactors'] as $factor): ?>
+                        <span class="badge" style="background: #fee2e2; color: #991b1b; font-size: 0.7rem;">
+                            <?php echo htmlspecialchars($factor); ?>
+                        </span>
+                        <?php endforeach; ?>
+                    </div>
+                </div>
+                <?php endif; ?>
+
+                <?php if (!empty($report['aiClassification']['recommendation'])): ?>
+                <div>
+                    <div style="font-size: 0.75rem; font-weight: 600; color: #6b7280; margin-bottom: 4px;">AI Recommendation:</div>
+                    <div style="font-size: 0.85rem; color: #374151; line-height: 1.4;">
+                        <?php echo htmlspecialchars($report['aiClassification']['recommendation']); ?>
+                    </div>
+                </div>
+                <?php endif; ?>
+            </div>
+            <?php endif; ?>
+
             <!-- Quick Actions -->
             <div class="quick-actions no-print">
                 <button class="btn btn-outline" onclick="window.print();">
@@ -1136,8 +1221,8 @@ $daysSinceBite = $now->diff($biteDate)->days;
 
                     <div class="form-group">
                         <label for="notes" class="form-label">Case Notes</label>
-                        <textarea class="form-control" id="notes" name="notes" rows="3" 
-                            placeholder="Add treatment notes, follow-up instructions, or observations..."><?php echo htmlspecialchars($report['notes'] ?? ''); ?></textarea>
+                        <textarea class="form-control" id="notes" name="notes" rows="3"
+                            placeholder="Add treatment notes, follow-up instructions, or observations..."><?php echo htmlspecialchars($report['cleanNotes'] ?? ''); ?></textarea>
                     </div>
 
                     <div style="display: flex; justify-content: flex-end; gap: 12px; padding-top: 8px;">

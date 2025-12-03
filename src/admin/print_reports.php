@@ -242,6 +242,28 @@ try {
             background: #115e59;
         }
 
+        .back-button {
+            position: fixed;
+            top: 16px;
+            left: 16px;
+            background: #6b7280;
+            color: #fff;
+            padding: 8px 14px;
+            border: none;
+            border-radius: 999px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            box-shadow: 0 8px 20px rgba(107, 114, 128, 0.4);
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .back-button:hover {
+            background: #4b5563;
+        }
+
         @media (max-width: 640px) {
             .card {
                 padding: 16px 14px;
@@ -386,6 +408,7 @@ try {
 </head>
 <body>
 
+<button onclick="window.close()" class="back-button no-print">← Close</button>
 <button onclick="window.print()" class="print-button no-print">Print reports</button>
 
 <div class="shell">
@@ -480,7 +503,7 @@ try {
                 <?php else: ?>
                     <?php foreach ($reports as $report): ?>
                     <tr>
-                        <td><?= htmlspecialchars($report['firstName'] . ' ' . $report['lastName']); ?></td>
+                        <td><?= htmlspecialchars(strtoupper($report['firstName'] . ' ' . $report['lastName'])); ?></td>
                         <td><?= htmlspecialchars($report['contactNumber']); ?></td>
                         <td><?= htmlspecialchars($report['barangay']); ?></td>
                         <td><?= htmlspecialchars($report['animalType']); ?></td>

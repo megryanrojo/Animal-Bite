@@ -105,15 +105,90 @@ try {
         header('Location: view_patients.php');
         exit;
     }
+    // Pagination for reports
+    $reportsPage = isset($_GET['reports_page']) ? (int)$_GET['reports_page'] : 1;
+    $reportsPerPage = 10; // Show 10 reports per page
+    $reportsOffset = ($reportsPage - 1) * $reportsPerPage;
+
+    // Get total count of reports for pagination
+    $countStmt = $pdo->prepare("SELECT COUNT(*) FROM reports WHERE patientId = ?");
+    $countStmt->execute([$patientId]);
+    $totalReports = $countStmt->fetchColumn();
+    $totalReportPages = ceil($totalReports / $reportsPerPage);
+
+    // Build query with LIMIT and OFFSET (cannot use parameterized queries for these in MySQL/MariaDB)
     $reportsStmt = $pdo->prepare("
         SELECT r.*, CONCAT(s.firstName, ' ', s.lastName) as staffName
         FROM reports r
         LEFT JOIN staff s ON r.staffId = s.staffId
         WHERE r.patientId = ?
         ORDER BY r.reportDate DESC
-    ");
+        LIMIT " . (int)$reportsPerPage . " OFFSET " . (int)$reportsOffset
+    );
     $reportsStmt->execute([$patientId]);
     $reports = $reportsStmt->fetchAll(PDO::FETCH_ASSOC);
+
+    // Function to parse AI classification from notes
+    function parseAiClassification($notes) {
+        if (empty($notes) || strpos($notes, '[CLASSIFICATION REPORT]') === false) {
+            return null;
+        }
+
+        $classificationText = substr($notes, strpos($notes, '[CLASSIFICATION REPORT]'));
+        $classificationText = str_replace('[CLASSIFICATION REPORT]', '', $classificationText);
+
+        // Parse the classification details
+        $lines = explode("\n", trim($classificationText));
+        $classification = [
+            'riskScore' => null,
+            'riskFactors' => [],
+            'recommendation' => null,
+            'rationale' => trim($classificationText)
+        ];
+
+        foreach ($lines as $line) {
+            $line = trim($line);
+            if (strpos($line, 'Risk Score:') === 0) {
+                // Extract score like "Risk Score: 8/15 | Factors: factor1, factor2"
+                if (preg_match('/Risk Score:\s*(\d+)\/(\d+)\s*\|\s*Factors:\s*(.+)/', $line, $matches)) {
+                    $classification['riskScore'] = $matches[1] . '/' . $matches[2];
+                    $classification['riskFactors'] = array_map('trim', explode(',', $matches[3]));
+                }
+            } elseif (strpos($line, 'Immediate PEP') !== false || strpos($line, 'PEP required') !== false || strpos($line, 'Hospital referral') !== false) {
+                $classification['recommendation'] = $line;
+            }
+        }
+
+        return $classification;
+    }
+
+    // Function to clean notes by removing AI classification
+    function cleanNotes($notes) {
+        if (empty($notes) || strpos($notes, '[CLASSIFICATION REPORT]') === false) {
+            return $notes;
+        }
+        return trim(substr($notes, 0, strpos($notes, '[CLASSIFICATION REPORT]')));
+    }
+
+    // Add AI classification data to each report
+    foreach ($reports as &$report) {
+        $report['aiClassification'] = parseAiClassification($report['notes']);
+        // Clean notes for display (remove AI classification)
+        $report['cleanNotes'] = cleanNotes($report['notes']);
+    }
+
+    // Function to build URLs for report pagination
+    function buildReportUrl($newParams = []) {
+        $params = $_GET;
+        foreach ($newParams as $key => $value) {
+            if ($value === null) {
+                unset($params[$key]);
+            } else {
+                $params[$key] = $value;
+            }
+        }
+        return 'view_patient.php?' . http_build_query($params);
+    }
 
     $vaccStmt = $pdo->prepare("
         SELECT vr.*, r.biteDate
@@ -629,6 +704,42 @@ function calculateAge($dateOfBirth) {
             border-left: 4px solid #ef4444;
             background: linear-gradient(135deg, rgba(239, 68, 68, 0.03) 0%, rgba(239, 68, 68, 0.01) 100%);
         }
+        /* Pagination Styles */
+        .pagination-row {
+            display: flex;
+            justify-content: center;
+            gap: 4px;
+            padding: 20px;
+            margin-top: 20px;
+            border-top: 1px solid var(--gray-200);
+        }
+        .pagination-row a,
+        .pagination-row span {
+            padding: 8px 14px;
+            border-radius: 6px;
+            text-decoration: none;
+            font-size: 0.9rem;
+            border: 1px solid var(--gray-200);
+        }
+        .pagination-row a {
+            background: white;
+            color: var(--gray-600);
+            transition: all 0.2s ease;
+        }
+        .pagination-row a:hover {
+            background: var(--gray-50);
+            color: var(--gray-800);
+        }
+        .pagination-row .active {
+            background: var(--primary);
+            color: white;
+            border: 1px solid var(--primary);
+        }
+        .pagination-row .ellipsis {
+            padding: 8px 14px;
+            color: var(--gray-400);
+            user-select: none;
+        }
     </style>
 </head>
 <body>
@@ -889,6 +1000,55 @@ function calculateAge($dateOfBirth) {
         <div class="card-header">
             <h2 class="card-title"><i class="bi bi-file-earmark-text"></i> Bite Reports</h2>
         </div>
+
+        <!-- AI Classification Section -->
+        <?php
+        $reportsWithClassification = array_filter($reports, function($report) {
+            return !empty($report['aiClassification']);
+        });
+        ?>
+        <?php if (count($reportsWithClassification) > 0): ?>
+        <div class="ai-classification-section" style="padding: 16px; background: #f8fafc; border-bottom: 1px solid #e2e8f0;">
+            <h3 style="font-size: 14px; font-weight: 600; color: #374151; margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
+                <i class="bi bi-robot"></i> AI Risk Assessment
+            </h3>
+            <div class="ai-classifications" style="display: grid; gap: 12px;">
+                <?php foreach ($reportsWithClassification as $report): ?>
+                <div class="ai-classification-card" style="background: white; border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px;">
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
+                        <span style="font-weight: 600; color: #374151;">Report #<?php echo $report['reportId']; ?></span>
+                        <?php if (!empty($report['aiClassification']['riskScore'])): ?>
+                        <span class="badge" style="background: #fef3c7; color: #92400e; font-size: 0.75rem;">
+                            Risk Score: <?php echo htmlspecialchars($report['aiClassification']['riskScore']); ?>
+                        </span>
+                        <?php endif; ?>
+                    </div>
+
+                    <?php if (!empty($report['aiClassification']['riskFactors'])): ?>
+                    <div style="margin-bottom: 8px;">
+                        <span style="font-size: 0.75rem; font-weight: 600; color: #6b7280;">Risk Factors:</span>
+                        <div style="margin-top: 4px;">
+                            <?php foreach ($report['aiClassification']['riskFactors'] as $factor): ?>
+                            <span class="badge" style="background: #fee2e2; color: #991b1b; font-size: 0.7rem; margin-right: 4px; margin-bottom: 2px;">
+                                <?php echo htmlspecialchars($factor); ?>
+                            </span>
+                            <?php endforeach; ?>
+                        </div>
+                    </div>
+                    <?php endif; ?>
+
+                    <?php if (!empty($report['aiClassification']['recommendation'])): ?>
+                    <div>
+                        <span style="font-size: 0.75rem; font-weight: 600; color: #6b7280;">Recommendation:</span>
+                        <p style="margin: 4px 0 0 0; font-size: 0.8rem; color: #374151;"><?php echo htmlspecialchars($report['aiClassification']['recommendation']); ?></p>
+                    </div>
+                    <?php endif; ?>
+                </div>
+                <?php endforeach; ?>
+            </div>
+        </div>
+        <?php endif; ?>
+
         <?php if (count($reports) > 0): ?>
         <div class="table-container mobile-cards">
             <table class="table">
@@ -939,6 +1099,67 @@ function calculateAge($dateOfBirth) {
                 </tbody>
             </table>
         </div>
+
+        <?php if ($totalReportPages > 1): ?>
+        <div class="pagination-row">
+            <?php
+            $showPages = 5; // Total pages to show around current page
+            $halfShow = floor($showPages / 2);
+
+            // Calculate start and end pages to show
+            $startPage = max(1, $reportsPage - $halfShow);
+            $endPage = min($totalReportPages, $reportsPage + $halfShow);
+
+            // Adjust if we're near the beginning or end
+            if ($endPage - $startPage + 1 < $showPages) {
+                if ($startPage == 1) {
+                    $endPage = min($totalReportPages, $startPage + $showPages - 1);
+                } elseif ($endPage == $totalReportPages) {
+                    $startPage = max(1, $endPage - $showPages + 1);
+                }
+            }
+
+            // Previous button
+            if ($reportsPage > 1): ?>
+                <a href="<?php echo buildReportUrl(['reports_page' => $reportsPage - 1]); ?>" title="Previous page">&laquo;</a>
+            <?php endif; ?>
+
+            <?php
+            // First page + ellipsis if needed
+            if ($startPage > 1): ?>
+                <a href="<?php echo buildReportUrl(['reports_page' => 1]); ?>">1</a>
+                <?php if ($startPage > 2): ?>
+                    <span class="ellipsis">...</span>
+                <?php endif; ?>
+            <?php endif; ?>
+
+            <?php
+            // Page range
+            for ($i = $startPage; $i <= $endPage; $i++): ?>
+                <?php if ($i == $reportsPage): ?>
+                    <span class="active"><?php echo $i; ?></span>
+                <?php else: ?>
+                    <a href="<?php echo buildReportUrl(['reports_page' => $i]); ?>"><?php echo $i; ?></a>
+                <?php endif; ?>
+            <?php endfor; ?>
+
+            <?php
+            // Last page + ellipsis if needed
+            if ($endPage < $totalReportPages): ?>
+                <?php if ($endPage < $totalReportPages - 1): ?>
+                    <span class="ellipsis">...</span>
+                <?php endif; ?>
+                <a href="<?php echo buildReportUrl(['reports_page' => $totalReportPages]); ?>"><?php echo $totalReportPages; ?></a>
+            <?php endif; ?>
+
+            <?php
+            // Next button
+            if ($reportsPage < $totalReportPages): ?>
+                <a href="<?php echo buildReportUrl(['reports_page' => $reportsPage + 1]); ?>" title="Next page">&raquo;</a>
+            <?php endif; ?>
+        </div>
+        <?php endif; ?>
+
         <?php else: ?>
         <div class="empty-state">
             <i class="bi bi-file-earmark-text"></i>

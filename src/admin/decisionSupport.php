@@ -108,6 +108,66 @@ try {
     $trendCounts = [];
 }
 
+// --- Animal Types Over Time (Line Graph) ---
+$animalTrendData = [];
+try {
+    // Get months in date range
+    $monthsQuery = "SELECT DISTINCT DATE_FORMAT(r.biteDate, '%Y-%m') as month
+                   FROM reports r JOIN patients p ON r.patientId = p.patientId
+                   WHERE r.biteDate BETWEEN ? AND ?
+                   ORDER BY month";
+    $monthsStmt = $pdo->prepare($monthsQuery);
+    $monthsStmt->execute([$dateFrom, $dateTo]);
+    $months = $monthsStmt->fetchAll(PDO::FETCH_COLUMN);
+
+    // Get animal types
+    $typesQuery = "SELECT DISTINCT r.animalType
+                  FROM reports r JOIN patients p ON r.patientId = p.patientId
+                  WHERE r.biteDate BETWEEN ? AND ? AND r.animalType IS NOT NULL
+                  ORDER BY r.animalType";
+    $typesStmt = $pdo->prepare($typesQuery);
+    $typesStmt->execute([$dateFrom, $dateTo]);
+    $animalTypes = $typesStmt->fetchAll(PDO::FETCH_COLUMN);
+
+    $labels = [];
+    $datasets = [];
+
+    // Format month labels
+    foreach ($months as $month) {
+        $date = DateTime::createFromFormat('Y-m', $month);
+        $labels[] = $date->format('M Y');
+    }
+
+    // Colors for different animal types
+    $colors = ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', '#FF9F40'];
+
+    foreach ($animalTypes as $index => $animalType) {
+        $data = [];
+        foreach ($months as $month) {
+            $countQuery = "SELECT COUNT(*) FROM reports r JOIN patients p ON r.patientId = p.patientId
+                          WHERE r.biteDate BETWEEN ? AND ? AND DATE_FORMAT(r.biteDate, '%Y-%m') = ? AND r.animalType = ?";
+            $countStmt = $pdo->prepare($countQuery);
+            $countStmt->execute([$dateFrom, $dateTo, $month, $animalType]);
+            $data[] = (int)$countStmt->fetchColumn();
+        }
+
+        $colorIndex = $index % count($colors);
+        $datasets[] = [
+            'label' => $animalType,
+            'data' => $data,
+            'borderColor' => $colors[$colorIndex],
+            'backgroundColor' => $colors[$colorIndex] . '20',
+            'tension' => 0.4,
+            'fill' => false
+        ];
+    }
+
+    $animalTrendData = ['labels' => $labels, 'datasets' => $datasets];
+
+} catch (PDOException $e) {
+    $animalTrendData = ['labels' => [], 'datasets' => []];
+}
+
 // --- Age Group ---
 $ageWhere = " WHERE r.biteDate BETWEEN ? AND ? AND p.dateOfBirth IS NOT NULL";
 $ageParams = [$dateFrom, $dateTo];
@@ -1229,26 +1289,26 @@ function buildUrl($newParams = []) {
                         $recommendations = [];
                         
                         if ($categoryIIIPercent > 30) {
-                            $recommendations[] = "<strong>Severe Case Management:</strong> With " . number_format($categoryIIIPercent, 1) . "% Category III cases, prioritize immediate medical intervention protocols.";
+                            $recommendations[] = "<strong>Emergency Response:</strong> Establish rapid response teams for Category III cases with dedicated hospital coordination and emergency vaccine stockpiles.";
                         }
-                        
+
                         if (isset($treatmentRate) && $treatmentRate < 80) {
-                            $recommendations[] = "<strong>Vaccination Coverage:</strong> At " . number_format($treatmentRate, 1) . "%, increase rabies vaccination through mobile clinics and awareness campaigns.";
+                            $recommendations[] = "<strong>Vaccination Program:</strong> Deploy mobile vaccination units and conduct door-to-door campaigns to achieve 90%+ coverage in vulnerable communities.";
                         }
-                        
+
                         if (count($barangayData) > 0) {
                             $topAreas = array_slice($barangayData, 0, 3);
                             $areaNames = array_map(function($a) { return $a['barangay']; }, $topAreas);
-                            $recommendations[] = "<strong>Hotspot Focus:</strong> Concentrate resources in " . implode(', ', $areaNames) . " for maximum impact.";
+                            $recommendations[] = "<strong>Targeted Intervention:</strong> Establish permanent health outposts in " . implode(', ', $areaNames) . " with daily monitoring and immediate treatment capabilities.";
                         }
-                        
+
                         if (isset($strayPct) && $strayPct > 50) {
-                            $recommendations[] = "<strong>Stray Animal Control:</strong> Implement community-based animal management programs.";
+                            $recommendations[] = "<strong>Animal Population Management:</strong> Partner with local authorities for mass vaccination drives, sterilization programs, and responsible pet ownership campaigns.";
                         }
                         
                         if (count($recommendations) < 3) {
-                            $recommendations[] = "<strong>Data Quality:</strong> Improve case reporting completeness, especially vaccination status and follow-up.";
-                            $recommendations[] = "<strong>Community Engagement:</strong> Develop educational programs targeting high-risk demographics.";
+                            $recommendations[] = "<strong>Community Education:</strong> Launch targeted awareness campaigns in high-risk areas focusing on bite prevention and immediate first aid.";
+                            $recommendations[] = "<strong>Resource Allocation:</strong> Deploy additional medical teams and vaccines to areas with highest case concentrations.";
                         }
                         
                         foreach ($recommendations as $rec) {
@@ -1259,11 +1319,6 @@ function buildUrl($newParams = []) {
             </div>
         </div>
         
-        <!-- Footer -->
-        <footer class="footer">
-            <div>&copy; <?php echo date('Y'); ?> Barangay Health Workers Management System</div>
-            <div><a href="help.php">Help & Support</a></div>
-        </footer>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>

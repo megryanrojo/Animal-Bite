@@ -1,0 +1,250 @@
+* {
+box-sizing: border-box;
+}
+
+body {
+background-color: #f5f7fa;
+font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+min-height: 100vh;
+margin: 0;
+}
+
+/* Header */
+.header {
+background: white;
+border-bottom: 1px solid #e5e7eb;
+padding: 1rem 1.5rem;
+position: sticky;
+top: 0;
+z-index: 100;
+}
+
+.header-content {
+max-width: 1200px;
+margin: 0 auto;
+display: flex;
+justify-content: space-between;
+align-items: center;
+gap: 1rem;
+}
+
+.logo {
+display: flex;
+align-items: center;
+gap: 0.5rem;
+font-weight: 600;
+font-size: 1.1rem;
+color: #1a1a1a;
+}
+
+.logo i {
+color: #16a34a;
+font-size: 1.25rem;
+}
+
+.header-actions {
+display: flex;
+align-items: center;
+gap: 0.75rem;
+}
+
+.btn-new {
+background: #16a34a;
+color: white;
+border: none;
+padding: 0.5rem 1rem;
+border-radius: 6px;
+font-size: 0.875rem;
+font-weight: 500;
+display: flex;
+align-items: center;
+gap: 0.5rem;
+text-decoration: none;
+transition: background 0.2s;
+}
+
+.btn-new:hover {
+background: #15803d;
+color: white;
+}
+
+.btn-logout {
+background: #dc2626;
+color: white;
+border: none;
+padding: 0.5rem;
+border-radius: 6px;
+font-size: 1rem;
+display: flex;
+align-items: center;
+justify-content: center;
+cursor: pointer;
+transition: background 0.2s;
+}
+
+.btn-logout:hover {
+background: #b91c1c;
+color: white;
+}
+
+/* Main Content */
+.main {
+max-width: 1200px;
+margin: 0 auto;
+padding: 1.5rem;
+}
+
+/* Welcome */
+.welcome {
+margin-bottom: 1.5rem;
+}
+
+.welcome h1 {
+font-size: 1.5rem;
+font-weight: 600;
+color: #1a1a1a;
+margin: 0 0 0.25rem 0;
+}
+
+.welcome p {
+color: #6b7280;
+margin: 0;
+font-size: 0.9rem;
+}
+
+/* Quick Actions */
+.quick-actions {
+margin-bottom: 3rem;
+}
+
+.action-card {
+background: white;
+border-radius: 12px;
+padding: 2rem;
+box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+border-left: 4px solid #10b981;
+display: flex;
+align-items: center;
+gap: 1.5rem;
+}
+
+.action-card.primary {
+border-left-color: #10b981;
+}
+
+.action-icon {
+width: 60px;
+height: 60px;
+background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+border-radius: 50%;
+display: flex;
+align-items: center;
+justify-content: center;
+color: white;
+font-size: 1.5rem;
+flex-shrink: 0;
+}
+
+.action-content h3 {
+font-size: 1.25rem;
+font-weight: 600;
+color: #111827;
+margin-bottom: 0.5rem;
+}
+
+.action-content p {
+color: #6b7280;
+margin-bottom: 1rem;
+}
+
+.btn-action {
+background: #10b981;
+color: white;
+border: none;
+padding: 0.5rem 1rem;
+border-radius: 6px;
+text-decoration: none;
+font-weight: 500;
+display: inline-flex;
+align-items: center;
+gap: 0.5rem;
+transition: background 0.2s;
+}
+
+.btn-action:hover {
+background: #059669;
+color: white;
+}
+
+/* Instructions */
+.instructions {
+background: white;
+border-radius: 12px;
+padding: 2rem;
+box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.instructions h2 {
+font-size: 1.5rem;
+font-weight: 600;
+color: #111827;
+margin-bottom: 1.5rem;
+text-align: center;
+}
+
+.steps {
+display: flex;
+flex-direction: column;
+gap: 1.5rem;
+}
+
+.step {
+display: flex;
+gap: 1rem;
+align-items: flex-start;
+}
+
+.step-number {
+width: 40px;
+height: 40px;
+background: #10b981;
+color: white;
+border-radius: 50%;
+display: flex;
+align-items: center;
+justify-content: center;
+font-weight: 600;
+font-size: 1.1rem;
+flex-shrink: 0;
+}
+
+.step-content h4 {
+font-size: 1rem;
+font-weight: 600;
+color: #111827;
+margin-bottom: 0.5rem;
+}
+
+.step-content p {
+color: #6b7280;
+font-size: 0.875rem;
+line-height: 1.5;
+margin: 0;
+}
+
+/* Responsive */
+@media (max-width: 600px) {
+.header-content {
+flex-wrap: wrap;
+}
+
+.main {
+padding: 1rem;
+}
+
+.table th,
+.table td {
+padding: 0.75rem 1rem;
+font-size: 0.875rem;
+}
+}
